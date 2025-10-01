@@ -181,3 +181,63 @@ async def health_check():
             "error": str(e)
         }
 
+
+@router.get("/messages/{session_id}")
+async def get_chat_messages(session_id: str):
+    """
+    Get all chat messages for a session.
+
+    Args:
+        session_id: Session ID to retrieve messages for
+
+    Returns:
+        List of chat messages
+    """
+    init_services()
+
+    try:
+        messages = storage_service.get_chat_messages(session_id)
+        return messages
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/messages")
+async def save_chat_message(message_data: dict):
+    """
+    Save a chat message to storage.
+
+    Args:
+        message_data: Message data to save
+
+    Returns:
+        Saved message with ID
+    """
+    init_services()
+
+    try:
+        saved_message = storage_service.create_chat_message(message_data)
+        return saved_message
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/messages/{session_id}")
+async def delete_chat_messages(session_id: str):
+    """
+    Delete all chat messages for a session.
+
+    Args:
+        session_id: Session ID to delete messages for
+
+    Returns:
+        Success status
+    """
+    init_services()
+
+    try:
+        deleted = storage_service.delete_chat_messages(session_id)
+        return {"success": deleted, "message": f"Deleted messages for session {session_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

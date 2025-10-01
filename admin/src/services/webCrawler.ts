@@ -22,28 +22,33 @@ function normalizeUrl(urlString: string): string {
 }
 
 /**
- * Checks if a URL is a valid sub-link within the root domain
+ * Checks if a URL is within the same domain as the root URL
+ * This prevents crawling external domains while allowing full domain exploration
  */
 function isValidSubLink(rootUrl: URL, foundUrl: URL): boolean {
   // Same protocol
   if (rootUrl.protocol !== foundUrl.protocol) return false;
 
-  // Same domain
-  const rootDomain = rootUrl.hostname.split('.').slice(-2).join('.');
-  const foundDomain = foundUrl.hostname.split('.').slice(-2).join('.');
-  if (rootDomain !== foundDomain) return false;
+  // Must be exact same hostname (no subdomains allowed for security)
+  if (foundUrl.hostname !== rootUrl.hostname) return false;
 
-  // Same hostname or subdomain
-  if (foundUrl.hostname !== rootUrl.hostname && 
-      !foundUrl.hostname.endsWith(`.${rootUrl.hostname}`)) {
+  // Skip common non-content paths
+  const skipPaths = [
+    '/api/', '/admin/', '/login/', '/logout/', '/auth/',
+    '/static/', '/assets/', '/css/', '/js/', '/images/',
+    '.pdf', '.zip', '.exe', '.dmg', '.pkg'
+  ];
+
+  const foundPath = foundUrl.pathname.toLowerCase();
+  if (skipPaths.some(skip => foundPath.includes(skip))) {
     return false;
   }
 
-  // Path must be within root path
-  const rootPath = rootUrl.pathname.endsWith('/') ? rootUrl.pathname : `${rootUrl.pathname}/`;
-  const foundPath = foundUrl.pathname.endsWith('/') ? foundUrl.pathname : `${foundUrl.pathname}/`;
-  
-  if (!foundPath.startsWith(rootPath)) return false;
+  // Skip anchor-only links (same page)
+  if (foundUrl.href === rootUrl.href + '#' ||
+      (foundUrl.pathname === rootUrl.pathname && foundUrl.hash)) {
+    return false;
+  }
 
   return true;
 }
@@ -66,11 +71,51 @@ export interface CrawlProgress {
 export class WebCrawler {
   private turndownService: TurndownService;
   private progressCallback?: (progress: CrawlProgress) => void;
+  private currentBaseUrl?: string;
 
   constructor() {
     this.turndownService = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
+    });
+    this.setupTurndownRules();
+  }
+
+  /**
+   * Setup TurndownService rules to handle relative URLs
+   */
+  private setupTurndownRules(): void {
+    // Handle images with relative URL resolution
+    this.turndownService.addRule('images', {
+      filter: 'img',
+      replacement: (_content: any, node: any) => {
+        const src = node.getAttribute && node.getAttribute('src');
+        const alt = node.getAttribute && node.getAttribute('alt') || '';
+
+        if (src) {
+          // Resolve relative URLs to absolute URLs if base URL is available
+          const resolvedSrc = this.resolveUrl(src);
+          return `![${alt}](${resolvedSrc})`;
+        }
+        return '';
+      }
+    });
+
+    // Handle links with relative URL resolution
+    this.turndownService.addRule('links', {
+      filter: 'a',
+      replacement: (content: any, node: any) => {
+        const href = node.getAttribute && node.getAttribute('href');
+        const title = node.getAttribute && node.getAttribute('title');
+
+        if (href) {
+          // Resolve relative URLs to absolute URLs if base URL is available
+          const resolvedHref = this.resolveUrl(href);
+          const titlePart = title ? ` "${title}"` : '';
+          return `[${content}](${resolvedHref}${titlePart})`;
+        }
+        return content;
+      }
     });
   }
 
@@ -172,11 +217,59 @@ export class WebCrawler {
   }
 
   /**
+   * Helper method to resolve relative URLs to absolute URLs
+   */
+  private resolveUrl(url: string): string {
+    if (!this.currentBaseUrl || url.startsWith('http://') || url.startsWith('https://')) {
+      return url; // Return as-is if no base URL or already absolute
+    }
+
+    try {
+      return new URL(url, this.currentBaseUrl).href;
+    } catch (error) {
+      console.warn(`Failed to resolve URL: ${url} with base: ${this.currentBaseUrl}`);
+      return url; // Return original if resolution fails
+    }
+  }
+
+  /**
+   * Convert relative URLs to absolute URLs in markdown content
+   */
+  private convertRelativeUrlsToAbsolute(markdownContent: string, baseUrl: string): string {
+    const markdownLinkOrImageRegex = /(!?\[([^\]]*)\])\(([^)]+)\)/g;
+
+    return markdownContent.replace(markdownLinkOrImageRegex, (match, textPart, _linkText, url) => {
+      if (url.startsWith('https://') || url.startsWith('http://')) {
+        return match; // Already absolute
+      }
+
+      // Convert relative URL to absolute
+      try {
+        const absoluteUrl = new URL(url, baseUrl).toString();
+        return `${textPart}(${absoluteUrl})`;
+      } catch (error) {
+        console.warn(`Failed to convert relative URL: ${url}`, error);
+        return match; // Return original if conversion fails
+      }
+    });
+  }
+
+  /**
    * Convert HTML to Markdown
    */
   @weave.op()
-  htmlToMarkdown(html: string): string {
-    return this.turndownService.turndown(html);
+  htmlToMarkdown(html: string, baseUrl?: string): string {
+    // Set the base URL for use in TurndownService rules
+    this.currentBaseUrl = baseUrl;
+
+    let markdown = this.turndownService.turndown(html);
+
+    // Convert any remaining relative URLs to absolute URLs
+    if (baseUrl) {
+      markdown = this.convertRelativeUrlsToAbsolute(markdown, baseUrl);
+    }
+
+    return markdown;
   }
 
   /**
@@ -194,16 +287,16 @@ export class WebCrawler {
     // Extract main content
     const mainHtml = this.extractMainContent($);
 
-    // Convert to markdown
-    const markdown = this.htmlToMarkdown(mainHtml);
+    // Convert to markdown with base URL for relative URL resolution
+    const markdown = this.htmlToMarkdown(mainHtml, url);
 
     // Extract links
     const links = this.extractLinks($, url);
 
-    weave.logEvent('process_page_complete', { 
-      url, 
-      depth, 
-      title, 
+    weave.logEvent('process_page_complete', {
+      url,
+      depth,
+      title,
       markdownLength: markdown.length,
       linksFound: links.length,
     });
@@ -226,12 +319,14 @@ export class WebCrawler {
     const startTime = Date.now();
 
     const normalizedStartUrl = normalizeUrl(startUrl);
+    const startUrlParsed = new URL(normalizedStartUrl);
     const visited = new Set<string>();
     const results: CrawlResult[] = [];
     const queue: Array<{ url: string; depth: number }> = [{ url: normalizedStartUrl, depth: 0 }];
 
     let completed = 0;
     let failed = 0;
+    let skippedExternal = 0;
 
     while (queue.length > 0) {
       const { url, depth } = queue.shift()!;
@@ -239,6 +334,22 @@ export class WebCrawler {
       // Skip if already visited
       if (visited.has(url)) continue;
       visited.add(url);
+
+      // Validate domain for non-root URLs
+      if (depth > 0) {
+        try {
+          const currentUrlParsed = new URL(url);
+          if (!isValidSubLink(startUrlParsed, currentUrlParsed)) {
+            skippedExternal++;
+            console.log(`[Crawl] Skipping external domain: ${url}`);
+            weave.logEvent('crawl_skip_external', { url, startDomain: startUrlParsed.hostname, foundDomain: currentUrlParsed.hostname });
+            continue;
+          }
+        } catch (error) {
+          console.warn(`[Crawl] Invalid URL format: ${url}`);
+          continue;
+        }
+      }
 
       // Update progress
       if (this.progressCallback) {
@@ -283,9 +394,12 @@ export class WebCrawler {
       maxDepth,
       pagesProcessed: completed,
       pagesFailed: failed,
+      pagesSkippedExternal: skippedExternal,
       duration,
     });
     weave.logMetric('crawl_duration_ms', duration, { startUrl, maxDepth });
+
+    console.log(`[Crawl] Completed: ${completed} pages processed, ${failed} failed, ${skippedExternal} external domains skipped`);
 
     return results;
   }

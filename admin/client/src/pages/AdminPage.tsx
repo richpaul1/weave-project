@@ -5,6 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Eye, Trash2 } from 'lucide-react';
 import type { PageMetadata, CrawlJobStatus, ContentStats } from '../../../shared/schema';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'sonner';
@@ -14,6 +18,10 @@ export default function AdminPage() {
   const [maxDepth, setMaxDepth] = useState(2);
   const [crawling, setCrawling] = useState(false);
   const [currentJob, setCurrentJob] = useState<CrawlJobStatus | null>(null);
+  const [selectedPage, setSelectedPage] = useState<PageMetadata | null>(null);
+  const [pageMarkdown, setPageMarkdown] = useState<string>('');
+  const [showPageDialog, setShowPageDialog] = useState(false);
+  const [loadingMarkdown, setLoadingMarkdown] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch pages
@@ -131,13 +139,31 @@ export default function AdminPage() {
     deletePageMutation.mutate(id);
   };
 
+  const viewPage = async (page: PageMetadata) => {
+    setSelectedPage(page);
+    setShowPageDialog(true);
+    setLoadingMarkdown(true);
+    setPageMarkdown('');
+
+    try {
+      const response = await apiRequest('GET', `/api/content/pages/${page.id}/markdown`);
+      setPageMarkdown(response.markdown || 'No markdown content available');
+    } catch (error) {
+      console.error('Error fetching page markdown:', error);
+      setPageMarkdown('Error loading markdown content');
+      toast.error('Failed to load page content');
+    } finally {
+      setLoadingMarkdown(false);
+    }
+  };
+
   const getProgressPercentage = () => {
     if (!currentJob?.progress.total) return 0;
     return Math.round((currentJob.progress.completed / currentJob.progress.total) * 100);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Content Management</h1>
         <p className="text-muted-foreground mt-2">
@@ -274,19 +300,83 @@ export default function AdminPage() {
                       Depth: {page.crawlDepth} • {page.domain}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deletePage(page.id)}
-                  >
-                    Delete
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => viewPage(page)}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deletePage(page.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Page View Dialog */}
+      <Dialog open={showPageDialog} onOpenChange={setShowPageDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              {selectedPage?.title}
+            </DialogTitle>
+            <div className="text-sm text-muted-foreground truncate">
+              {selectedPage?.url}
+            </div>
+          </DialogHeader>
+
+          <Tabs defaultValue="markdown" className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="markdown">Markdown Content</TabsTrigger>
+              <TabsTrigger value="preview">Live Preview</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="markdown" className="flex-1 min-h-0">
+              <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
+                {loadingMarkdown ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <pre className="text-sm whitespace-pre-wrap font-mono">
+                    {pageMarkdown}
+                  </pre>
+                )}
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="preview" className="flex-1 min-h-0">
+              <div className="h-[60vh] w-full rounded-md border overflow-hidden">
+                {selectedPage?.url ? (
+                  <iframe
+                    src={selectedPage.url}
+                    className="w-full h-full border-0"
+                    title={`Preview of ${selectedPage.title}`}
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    No URL available for preview
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

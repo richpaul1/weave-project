@@ -6,6 +6,8 @@ All methods are decorated with @weave.op() for observability.
 """
 from typing import List, Dict, Any, Optional
 from neo4j import GraphDatabase, Driver, Session
+from datetime import datetime
+import uuid
 import weave
 from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DB_NAME
 
@@ -259,4 +261,112 @@ class StorageService:
                 })
             
             return chunks
+
+    @weave.op()
+    def create_chat_message(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new chat message in Neo4j.
+
+        Args:
+            message_data: Dictionary containing message data
+
+        Returns:
+            Created message with ID and timestamp
+        """
+        with self._get_session() as session:
+            message_id = str(uuid.uuid4())
+            timestamp = datetime.now()
+
+            query = """
+            CREATE (m:ChatMessage {
+                id: $id,
+                sessionId: $sessionId,
+                sender: $sender,
+                message: $message,
+                thinking: $thinking,
+                timestamp: datetime($timestamp)
+            })
+            RETURN m
+            """
+
+            result = session.run(query, {
+                "id": message_id,
+                "sessionId": message_data.get("sessionId"),
+                "sender": message_data.get("sender"),
+                "message": message_data.get("message"),
+                "thinking": message_data.get("thinking", ""),
+                "timestamp": timestamp.isoformat()
+            })
+
+            record = result.single()
+            if record:
+                props = record["m"]
+                return {
+                    "id": props["id"],
+                    "sessionId": props["sessionId"],
+                    "sender": props["sender"],
+                    "message": props["message"],
+                    "thinking": props["thinking"],
+                    "timestamp": props["timestamp"]
+                }
+
+            return {}
+
+    @weave.op()
+    def get_chat_messages(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve all chat messages for a session.
+
+        Args:
+            session_id: Session ID to retrieve messages for
+
+        Returns:
+            List of chat messages ordered by timestamp
+        """
+        with self._get_session() as session:
+            query = """
+            MATCH (m:ChatMessage {sessionId: $sessionId})
+            RETURN m
+            ORDER BY m.timestamp ASC
+            """
+
+            result = session.run(query, {"sessionId": session_id})
+            messages = []
+
+            for record in result:
+                props = record["m"]
+                messages.append({
+                    "id": props["id"],
+                    "sessionId": props["sessionId"],
+                    "sender": props["sender"],
+                    "message": props["message"],
+                    "thinking": props.get("thinking", ""),
+                    "timestamp": props["timestamp"]
+                })
+
+            return messages
+
+    @weave.op()
+    def delete_chat_messages(self, session_id: str) -> bool:
+        """
+        Delete all chat messages for a session.
+
+        Args:
+            session_id: Session ID to delete messages for
+
+        Returns:
+            True if messages were deleted
+        """
+        with self._get_session() as session:
+            query = """
+            MATCH (m:ChatMessage {sessionId: $sessionId})
+            DETACH DELETE m
+            RETURN count(m) as deletedCount
+            """
+
+            result = session.run(query, {"sessionId": session_id})
+            record = result.single()
+            deleted_count = record["deletedCount"] if record else 0
+
+            return deleted_count > 0
 

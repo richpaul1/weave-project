@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { weave } from '../weave/init.js';
+import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 
 export interface PageMetadata {
   id: string;
@@ -132,14 +133,22 @@ export class StorageService {
     const filePath = this.getMarkdownPath(domain, slug);
     const dir = path.dirname(filePath);
 
-    // Create directory if it doesn't exist
-    await fs.mkdir(dir, { recursive: true });
+    try {
+      // Ensure base storage directory exists first
+      await fs.mkdir(config.contentStoragePath, { recursive: true });
 
-    // Write markdown file
-    await fs.writeFile(filePath, markdown, 'utf-8');
+      // Create domain directory if it doesn't exist
+      await fs.mkdir(dir, { recursive: true });
 
-    weave.logEvent('markdown_saved', { domain, slug, filePath });
-    return filePath;
+      // Write markdown file
+      await fs.writeFile(filePath, markdown, 'utf-8');
+
+      weave.logEvent('markdown_saved', { domain, slug, filePath });
+      return filePath;
+    } catch (error: any) {
+      console.error(`Failed to save markdown file: ${error.message}`);
+      throw new Error(`Failed to save markdown file for ${domain}/${slug}: ${error.message}`);
+    }
   }
 
   /**
@@ -150,14 +159,22 @@ export class StorageService {
     const filePath = this.getMetadataPath(domain, slug);
     const dir = path.dirname(filePath);
 
-    // Create directory if it doesn't exist
-    await fs.mkdir(dir, { recursive: true });
+    try {
+      // Ensure base storage directory exists first
+      await fs.mkdir(config.contentStoragePath, { recursive: true });
 
-    // Write metadata file
-    await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
+      // Create directory if it doesn't exist
+      await fs.mkdir(dir, { recursive: true });
 
-    weave.logEvent('metadata_saved', { domain, slug, filePath });
-    return filePath;
+      // Write metadata file
+      await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
+
+      weave.logEvent('metadata_saved', { domain, slug, filePath });
+      return filePath;
+    } catch (error: any) {
+      console.error(`Failed to save metadata file: ${error.message}`);
+      throw new Error(`Failed to save metadata file for ${domain}/${slug}: ${error.message}`);
+    }
   }
 
   /**
@@ -209,7 +226,7 @@ export class StorageService {
   }
 
   /**
-   * Save complete page (Neo4j + file system)
+   * Save complete page (Neo4j + file system) with chunks
    */
   @weave.op()
   async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
@@ -222,14 +239,82 @@ export class StorageService {
     // Save metadata to file system
     await this.saveMetadataFile(metadata.domain, metadata.slug, metadata);
 
-    weave.logEvent('complete_page_saved', { 
-      id: metadata.id, 
-      url, 
-      domain: metadata.domain, 
+    // Create and save chunks
+    await this.createPageChunks(metadata.id, markdown);
+
+    weave.logEvent('complete_page_saved', {
+      id: metadata.id,
+      url,
+      domain: metadata.domain,
       slug: metadata.slug,
     });
 
     return metadata;
+  }
+
+  /**
+   * Create chunks for a page and store them in Neo4j
+   */
+  @weave.op()
+  async createPageChunks(pageId: string, markdown: string): Promise<void> {
+    const chunks = chunkMarkdown(markdown, 1000);
+
+    for (const chunk of chunks) {
+      await this.createChunk(pageId, chunk);
+    }
+
+    weave.logEvent('page_chunks_created', {
+      pageId,
+      chunkCount: chunks.length,
+    });
+  }
+
+  /**
+   * Create a single chunk node and link it to a page
+   */
+  @weave.op()
+  async createChunk(pageId: string, chunk: TextChunk): Promise<string> {
+    const session = this.getSession();
+    const chunkId = uuidv4();
+
+    try {
+      // First verify the page exists
+      const pageCheckResult = await session.run(`
+        MATCH (p:Page {id: $pageId})
+        RETURN p.id as pageId
+      `, { pageId });
+
+      if (pageCheckResult.records.length === 0) {
+        throw new Error(`Page with id ${pageId} not found. Cannot create chunk.`);
+      }
+
+      // Create chunk and link to page in a single transaction
+      await session.run(`
+        MATCH (p:Page {id: $pageId})
+        CREATE (c:Chunk {
+          id: $chunkId,
+          pageId: $pageId,
+          text: $text,
+          chunkIndex: $chunkIndex,
+          startPosition: $startPosition,
+          endPosition: $endPosition,
+          createdAt: datetime()
+        })
+        CREATE (p)-[:HAS_CHUNK]->(c)
+        RETURN c.id as chunkId
+      `, {
+        chunkId,
+        pageId,
+        text: chunk.text,
+        chunkIndex: chunk.index,
+        startPosition: chunk.startPosition,
+        endPosition: chunk.endPosition,
+      });
+
+      return chunkId;
+    } finally {
+      await session.close();
+    }
   }
 
   /**

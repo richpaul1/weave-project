@@ -25,7 +25,7 @@ describe('API Integration Tests', () => {
     // Initialize storage
     storage = new StorageService();
     // Add delay to avoid concurrent schema initialization with other test suites
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     try {
       await storage.initializeSchema();
     } catch (error: any) {
@@ -34,12 +34,25 @@ describe('API Integration Tests', () => {
         throw error;
       }
     }
+    // Ensure clean state
     await storage.resetAllContent();
+    // Add additional delay to ensure cleanup is complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
   });
 
   beforeEach(async () => {
     // Clean up before each test to ensure isolation
     await storage.resetAllContent();
+    // Add delay to ensure cleanup is complete before next test
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Double-check that database is actually clean
+    const pages = await storage.getAllPages();
+    if (pages.length > 0) {
+      console.warn(`Found ${pages.length} pages after reset, cleaning again...`);
+      await storage.resetAllContent();
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   });
 
   afterAll(async () => {

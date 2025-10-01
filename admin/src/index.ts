@@ -125,7 +125,6 @@ async function startServer() {
       console.log('='.repeat(50));
       console.log(`Port: ${config.port}`);
       console.log(`Mode: ${isDevelopment ? 'Development' : 'Production'}`);
-      console.log(`Client URL: http://localhost:${config.port}/`);
       console.log(`Health Check: http://localhost:${config.port}/health`);
       console.log(`Neo4j: ${config.neo4jUri}`);
       console.log(`Weave Project: ${config.weaveProjectName}`);
@@ -148,6 +147,7 @@ async function startServer() {
       console.log(`  DELETE /api/graph/nodes/:id`);
       console.log(`  GET    /api/duplicates`);
       console.log('='.repeat(50));
+      console.log(`Admin Panel URL: http://localhost:${config.port}/`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

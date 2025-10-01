@@ -21,19 +21,48 @@ else:
 from app.weave.init import init_weave
 init_weave()
 
+# Startup event handler
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("=" * 50)
+    print("🚀 Agent Backend Server Started")
+    print("=" * 50)
+    print(f"Port: 8000")
+    print(f"Mode: Development")
+    print(f"Health Check: http://localhost:8000/health")
+    print(f"API Documentation: http://localhost:8000/docs")
+    print(f"OpenAPI Schema: http://localhost:8000/openapi.json")
+    print("=" * 50)
+    print("API Endpoints:")
+    print("  GET    /")
+    print("  GET    /health")
+    print("  POST   /api/chat/message")
+    print("  POST   /api/chat/stream")
+    print("  GET    /api/chat/health")
+    print("=" * 50)
+    print("Agent Backend URL: http://localhost:8000/")
+    print("Agent Client URL: http://localhost:8001/")
+    yield
+    # Shutdown (if needed)
+    pass
+
 # Create FastAPI app
 app = FastAPI(
     title="Weave Agent Backend",
     description="RAG Chat Agent with Weave Instrumentation",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
-# Configure CORS for frontend (port 5174)
+# Configure CORS for frontend (port 8001)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
+        "http://localhost:8001",
+        "http://127.0.0.1:8001",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -63,6 +92,15 @@ async def root():
 # Import and include routers
 from app.routes import chat
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+
+# Graph endpoints
+@app.get("/api/graph/nodes")
+async def get_graph_nodes():
+    """Get all graph nodes for visualization"""
+    # For now, return empty array - can be enhanced later
+    return []
+
+
 
 if __name__ == "__main__":
     import uvicorn

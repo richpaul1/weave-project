@@ -16,17 +16,39 @@ describe('WebCrawler Integration Tests', () => {
   beforeAll(async () => {
     crawler = new WebCrawler();
     storage = new StorageService();
-    
-    // Initialize schema
-    await storage.initializeSchema();
-    
+
+    // Add delay to avoid concurrent schema initialization
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    try {
+      // Initialize schema
+      await storage.initializeSchema();
+    } catch (error: any) {
+      // Ignore deadlock errors during schema init - constraints may already exist
+      if (!error.code?.includes('DeadlockDetected')) {
+        throw error;
+      }
+    }
+
     // Clean up any existing test data
     await storage.resetAllContent();
+    // Add delay to ensure cleanup is complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
   });
 
   beforeEach(async () => {
     // Clean up before each test to ensure isolation
     await storage.resetAllContent();
+    // Add delay to ensure cleanup is complete before next test
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Double-check that database is actually clean
+    const pages = await storage.getAllPages();
+    if (pages.length > 0) {
+      console.warn(`Found ${pages.length} pages after reset, cleaning again...`);
+      await storage.resetAllContent();
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   });
 
   afterAll(async () => {
@@ -177,25 +199,40 @@ describe('WebCrawler Integration Tests', () => {
 
     // Save the first result to storage
     const firstResult = results[0];
-    const metadata = await storage.saveCompletePage(
-      firstResult.url,
-      firstResult.title,
-      firstResult.markdown,
-      firstResult.depth
-    );
+    let markdownExists = false;
+    let markdownPath = '';
+    let metadata: any = null;
 
-    // Verify markdown file exists
-    const markdownPath = path.join(
-      config.contentStoragePath,
-      metadata.domain,
-      `${metadata.slug}.md`
-    );
+    try {
+      metadata = await storage.saveCompletePage(
+        firstResult.url,
+        firstResult.title,
+        firstResult.markdown,
+        firstResult.depth
+      );
 
-    const markdownExists = await fs.access(markdownPath)
-      .then(() => true)
-      .catch(() => false);
+      // Verify markdown file exists
+      markdownPath = path.join(
+        config.contentStoragePath,
+        metadata.domain,
+        `${metadata.slug}.md`
+      );
 
-    expect(markdownExists).toBe(true);
+      markdownExists = await fs.access(markdownPath)
+        .then(() => true)
+        .catch(() => false);
+
+      expect(markdownExists).toBe(true);
+
+      // Verify page exists in Neo4j
+      const savedPage = await storage.getPageById(metadata.id);
+      expect(savedPage).toBeTruthy();
+      expect(savedPage?.url).toBe(firstResult.url);
+
+    } catch (error: any) {
+      console.error('Error in saveCompletePage test:', error.message);
+      throw error;
+    }
 
     // Verify markdown content
     const markdownContent = await fs.readFile(markdownPath, 'utf-8');
@@ -235,6 +272,8 @@ describe('WebCrawler Integration Tests', () => {
   it('should completely clear all content from system', async () => {
     // Clean up first to ensure we start fresh
     await storage.resetAllContent();
+    // Add delay to ensure cleanup is complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Create multiple pages with markdown files
     const testPages = [
@@ -245,8 +284,13 @@ describe('WebCrawler Integration Tests', () => {
 
     const createdMetadata = [];
     for (const page of testPages) {
-      const metadata = await storage.saveCompletePage(page.url, page.title, page.markdown, 0);
-      createdMetadata.push(metadata);
+      try {
+        const metadata = await storage.saveCompletePage(page.url, page.title, page.markdown, 0);
+        createdMetadata.push(metadata);
+      } catch (error: any) {
+        console.error(`Failed to save page ${page.url}:`, error.message);
+        throw error;
+      }
     }
 
     // Verify all pages exist in Neo4j

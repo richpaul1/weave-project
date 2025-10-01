@@ -97,18 +97,18 @@ start_service_linux() {
 # Start services based on platform
 if [ "$PLATFORM" == "mac" ]; then
     # macOS - use Terminal.app
-    start_service_mac "Admin Backend" "admin-backend" "npm run dev"
+    start_service_mac "Admin Backend" "admin" "npm run dev"
     sleep 2
-    start_service_mac "Agent Backend" "agent-backend" "uvicorn app.main:app --reload --port 8000"
+    start_service_mac "Agent Backend" "agent" "uvicorn app.main:app --reload --port 8000"
     sleep 2
     start_service_mac "Frontend Client" "client" "npm run dev"
     
 elif [ "$PLATFORM" == "linux" ]; then
     # Linux - use gnome-terminal
     if command -v gnome-terminal &> /dev/null; then
-        start_service_linux "Admin Backend" "admin-backend" "npm run dev"
+        start_service_linux "Admin Backend" "admin" "npm run dev"
         sleep 2
-        start_service_linux "Agent Backend" "agent-backend" "uvicorn app.main:app --reload --port 8000"
+        start_service_linux "Agent Backend" "agent" "uvicorn app.main:app --reload --port 8000"
         sleep 2
         start_service_linux "Frontend Client" "client" "npm run dev"
     else
