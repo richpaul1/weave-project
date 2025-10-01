@@ -1,0 +1,80 @@
+{
+  "name": "weave-project",
+  "version": "1.0.0",
+  "description": "Dual-backend RAG application with comprehensive Weave instrumentation",
+  "private": true,
+  "workspaces": [
+    "admin-backend",
+    "client"
+  ],
+  "scripts": {
+    "preinstall": "node scripts/check-prerequisites.js || true",
+    "install:all": "npm install && cd admin-backend && npm install && cd ../client && npm install && cd ../agent-backend && pip install -r requirements.txt",
+    "dev": "concurrently -n \"admin,agent,client\" -c \"blue,green,yellow\" \"npm run dev:admin\" \"npm run dev:agent\" \"npm run dev:client\"",
+    "dev:admin": "cd admin-backend && npm run dev",
+    "dev:agent": "cd agent-backend && uvicorn app.main:app --reload --port 8000",
+    "dev:client": "cd client && npm run dev",
+    "start": "./scripts/start.sh",
+    "start:all": "./scripts/start-all.sh",
+    "start:admin": "cd admin-backend && npm run dev",
+    "start:agent": "cd agent-backend && uvicorn app.main:app --reload --port 8000",
+    "start:client": "cd client && npm run dev",
+    "build": "npm run build:admin && npm run build:client",
+    "build:admin": "cd admin-backend && npm run build",
+    "build:client": "cd client && npm run build",
+    "test": "npm run test:admin && npm run test:agent && npm run test:client",
+    "test:admin": "cd admin-backend && npm test",
+    "test:agent": "cd agent-backend && python -m pytest tests/",
+    "test:client": "cd client && npm test",
+    "test:unit": "npm run test:unit:admin && npm run test:unit:agent",
+    "test:unit:admin": "cd admin-backend && npm run test:unit",
+    "test:unit:agent": "cd agent-backend && python -m pytest tests/unit/",
+    "test:integration": "npm run test:integration:admin && npm run test:integration:agent",
+    "test:integration:admin": "cd admin-backend && npm run test:integration",
+    "test:integration:agent": "cd agent-backend && python -m pytest tests/integration/",
+    "test:functional": "npm run test:functional:admin && npm run test:functional:agent",
+    "test:functional:admin": "cd admin-backend && npm run test:functional",
+    "test:functional:agent": "cd agent-backend && python -m pytest tests/functional/",
+    "test:weave": "cd agent-backend && python -m pytest tests/integration/test_weave_instrumentation.py -v",
+    "test:coverage": "npm run test:coverage:admin && npm run test:coverage:agent",
+    "test:coverage:admin": "cd admin-backend && npm run test:coverage",
+    "test:coverage:agent": "cd agent-backend && python -m pytest --cov=app --cov-report=html --cov-report=term",
+    "lint": "npm run lint:admin && npm run lint:client",
+    "lint:admin": "cd admin-backend && npm run lint",
+    "lint:client": "cd client && npm run lint",
+    "clean": "npm run clean:admin && npm run clean:client && npm run clean:agent",
+    "clean:admin": "cd admin-backend && rm -rf node_modules dist coverage",
+    "clean:client": "cd client && rm -rf node_modules dist",
+    "clean:agent": "cd agent-backend && rm -rf __pycache__ .pytest_cache htmlcov .coverage",
+    "health": "npm run health:admin && npm run health:agent",
+    "health:admin": "curl -s http://localhost:3002/health | jq . || echo '❌ Admin backend not running'",
+    "health:agent": "curl -s http://localhost:8000/health | jq . || echo '❌ Agent backend not running'",
+    "check": "node scripts/check-prerequisites.js",
+    "check:prereqs": "node scripts/check-prerequisites.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/weave-project"
+  },
+  "keywords": [
+    "rag",
+    "llm",
+    "weave",
+    "wandb",
+    "neo4j",
+    "fastapi",
+    "react",
+    "typescript",
+    "python"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
+

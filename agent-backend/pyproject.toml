@@ -1,0 +1,17 @@
+[project]
+name = "weave-agent-backend"
+version = "0.1.0"
+description = "RAG Chat Agent with Weave Instrumentation"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+

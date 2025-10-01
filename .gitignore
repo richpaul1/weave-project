@@ -1,0 +1,32 @@
+# Environment files
+.env.local
+.env
+
+# Storage
+storage/
+
+# Node modules
+node_modules/
+/node_modules
+
+# Python virtual environments
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Markdown files
+*.md
+
+
