@@ -1,49 +1,66 @@
-import { Route, Link, useLocation } from 'wouter';
-import { AdminPage } from './pages/AdminPage';
-import { ChatPage } from './pages/ChatPage';
+import { Switch, Route, useLocation } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import Navigation from "@/components/navigation";
+import ChatPage from "@/pages/ChatPage";
+import AdminPage from "@/pages/AdminPage";
+import GraphPage from "@/pages/GraphPage";
+import { v4 as uuidv4 } from "uuid";
 
-function App() {
-  const [location] = useLocation();
+function Router() {
+  const [, navigate] = useLocation();
+
+  // Check for existing session ID in local storage
+  const getSessionId = () => {
+    let sessionId = localStorage.getItem("chatSessionId");
+    if (!sessionId) {
+      sessionId = uuidv4();
+      localStorage.setItem("chatSessionId", sessionId);
+    }
+    return sessionId;
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b border-border bg-surface">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-xl font-bold text-foreground">Weave RAG Demo</h1>
-            <div className="flex gap-4">
-              <Link href="/">
-                <a className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  location === '/'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}>
-                  Admin
-                </a>
-              </Link>
-              <Link href="/chat">
-                <a className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  location === '/chat'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}>
-                  Chat
-                </a>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Route path="/">
-          <AdminPage />
-        </Route>
-        <Route path="/chat">
-          <ChatPage />
-        </Route>
+    <div className="flex h-screen overflow-hidden">
+      <Navigation />
+      <main className="flex-1 overflow-auto">
+        <Switch>
+          <Route path="/">
+            {() => {
+              const sessionId = getSessionId();
+              navigate(`/chat/${sessionId}`, { replace: true });
+              return null;
+            }}
+          </Route>
+          <Route path="/chat">
+            {() => {
+              const sessionId = getSessionId();
+              navigate(`/chat/${sessionId}`, { replace: true });
+              return null;
+            }}
+          </Route>
+          <Route path="/chat/:sessionId" component={ChatPage} />
+          <Route path="/admin" component={AdminPage} />
+          <Route path="/graph" component={GraphPage} />
+        </Switch>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

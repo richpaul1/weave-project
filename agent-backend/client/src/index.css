@@ -1,0 +1,374 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default dark theme variables in :root */
+:root {
+  --background: hsl(222, 84%, 4.9%);
+  --foreground: hsl(210, 40%, 98%);
+  --muted: hsl(217, 32%, 17%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  --popover: hsl(222, 84%, 4.9%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --card: hsl(222, 84%, 4.9%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --border: hsl(217, 32%, 17%);
+  --input: hsl(217, 32%, 17%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(222, 47%, 11%);
+  --secondary: hsl(217, 32%, 17%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --accent: hsl(142, 76%, 36%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --ring: hsl(217, 91%, 60%);
+  --radius: 0.5rem;
+  --surface: hsl(222, 47%, 11%);
+  --surface-foreground: hsl(210, 40%, 98%);
+}
+
+/* Light theme override */
+.light {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(222, 47%, 11%);
+  --muted: hsl(210, 40%, 96%);
+  --muted-foreground: hsl(215, 16%, 47%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(222, 47%, 11%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(222, 47%, 11%);
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 40%, 96%);
+  --secondary-foreground: hsl(222, 47%, 11%);
+  --accent: hsl(142, 76%, 36%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --ring: hsl(217, 91%, 60%);
+  --surface: hsl(0, 0%, 98%);
+  --surface-foreground: hsl(222, 47%, 11%);
+}
+
+/* Dark theme (explicit, same as :root) */
+.dark {
+  --background: hsl(222, 84%, 4.9%);
+  --foreground: hsl(210, 40%, 98%);
+  --muted: hsl(217, 32%, 17%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  --popover: hsl(222, 84%, 4.9%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --card: hsl(222, 84%, 4.9%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --border: hsl(217, 32%, 17%);
+  --input: hsl(217, 32%, 17%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(222, 47%, 11%);
+  --secondary: hsl(217, 32%, 17%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --accent: hsl(142, 76%, 36%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --ring: hsl(217, 91%, 60%);
+  --surface: hsl(222, 47%, 11%);
+  --surface-foreground: hsl(210, 40%, 98%);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .nav-item {
+    @apply w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors;
+  }
+
+  .nav-item.active {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .nav-item:not(.active) {
+    @apply text-muted-foreground hover:text-foreground hover:bg-muted;
+  }
+
+  .upload-dropzone {
+    @apply border-2 border-dashed border-muted-foreground rounded-lg transition-all duration-300 ease-in-out;
+  }
+
+  .upload-dropzone:hover {
+    @apply border-primary bg-muted;
+  }
+
+  .upload-dropzone.dragover {
+    @apply border-accent bg-muted;
+  }
+
+  .markdown-content {
+    @apply prose prose-invert max-w-none;
+  }
+
+  .light .markdown-content {
+    @apply prose;
+  }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3 {
+    @apply font-semibold mb-4 text-foreground;
+  }
+
+  .markdown-content p {
+    @apply mb-4 text-muted-foreground leading-relaxed;
+  }
+
+  .markdown-content p:last-child {
+    @apply mb-0;
+  }
+
+  /* Fix for single paragraph messages (like user questions) */
+  .markdown-content p:only-child {
+    @apply mb-0;
+  }
+
+  /* More aggressive fix for single paragraph spacing */
+  .markdown-content p:first-child:last-child {
+    @apply mb-0 mt-0;
+  }
+
+  /* Remove any default browser margins on paragraphs in markdown content */
+  .markdown-content p:first-child {
+    @apply mt-0;
+  }
+
+  /* Specific styles for user messages to remove extra spacing */
+  .user-content.markdown-content p {
+    @apply mb-0 mt-0;
+  }
+
+  /* Ensure user message container has minimal padding if needed */
+  .user-message .user-content.markdown-content {
+    @apply leading-normal;
+  }
+
+  /* Reduce padding for user messages to eliminate extra spacing */
+  .user-message {
+    @apply py-2 px-4;
+  }
+
+  .markdown-content code {
+    @apply bg-muted px-2 py-1 rounded text-sm font-mono text-accent;
+  }
+
+  .markdown-content pre {
+    @apply bg-muted p-4 rounded-lg overflow-x-auto mb-4;
+  }
+
+  .markdown-content ul {
+    @apply list-disc list-outside ml-6 mb-4 text-muted-foreground space-y-1;
+  }
+
+  .markdown-content ol {
+    @apply list-decimal list-outside ml-6 mb-4 text-muted-foreground space-y-1;
+  }
+
+  .markdown-content li {
+    @apply leading-relaxed pl-2;
+  }
+
+  .streaming-text {
+    position: relative;
+  }
+
+  .streaming-text::after {
+    content: '|';
+    @apply text-primary animate-pulse;
+  }
+
+  .graph-node {
+    @apply transition-all duration-300 ease-in-out cursor-pointer;
+  }
+
+  .graph-node:hover {
+    @apply scale-110 brightness-125;
+  }
+
+  .status-indicator {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-indicator.connected {
+    @apply bg-accent;
+  }
+
+  .status-indicator.disconnected {
+    @apply bg-destructive;
+  }
+
+  .status-indicator.processing {
+    @apply bg-yellow-500 animate-pulse;
+  }
+}
+
+@layer utilities {
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateY(-10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}
+
+/* Custom background surface class */
+.bg-surface {
+  background-color: var(--surface);
+}
+
+/* Enhanced scrolling for content management */
+.content-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+
+.content-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.content-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--muted);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.content-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border);
+}
+
+/* Ensure proper overflow handling for content views */
+.content-view-container {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-view-container .prose {
+  max-width: none !important;
+}
+
+/* Better HTML preview styling */
+.html-preview {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--foreground);
+  position: relative;
+}
+
+.html-preview * {
+  max-width: 100%;
+}
+
+.html-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Iframe styling for website previews */
+.html-preview iframe {
+  background: var(--card);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading state for iframes */
+.iframe-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: 4px;
+  min-height: 200px;
+}
+
+/* Iframe popup styling */
+.iframe-popup {
+  height: calc(80vh - 120px);
+  min-height: 400px;
+}
+
+.iframe-popup iframe {
+  background: var(--card);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Ensure iframe containers have proper height */
+.content-view-container .html-preview {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Performance optimizations for touch events and iframes */
+iframe {
+  touch-action: manipulation;
+  will-change: transform;
+}
+
+/* Improve scrolling performance */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Optimize iframe containers */
+.iframe-container {
+  contain: layout style paint;
+  transform: translateZ(0);
+}

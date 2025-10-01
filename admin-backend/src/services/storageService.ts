@@ -324,7 +324,7 @@ export class StorageService {
   @weave.op()
   async resetAllContent(): Promise<void> {
     const session = this.getSession();
-    
+
     try {
       // Delete all pages from Neo4j
       await session.run(`
@@ -341,6 +341,167 @@ export class StorageService {
       }
 
       weave.logEvent('all_content_reset');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get all graph nodes
+   */
+  @weave.op()
+  async getGraphNodes(): Promise<any[]> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(`
+        MATCH (n)
+        RETURN n.id as id, labels(n)[0] as type,
+               COALESCE(n.title, n.label, n.name, n.id) as label,
+               properties(n) as properties
+        ORDER BY type, label
+      `);
+
+      return result.records.map(record => ({
+        id: record.get('id'),
+        type: record.get('type'),
+        label: record.get('label'),
+        properties: record.get('properties'),
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get all graph edges
+   */
+  @weave.op()
+  async getGraphEdges(): Promise<any[]> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(`
+        MATCH (source)-[r]->(target)
+        RETURN source.id as sourceId, target.id as targetId,
+               type(r) as relationship,
+               COALESCE(r.weight, 1.0) as weight,
+               properties(r) as properties
+      `);
+
+      return result.records.map(record => ({
+        sourceId: record.get('sourceId'),
+        targetId: record.get('targetId'),
+        relationship: record.get('relationship'),
+        weight: record.get('weight'),
+        properties: record.get('properties'),
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Search graph nodes by label
+   */
+  @weave.op()
+  async searchGraphNodes(query: string, limit: number = 50): Promise<any> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(`
+        MATCH (n)
+        WHERE toLower(COALESCE(n.title, n.label, n.name, '')) CONTAINS toLower($query)
+        RETURN n.id as id, labels(n)[0] as type,
+               COALESCE(n.title, n.label, n.name, n.id) as label,
+               properties(n) as properties
+        ORDER BY label
+        LIMIT $limit
+      `, { query, limit: neo4j.int(limit) });
+
+      const results = result.records.map(record => ({
+        id: record.get('id'),
+        type: record.get('type'),
+        label: record.get('label'),
+        properties: record.get('properties'),
+      }));
+
+      return {
+        results,
+        total: results.length,
+        query,
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get node type statistics
+   */
+  @weave.op()
+  async getNodeTypeStats(): Promise<Record<string, number>> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(`
+        MATCH (n)
+        RETURN labels(n)[0] as type, count(n) as count
+        ORDER BY count DESC
+      `);
+
+      const stats: Record<string, number> = {};
+      result.records.forEach(record => {
+        const type = record.get('type');
+        const count = record.get('count').toNumber();
+        stats[type] = count;
+      });
+
+      return stats;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete a graph node and optionally its connections
+   */
+  @weave.op()
+  async deleteGraphNode(nodeId: string, cascade: boolean = false): Promise<{ deletedNodes: number; deletedEdges: number }> {
+    const session = this.getSession();
+
+    try {
+      if (cascade) {
+        // Delete node and all connected nodes
+        const result = await session.run(`
+          MATCH (n {id: $nodeId})
+          OPTIONAL MATCH (n)-[r]-()
+          WITH n, count(r) as edgeCount
+          DETACH DELETE n
+          RETURN 1 as deletedNodes, edgeCount
+        `, { nodeId });
+
+        const record = result.records[0];
+        return {
+          deletedNodes: record ? record.get('deletedNodes') : 0,
+          deletedEdges: record ? record.get('edgeCount').toNumber() : 0,
+        };
+      } else {
+        // Delete only the node and its relationships
+        const result = await session.run(`
+          MATCH (n {id: $nodeId})
+          OPTIONAL MATCH (n)-[r]-()
+          WITH n, count(r) as edgeCount
+          DETACH DELETE n
+          RETURN 1 as deletedNodes, edgeCount
+        `, { nodeId });
+
+        const record = result.records[0];
+        return {
+          deletedNodes: record ? record.get('deletedNodes') : 0,
+          deletedEdges: record ? record.get('edgeCount').toNumber() : 0,
+        };
+      }
     } finally {
       await session.close();
     }

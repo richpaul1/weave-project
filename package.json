@@ -5,14 +5,20 @@
   "private": true,
   "workspaces": [
     "admin-backend",
-    "client"
+    "admin-backend/client",
+    "agent-backend/client"
   ],
   "scripts": {
     "preinstall": "node scripts/check-prerequisites.js || true",
-    "install:all": "npm install && cd admin-backend && npm install && cd ../client && npm install && cd ../agent-backend && pip install -r requirements.txt",
-    "dev": "concurrently -n \"admin,agent,client\" -c \"blue,green,yellow\" \"npm run dev:admin\" \"npm run dev:agent\" \"npm run dev:client\"",
+    "install:all": "npm install && cd admin-backend && npm install && cd client && npm install && cd ../../agent-backend && pip install -r requirements.txt && cd client && npm install",
+    "dev": "node scripts/dev-with-urls.js",
+    "dev:raw": "concurrently -n \"admin-be,admin-fe,agent-be,agent-fe\" -c \"blue,cyan,green,yellow\" \"npm run dev:admin-backend\" \"npm run dev:admin-frontend\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
+    "dev:admin-backend": "cd admin-backend && npm run dev",
+    "dev:admin-frontend": "cd admin-backend/client && npx vite",
+    "dev:agent-backend": "cd agent-backend && python -m uvicorn app.main:app --reload --port 8000",
+    "dev:agent-frontend": "cd agent-backend/client && npx vite",
     "dev:admin": "cd admin-backend && npm run dev",
-    "dev:agent": "cd agent-backend && uvicorn app.main:app --reload --port 8000",
+    "dev:agent": "cd agent-backend && python -m uvicorn app.main:app --reload --port 8000",
     "dev:client": "cd client && npm run dev",
     "start": "./scripts/start.sh",
     "start:all": "./scripts/start-all.sh",

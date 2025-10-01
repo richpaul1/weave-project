@@ -1,16 +1,41 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 import { config } from './config.js';
 import { initializeWeave } from './weave/init.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
+import graphRoutes from './routes/graphRoutes.js';
+import { setupVite, serveStatic, log } from './vite.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const server = createServer(app);
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5174', // Frontend URL
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Allow same-origin requests and dev server
+    const allowedOrigins = [
+      `http://localhost:${config.port}`,
+      `http://localhost:${config.port + 1}`, // Dev frontend typically runs on port + 1
+    ];
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -40,14 +65,8 @@ app.get('/health', (req: Request, res: Response) => {
 // API routes
 app.use('/api/crawler', crawlerRoutes);
 app.use('/api/content', contentRoutes);
-
-// 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    error: 'Not Found',
-    path: req.path,
-  });
-});
+app.use('/api/graph', graphRoutes);
+app.use('/api/duplicates', graphRoutes);
 
 // Error handler
 app.use((err: Error, req: Request, res: Response, next: any) => {
@@ -61,6 +80,16 @@ app.use((err: Error, req: Request, res: Response, next: any) => {
 // Start server
 async function startServer() {
   try {
+    // Create content storage directory if it doesn't exist
+    const contentStoragePath = config.contentStoragePath;
+    if (!fs.existsSync(contentStoragePath)) {
+      console.log(`Creating content storage directory: ${contentStoragePath}`);
+      fs.mkdirSync(contentStoragePath, { recursive: true });
+      console.log('✅ Content storage directory created');
+    } else {
+      console.log(`✅ Content storage directory exists: ${contentStoragePath}`);
+    }
+
     // Initialize Weave
     console.log('Initializing Weave...');
     await initializeWeave();
@@ -72,12 +101,31 @@ async function startServer() {
     await storage.close();
     console.log('Database schema initialized');
 
+    // Setup Vite in development or serve static files in production
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+
+    if (isDevelopment) {
+      console.log('Setting up Vite dev server...');
+      await setupVite(app, server);
+      console.log('✅ Vite dev server ready');
+    } else {
+      console.log('Serving static files from build...');
+      const served = serveStatic(app);
+      if (!served) {
+        console.warn('⚠️  Frontend not built - API only mode');
+      } else {
+        console.log('✅ Serving frontend from dist/public');
+      }
+    }
+
     // Start Express server
-    app.listen(config.port, () => {
+    server.listen(config.port, () => {
       console.log('='.repeat(50));
       console.log(`🚀 Admin Backend Server Started`);
       console.log('='.repeat(50));
       console.log(`Port: ${config.port}`);
+      console.log(`Mode: ${isDevelopment ? 'Development' : 'Production'}`);
+      console.log(`Client URL: http://localhost:${config.port}/`);
       console.log(`Health Check: http://localhost:${config.port}/health`);
       console.log(`Neo4j: ${config.neo4jUri}`);
       console.log(`Weave Project: ${config.weaveProjectName}`);
@@ -93,6 +141,12 @@ async function startServer() {
       console.log(`  GET    /api/content/pages/:id/markdown`);
       console.log(`  DELETE /api/content/pages/:id`);
       console.log(`  GET    /api/content/stats`);
+      console.log(`  GET    /api/graph/nodes`);
+      console.log(`  GET    /api/graph/edges`);
+      console.log(`  GET    /api/graph/search`);
+      console.log(`  GET    /api/graph/node-types`);
+      console.log(`  DELETE /api/graph/nodes/:id`);
+      console.log(`  GET    /api/duplicates`);
       console.log('='.repeat(50));
     });
   } catch (error) {
