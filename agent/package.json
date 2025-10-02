@@ -4,14 +4,12 @@
   "description": "UI tests for Weave Agent using Vitest + Playwright",
   "type": "module",
   "scripts": {
-    "test:ui": "vitest run tests/ui --reporter=verbose",
-    "test:ui:watch": "vitest tests/ui",
-    "test:ui:headed": "HEADED=true vitest run tests/ui --reporter=verbose",
-    "install:playwright": "npx playwright install chromium"
+    "dev": "concurrently --names \"agent-backend,agent-frontend\" --prefix-colors \"blue,green\" \"python -m app.main\" \"sleep 3 && cd client && npm run dev\"",
+    "install:all": "npm install && cd client && npm install",
+    "test:ui": "vitest run tests/ui --reporter=verbose"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "dotenv": "^16.3.1",
+    "concurrently": "^8.2.2",
     "playwright": "^1.40.1",
     "typescript": "^5.3.3",
     "vitest": "^1.0.4"

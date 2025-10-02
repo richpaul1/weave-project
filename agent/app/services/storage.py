@@ -397,7 +397,6 @@ class StorageService:
 
             return deleted_count > 0
 
-    @weave.op()
     def get_recent_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent chat sessions with their latest message and metadata.

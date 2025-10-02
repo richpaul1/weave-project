@@ -106,7 +106,21 @@ export default function ChatPage() {
     setMessage("");
     setIsStreaming(true);
 
-    // Save user message first
+    // Add user message to UI immediately
+    const userMessageObj: StreamingMessage = {
+      id: uuidv4(),
+      role: "user",
+      content: userMessage,
+      thinking: "",
+      isStreaming: false,
+      isThinkingComplete: true,
+      createdAt: timestamp,
+      sessionId: sessionId,
+    };
+
+    setStreamingMessages((prev) => [...prev, userMessageObj]);
+
+    // Save user message to database
     try {
       await apiRequest('POST', '/api/chat/messages', {
         sessionId: sessionId,
@@ -129,7 +143,7 @@ export default function ChatPage() {
       thinking: "",
       isStreaming: true,
       isThinkingComplete: false,
-      createdAt: timestamp + 500,
+      createdAt: timestamp + 1000, // Show after user message
       sessionId: sessionId,
     };
 
@@ -138,7 +152,7 @@ export default function ChatPage() {
     currentThinkingRef.current = "";
 
     setStreamingMessages((prev) => [...prev, initialAssistantMessage]);
-    setThinkingOpen(prev => ({ ...prev, [assistantId]: true }));
+    // Don't auto-open thinking panel - keep it collapsed by default
 
     // Start streaming
     try {
@@ -163,7 +177,7 @@ export default function ChatPage() {
               msg.id === assistantId ? {
                 ...msg,
                 content: currentResponseRef.current,
-                isThinkingComplete: true
+                isThinkingComplete: true // Stop thinking spinner when response starts
               } : msg
             )
           );
@@ -294,12 +308,16 @@ export default function ChatPage() {
               )}
 
               <div className="flex flex-col gap-2 max-w-2xl">
-                {msg.role === "ai" && msg.thinking && (
+                {msg.role === "ai" && (
                   <Collapsible open={thinkingOpen[msg.id] ?? false} onOpenChange={(open) => setThinkingOpen(prev => ({ ...prev, [msg.id]: open }))}>
                     <Card className="bg-surface">
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" className="w-full justify-start p-3 hover:bg-transparent">
-                          <Brain className="h-4 w-4 text-muted-foreground mr-2" />
+                          <Brain className={`h-4 w-4 mr-2 ${
+                            msg.thinking && msg.thinking.trim()
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-gray-400 dark:text-gray-500'
+                          }`} />
                           <span className="text-xs text-muted-foreground">Thinking Process</span>
                           {msg.isStreaming && !msg.isThinkingComplete && (
                             <Loader2 className="h-3 w-3 ml-2 text-primary animate-spin" />
@@ -307,7 +325,9 @@ export default function ChatPage() {
                         </Button>
                       </CollapsibleTrigger>
                       <CollapsibleContent className="px-3 pb-3">
-                        <div className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.thinking}</div>
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                          {msg.thinking || (msg.isStreaming && !msg.isThinkingComplete ? "Thinking..." : "No thinking process available")}
+                        </div>
                       </CollapsibleContent>
                     </Card>
                   </Collapsible>
@@ -317,11 +337,6 @@ export default function ChatPage() {
                   {msg.content ? (
                     <div className="markdown-content">
                       <MarkdownRenderer content={msg.content} />
-                    </div>
-                  ) : msg.isStreaming ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Generating response...</span>
                     </div>
                   ) : null}
                 </Card>

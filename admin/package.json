@@ -6,20 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --ignore 'client/**' --ignore 'dist/**' src/index.ts",
-    "dev:admin": "npm run dev",
     "build": "cd client && npm run build && cd .. && esbuild src/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "NODE_ENV=production node dist/index.js",
-    "test": "vitest",
-    "test:unit": "vitest run src/tests/unit",
-    "test:functional": "vitest run tests/functional",
-    "test:integration": "vitest run tests/integration",
-    "test:ui": "vitest run tests/ui",
-    "test:all": "npm run test:unit && npm run test:functional && npm run test:integration && npm run test:ui",
-    "test:coverage": "vitest run --coverage",
     "install:all": "npm install && cd client && npm install",
-    "clean": "rm -rf node_modules client/node_modules dist client/dist coverage",
-    "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "test": "vitest run tests/unit tests/functional tests/integration tests/ui"
   },
   "keywords": [
     "weave",

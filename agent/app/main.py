@@ -27,14 +27,15 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    port = int(os.getenv("AGENT_PORT", "8000"))
     print("=" * 50)
     print("🚀 Agent Backend Server Started")
     print("=" * 50)
-    print(f"Port: 8000")
+    print(f"Port: {port}")
     print(f"Mode: Development")
-    print(f"Health Check: http://localhost:8000/health")
-    print(f"API Documentation: http://localhost:8000/docs")
-    print(f"OpenAPI Schema: http://localhost:8000/openapi.json")
+    print(f"Health Check: http://localhost:{port}/health")
+    print(f"API Documentation: http://localhost:{port}/docs")
+    print(f"OpenAPI Schema: http://localhost:{port}/openapi.json")
     print("=" * 50)
     print("API Endpoints:")
     print("  GET    /")
@@ -48,8 +49,9 @@ async def lifespan(app: FastAPI):
     print("  DELETE /api/chat/messages/{session_id}")
     print("  GET    /api/weave/config")
     print("=" * 50)
-    print("Agent Backend URL: http://localhost:8000/")
-    print("Agent Client URL: http://localhost:8001/")
+    client_port = int(os.getenv("AGENT_CLIENT_PORT", "8001"))
+    print(f"Agent Backend URL: http://localhost:{port}/")
+    print(f"Agent Client URL: http://localhost:{client_port}/")
     yield
     # Shutdown (if needed)
     pass
@@ -62,12 +64,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS for frontend (port 8001)
+# Configure CORS for frontend
+client_port = int(os.getenv("AGENT_CLIENT_PORT", "8001"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8001",
-        "http://127.0.0.1:8001",
+        f"http://localhost:{client_port}",
+        f"http://127.0.0.1:{client_port}",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -115,5 +118,15 @@ async def get_graph_nodes():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # Get port from environment variable, default to 8000
+    port = int(os.getenv("AGENT_PORT", "8000"))
+
+    print(f"🚀 Starting server on port {port}")
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True
+    )
 
