@@ -216,7 +216,9 @@ async def save_chat_message(message_data: dict):
     init_services()
 
     try:
-        saved_message = storage_service.create_chat_message(message_data)
+        # Extract session_id for Weave tracking
+        session_id = message_data.get("sessionId")
+        saved_message = storage_service.create_chat_message(message_data, session_id)
         return saved_message
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -238,6 +240,26 @@ async def delete_chat_messages(session_id: str):
     try:
         deleted = storage_service.delete_chat_messages(session_id)
         return {"success": deleted, "message": f"Deleted messages for session {session_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions")
+async def get_recent_sessions(limit: int = 10):
+    """
+    Get recent chat sessions with their latest message.
+
+    Args:
+        limit: Maximum number of sessions to return (default: 10)
+
+    Returns:
+        List of recent sessions with metadata
+    """
+    init_services()
+
+    try:
+        sessions = storage_service.get_recent_sessions(limit)
+        return sessions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

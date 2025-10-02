@@ -30,15 +30,21 @@ export default function ChatPage() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
+  // Refs to track current streaming content for saving
+  const currentResponseRef = useRef<string>("");
+  const currentThinkingRef = useRef<string>("");
+
   // Fetch chat history
   const { data: chatHistory = [], isLoading } = useQuery<ChatMessage[]>({
     queryKey: [`/api/chat/messages/${sessionId}`],
     queryFn: async () => {
       try {
+        console.log('🔍 Fetching chat history for session:', sessionId);
         const response = await apiRequest('GET', `/api/chat/messages/${sessionId}`);
+        console.log('📨 Chat history fetched:', response);
         return response || [];
       } catch (error) {
-        console.error('Error fetching chat history:', error);
+        console.error('❌ Error fetching chat history:', error);
         return [];
       }
     },
@@ -59,10 +65,10 @@ export default function ChatPage() {
   const allMessages = [
     ...chatHistory.map(msg => ({
       id: msg.id,
-      role: msg.role,
-      content: msg.content,
+      role: (msg as any).sender === 'user' ? 'user' : 'ai', // Convert sender to role
+      content: (msg as any).message || msg.content, // Handle both message and content fields
       thinking: msg.thinking,
-      createdAt: msg.createdAt,
+      createdAt: (msg as any).timestamp ? new Date((msg as any).timestamp).getTime() : msg.createdAt, // Convert timestamp to number
       sessionId: msg.sessionId,
       isStreaming: false,
       isThinkingComplete: true,
@@ -70,12 +76,43 @@ export default function ChatPage() {
     ...streamingMessages,
   ].sort((a, b) => a.createdAt - b.createdAt);
 
+  // Log streaming messages state changes
+  useEffect(() => {
+    console.log('📊 Streaming messages state:', streamingMessages);
+  }, [streamingMessages]);
+
+  // Log chat history changes
+  useEffect(() => {
+    console.log('📚 Chat history loaded:', chatHistory);
+  }, [chatHistory]);
+
+  // Log all messages combination
+  useEffect(() => {
+    console.log('📋 All messages (history + streaming):', allMessages);
+  }, [allMessages]);
+
   const handleSendMessage = async () => {
     if (!message.trim() || isStreaming || !sessionId) return;
 
     const timestamp = Date.now();
+    const userMessage = message.trim();
     setMessage("");
     setIsStreaming(true);
+
+    // Save user message first
+    try {
+      await apiRequest('POST', '/api/chat/messages', {
+        sessionId: sessionId,
+        sender: 'user',
+        message: userMessage,
+        thinking: '',
+        timestamp: new Date(timestamp).toISOString(),
+      });
+    } catch (error) {
+      console.error('Error saving user message:', error);
+      setIsStreaming(false);
+      return;
+    }
 
     const assistantId = uuidv4();
     const initialAssistantMessage: StreamingMessage = {
@@ -89,6 +126,10 @@ export default function ChatPage() {
       sessionId: sessionId,
     };
 
+    // Reset refs for new streaming session
+    currentResponseRef.current = "";
+    currentThinkingRef.current = "";
+
     setStreamingMessages((prev) => [...prev, initialAssistantMessage]);
     setThinkingOpen(prev => ({ ...prev, [assistantId]: true }));
 
@@ -96,8 +137,10 @@ export default function ChatPage() {
     try {
       await streamingClient.startStream(
         "/api/chat/stream",
-        { message: message.trim(), sessionId: sessionId },
+        { query: userMessage, session_id: sessionId },
         (newThinking) => {
+          console.log('🧠 Thinking received:', newThinking);
+          currentThinkingRef.current = newThinking;
           setStreamingMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantId ? { ...msg, thinking: newThinking } : msg
@@ -105,16 +148,58 @@ export default function ChatPage() {
           );
         },
         (newResponse) => {
+          console.log('💬 Response chunk received:', newResponse);
+          currentResponseRef.current += newResponse;
+          console.log('📝 Accumulated response so far:', currentResponseRef.current);
           setStreamingMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantId ? { ...msg, content: newResponse, isThinkingComplete: true } : msg
+              msg.id === assistantId ? {
+                ...msg,
+                content: currentResponseRef.current,
+                isThinkingComplete: true
+              } : msg
             )
           );
         },
         async () => {
+          console.log('✅ Streaming completed');
+          console.log('💾 Final accumulated response:', currentResponseRef.current);
+          console.log('💾 Final thinking content:', currentThinkingRef.current);
+
+          // Save the AI response to database using refs
+          if (currentResponseRef.current.trim()) {
+            console.log('💾 Saving AI response:', {
+              content: currentResponseRef.current,
+              thinking: currentThinkingRef.current,
+              sessionId: sessionId
+            });
+
+            try {
+              await apiRequest('POST', '/api/chat/messages', {
+                sessionId: sessionId,
+                sender: 'ai',
+                message: currentResponseRef.current.trim(),
+                thinking: currentThinkingRef.current,
+                timestamp: new Date().toISOString(),
+              });
+              console.log('✅ AI response saved successfully');
+            } catch (error) {
+              console.error('❌ Error saving AI response:', error);
+            }
+          } else {
+            console.warn('⚠️ No AI response content to save');
+          }
+
+          console.log('🧹 Clearing streaming state');
           setIsStreaming(false);
           setStreamingMessages([]);
+
+          console.log('🔄 Refreshing queries');
+          // Refresh both chat messages and sessions list
+          console.log('🔄 Invalidating chat messages query for session:', sessionId);
           queryClient.invalidateQueries({ queryKey: [`/api/chat/messages/${sessionId}`] });
+          console.log('🔄 Invalidating sessions query');
+          queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
         },
         (error) => {
           console.error('Streaming error:', error);
@@ -192,7 +277,7 @@ export default function ChatPage() {
                   </Collapsible>
                 )}
 
-                <Card className={`p-4 ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-surface"}`}>
+                <Card className={`p-4 ${msg.role === "user" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" : "bg-surface"}`}>
                   {msg.content ? (
                     <div className="markdown-content">
                       <MarkdownRenderer content={msg.content} />

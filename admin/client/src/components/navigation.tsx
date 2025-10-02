@@ -1,14 +1,18 @@
 import { Link, useLocation } from "wouter";
-import { FolderOpen, Network } from "lucide-react";
+import { FolderOpen, Network, Settings, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Button } from "@/components/ui/button";
 
 const navigationItems = [
   { path: "/admin", label: "Admin", icon: FolderOpen },
   { path: "/graph", label: "Graph", icon: Network },
+  { path: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Navigation() {
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="w-64 bg-surface border-r border-border flex flex-col">
@@ -35,7 +39,21 @@ export default function Navigation() {
         })}
       </div>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleTheme}
+          className="w-full justify-start"
+        >
+          {theme === "dark" ? (
+            <Sun className="mr-2 h-4 w-4" />
+          ) : (
+            <Moon className="mr-2 h-4 w-4" />
+          )}
+          {theme === "dark" ? "Light Mode" : "Dark Mode"}
+        </Button>
+
         <div className="text-xs text-muted-foreground">
           <p className="font-medium mb-1">Weave RAG Demo</p>
           <p>Powered by Weights & Biases</p>

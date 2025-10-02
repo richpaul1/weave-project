@@ -109,20 +109,20 @@ Answer:"""
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Process a query through the RAG pipeline with streaming response.
-        
+
         Args:
             query: The user query
-            session_id: Optional session ID for tracking
+            session_id: Optional session ID for tracking (also tracked by Weave)
             top_k: Number of context chunks to retrieve
-            
+
         Yields:
             Dictionaries with 'type' and 'data' keys:
             - type='context': Context retrieval complete
             - type='chunk': Response text chunk
             - type='done': Response complete with metadata
         """
-        # Retrieve relevant context
-        context_result = await self.retrieval_service.retrieve_context(
+        # Retrieve relevant context using page-based approach (like parent ChatService)
+        context_result = await self.retrieval_service.retrieve_page_context(
             query=query,
             top_k=top_k
         )
@@ -132,24 +132,88 @@ Answer:"""
             "type": "context",
             "data": {
                 "sources": context_result["sources"],
-                "num_chunks": context_result["num_chunks"]
+                "num_pages": context_result["num_pages"],
+                "num_sources": context_result["num_sources"]
             }
         }
         
         # Build prompt with context
         prompt = self._build_prompt(query, context_result["context_text"])
         
-        # Stream response
+        # Stream response with thinking/response separation
         full_response = ""
+        thinking_content = ""
+        response_content = ""
+        in_thinking = False
+        thinking_complete = False
+
         async for chunk in self.llm_service.generate_streaming(
             prompt=prompt,
             system_prompt=self.SYSTEM_PROMPT
         ):
             full_response += chunk
-            yield {
-                "type": "chunk",
-                "data": {"text": chunk}
-            }
+
+            # Check for thinking tags
+            if "<think>" in full_response and not in_thinking:
+                in_thinking = True
+                # Send any content before <think> as response
+                pre_think = full_response.split("<think>")[0]
+                if pre_think.strip():
+                    response_content += pre_think
+                    yield {
+                        "type": "response",
+                        "data": {"text": pre_think}
+                    }
+
+            if in_thinking and not thinking_complete:
+                # We're in thinking mode
+                if "</think>" in full_response:
+                    # Thinking is complete
+                    thinking_complete = True
+                    in_thinking = False
+
+                    # Extract thinking content
+                    think_start = full_response.find("<think>") + 7
+                    think_end = full_response.find("</think>")
+                    thinking_content = full_response[think_start:think_end]
+
+                    # Send thinking content
+                    yield {
+                        "type": "thinking",
+                        "data": {"text": thinking_content}
+                    }
+
+                    # Send any content after </think> as response
+                    post_think = full_response[think_end + 8:]
+                    if post_think.strip():
+                        response_content += post_think
+                        yield {
+                            "type": "response",
+                            "data": {"text": post_think}
+                        }
+                else:
+                    # Still accumulating thinking content, don't send chunks yet
+                    continue
+            elif thinking_complete or not in_thinking:
+                # Send as response content
+                if thinking_complete:
+                    # Only send the new chunk after thinking
+                    think_end = full_response.find("</think>") + 8
+                    new_content = full_response[think_end:]
+                    if len(new_content) > len(response_content):
+                        new_chunk = new_content[len(response_content):]
+                        response_content += new_chunk
+                        yield {
+                            "type": "response",
+                            "data": {"text": new_chunk}
+                        }
+                else:
+                    # No thinking tags, send as response
+                    response_content += chunk
+                    yield {
+                        "type": "response",
+                        "data": {"text": chunk}
+                    }
         
         # Post-process and yield final response
         response_text = self._post_process_response(full_response)
@@ -161,7 +225,7 @@ Answer:"""
                 "sources": context_result["sources"],
                 "metadata": {
                     "session_id": session_id,
-                    "num_chunks": context_result["num_chunks"],
+                    "num_pages": context_result["num_pages"],
                     "num_sources": context_result["num_sources"]
                 }
             }

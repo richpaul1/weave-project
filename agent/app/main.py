@@ -91,7 +91,12 @@ async def root():
 
 # Import and include routers
 from app.routes import chat
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(chat.router, tags=["chat"])
+
+print("✅ Registered routes:")
+for route in app.routes:
+    if hasattr(route, 'path') and hasattr(route, 'methods'):
+        print(f"  {list(route.methods)[0] if route.methods else 'GET':<6} {route.path}")
 
 # Graph endpoints
 @app.get("/api/graph/nodes")

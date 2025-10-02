@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 import weave
 from app.services.storage import StorageService
 from app.services.llm_service import LLMService
+from app.services.settings_service import get_settings_service
 from app.config import DEFAULT_TOP_K, MIN_RELEVANCE_SCORE, MAX_CONTEXT_LENGTH
 
 
@@ -212,4 +213,103 @@ class RetrievalService:
                 }
         
         return list(sources_dict.values())
+
+    @weave.op()
+    async def retrieve_page_context(
+        self,
+        query: str,
+        top_k: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Retrieve context using full page content, similar to parent ChatService pattern.
+
+        Args:
+            query: The user query
+            top_k: Number of top pages to retrieve
+
+        Returns:
+            Dictionary with 'pages', 'sources', 'context_text' keys
+        """
+        # Get settings from admin backend
+        settings_service = get_settings_service()
+        settings = await settings_service.get_chat_settings()
+
+        score_threshold = settings.get("search_score_threshold", 0.9)
+        max_pages = settings.get("max_pages", 5)
+
+        # Generate query embedding
+        query_embedding = await self.llm_service.generate_embedding(query)
+
+        # Get relevant pages with score filtering
+        pages = self.storage.get_relevant_pages(
+            embedding=query_embedding,
+            limit=max_pages,
+            score_threshold=score_threshold
+        )
+
+        # Load markdown content for each page
+        page_contents = []
+        sources = []
+
+        for page in pages:
+            # Load markdown content
+            markdown_content = await self.storage.load_markdown_from_file(page["id"])
+
+            if markdown_content:
+                page_contents.append({
+                    "id": page["id"],
+                    "url": page["url"],
+                    "title": page["title"],
+                    "score": page["score"],
+                    "content": markdown_content
+                })
+
+                sources.append({
+                    "url": page["url"],
+                    "title": page["title"],
+                    "domain": page["domain"]
+                })
+
+        # Build context text from full page contents
+        context_text = self._build_page_context_text(page_contents)
+
+        return {
+            "pages": page_contents,
+            "sources": sources,
+            "context_text": context_text,
+            "num_pages": len(page_contents),
+            "num_sources": len(sources)
+        }
+
+    @weave.op()
+    def _build_page_context_text(self, pages: List[Dict[str, Any]]) -> str:
+        """
+        Build formatted context text from full page contents.
+
+        Args:
+            pages: List of pages with markdown content
+
+        Returns:
+            Formatted context text
+        """
+        if not pages:
+            return ""
+
+        context_parts = []
+
+        for page in pages:
+            url = page.get("url", "Unknown")
+            title = page.get("title", "Unknown")
+            content = page.get("content", "")
+            score = page.get("score", 0)
+            page_id = page.get("id", "Unknown")
+
+            context_parts.append(
+                f"--- Full Page Content (Page ID: {page_id}, URL: {url}, "
+                f"Relevance Score: {score:.4f}) ---\n"
+                f"Title: {title}\n\n"
+                f"{content}\n"
+            )
+
+        return "\n---\n\n".join(context_parts)
 

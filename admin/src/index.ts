@@ -10,6 +10,7 @@ import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
 import graphRoutes from './routes/graphRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
 import { setupVite, serveStatic, log } from './vite.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,6 +68,7 @@ app.use('/api/crawler', crawlerRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/graph', graphRoutes);
 app.use('/api/duplicates', graphRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Error handler
 app.use((err: Error, req: Request, res: Response, next: any) => {
@@ -146,6 +148,10 @@ async function startServer() {
       console.log(`  GET    /api/graph/node-types`);
       console.log(`  DELETE /api/graph/nodes/:id`);
       console.log(`  GET    /api/duplicates`);
+      console.log(`  GET    /api/settings/health`);
+      console.log(`  GET    /api/settings/chat`);
+      console.log(`  PUT    /api/settings/chat`);
+      console.log(`  POST   /api/settings/chat/reset`);
       console.log('='.repeat(50));
       console.log(`Admin Panel URL: http://localhost:${config.port}/`);
     });

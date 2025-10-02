@@ -54,26 +54,35 @@ export class StreamingClient {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6)) as StreamingResponse;
+              console.log('📡 Streaming data received:', data);
 
               switch (data.type) {
                 case 'thinking':
-                  onThinking(data.content as string);
+                  // Backend sends data.data.text
+                  const thinkingText = (data as any).data?.text || data.content as string;
+                  console.log('🧠 Processing thinking:', thinkingText);
+                  onThinking(thinkingText);
                   break;
                 case 'response':
-                  onResponse(data.content as string);
+                  // Backend sends data.data.text
+                  const responseText = (data as any).data?.text || data.content as string;
+                  console.log('💬 Processing response chunk:', responseText);
+                  onResponse(responseText);
                   break;
                 case 'related_content':
+                  console.log('🔗 Processing related content:', data.content);
                   if (onRelatedContent) {
                     onRelatedContent(data.content);
                   }
                   break;
                 case 'done':
+                  console.log('✅ Streaming done event received');
                   completeCalled = true;
                   onComplete();
                   return;
               }
             } catch (e) {
-              // Skip invalid JSON
+              console.warn('⚠️ Failed to parse streaming data:', line, e);
             }
           }
         }

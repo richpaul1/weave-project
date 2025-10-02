@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Eye, Trash2 } from 'lucide-react';
-import type { PageMetadata, CrawlJobStatus, ContentStats } from '../../../shared/schema';
+import type { PageMetadata, CrawlJobStatus, ContentStats } from '@/types/schema';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'sonner';
 

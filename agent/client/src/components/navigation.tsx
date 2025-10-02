@@ -3,6 +3,7 @@ import { MessageCircle, FolderOpen, Network, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
+import SessionsList from "@/components/SessionsList";
 
 const navigationItems = [
   { path: "/chat", label: "Chat", icon: MessageCircle },
@@ -11,6 +12,9 @@ const navigationItems = [
 export default function Navigation() {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
+
+  // Extract current session ID from location
+  const currentSessionId = location.startsWith('/chat/') ? location.split('/chat/')[1] : undefined;
 
   return (
     <nav className="w-64 bg-surface border-r border-border flex flex-col">
@@ -21,23 +25,31 @@ export default function Navigation() {
         </h1>
       </div>
 
-      <div className="flex-1 px-4 py-6 space-y-2">
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location === item.path || (item.path === "/chat" && location === "/");
-
-          return (
-            <Link key={item.path} href={item.path}>
-              <div className={cn("nav-item", isActive && "active")}>
-                <Icon className="mr-3 h-4 w-4" />
-                {item.label}
-              </div>
-            </Link>
-          );
-        })}
+      {/* Chat Sessions List */}
+      <div className="flex-1 flex flex-col min-h-0">
+        <SessionsList currentSessionId={currentSessionId} />
       </div>
 
       <div className="p-4 border-t border-border space-y-3">
+        {/* Navigation Items */}
+        {navigationItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = location === item.path || (item.path === "/chat" && location.startsWith("/chat"));
+
+          return (
+            <Link key={item.path} href={item.path}>
+              <Button
+                variant={isActive ? "default" : "ghost"}
+                size="sm"
+                className="w-full justify-start"
+              >
+                <Icon className="mr-2 h-4 w-4" />
+                {item.label}
+              </Button>
+            </Link>
+          );
+        })}
+
         <Button
           variant="outline"
           size="sm"

@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import Navigation from "@/components/navigation";
 import AdminPage from "@/pages/AdminPage";
 import GraphPage from "@/pages/GraphPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 function Router() {
   const [, navigate] = useLocation();
@@ -24,6 +25,7 @@ function Router() {
           </Route>
           <Route path="/admin" component={AdminPage} />
           <Route path="/graph" component={GraphPage} />
+          <Route path="/settings" component={SettingsPage} />
         </Switch>
       </main>
     </div>
