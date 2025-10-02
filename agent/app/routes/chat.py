@@ -2,12 +2,14 @@
 Chat API Routes
 
 Handles chat requests for the RAG pipeline.
+Uses Weave threads to track conversation sessions.
 """
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import json
+import weave
 
 from app.services.storage import StorageService
 from app.services.llm_service import LLMService
@@ -74,43 +76,50 @@ def init_services():
 async def chat_message(request: ChatRequest):
     """
     Process a chat message and return a response.
-    
+    Uses Weave thread context to track the conversation session.
+
     Args:
         request: Chat request with query and options
-        
+
     Returns:
         Chat response with answer, sources, and metadata
     """
     init_services()
-    
+
     try:
-        # Process query through RAG pipeline
-        result = await rag_service.process_query(
-            query=request.query,
-            session_id=request.session_id,
-            top_k=request.top_k
-        )
-        
-        # Run hallucination detection
-        hallucination_result = await hallucination_service.detect_hallucination(
-            response=result["response"],
-            context="\n".join([
-                chunk.get("text", "") 
-                for chunk in result.get("chunks", [])
-            ]) if "chunks" in result else ""
-        )
-        
-        return ChatResponse(
-            response=result["response"],
-            sources=result["sources"],
-            metadata=result["metadata"],
-            hallucination_score=hallucination_result["score"],
-            hallucination_details={
-                "supported_claims": hallucination_result["supported_claims"],
-                "unsupported_claims": hallucination_result["unsupported_claims"],
-                "total_claims": hallucination_result["total_claims"]
-            }
-        )
+        # Use session_id as thread_id to track conversation context
+        thread_id = request.session_id or "default_session"
+
+        with weave.thread(thread_id) as thread_ctx:
+            print(f"🧵 Processing message in thread: {thread_ctx.thread_id}")
+
+            # Process query through RAG pipeline (this becomes a turn in the thread)
+            result = await rag_service.process_query(
+                query=request.query,
+                session_id=request.session_id,
+                top_k=request.top_k
+            )
+
+            # Run hallucination detection (nested call within the thread)
+            hallucination_result = await hallucination_service.detect_hallucination(
+                response=result["response"],
+                context="\n".join([
+                    chunk.get("text", "")
+                    for chunk in result.get("chunks", [])
+                ]) if "chunks" in result else ""
+            )
+
+            return ChatResponse(
+                response=result["response"],
+                sources=result["sources"],
+                metadata=result["metadata"],
+                hallucination_score=hallucination_result["score"],
+                hallucination_details={
+                    "supported_claims": hallucination_result["supported_claims"],
+                    "unsupported_claims": hallucination_result["unsupported_claims"],
+                    "total_claims": hallucination_result["total_claims"]
+                }
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -120,33 +129,40 @@ async def chat_message(request: ChatRequest):
 async def chat_stream(request: ChatRequest):
     """
     Process a chat message and stream the response.
-    
+    Uses Weave thread context to track the conversation session.
+
     Args:
         request: Chat request with query and options
-        
+
     Returns:
         Server-Sent Events stream with response chunks
     """
     init_services()
-    
+
     async def event_generator():
-        """Generate SSE events"""
+        """Generate SSE events within thread context"""
         try:
-            async for event in rag_service.process_query_streaming(
-                query=request.query,
-                session_id=request.session_id,
-                top_k=request.top_k
-            ):
-                # Format as SSE
-                yield f"data: {json.dumps(event)}\n\n"
-                
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Streaming message in thread: {thread_ctx.thread_id}")
+
+                async for event in rag_service.process_query_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    top_k=request.top_k
+                ):
+                    # Format as SSE
+                    yield f"data: {json.dumps(event)}\n\n"
+
         except Exception as e:
             error_event = {
                 "type": "error",
                 "data": {"error": str(e)}
             }
             yield f"data: {json.dumps(error_event)}\n\n"
-    
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream"

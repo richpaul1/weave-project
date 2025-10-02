@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 import weave
 from app.services.storage import StorageService
 from app.services.llm_service import LLMService
+from app.utils.weave_utils import add_session_metadata
 from app.services.settings_service import get_settings_service
 from app.config import DEFAULT_TOP_K, MIN_RELEVANCE_SCORE, MAX_CONTEXT_LENGTH
 
@@ -43,17 +44,26 @@ class RetrievalService:
         expand_context: bool = True
     ) -> Dict[str, Any]:
         """
-        Retrieve relevant context for a query.
-        
+        NESTED CALL: Retrieve relevant context for a query.
+        This is a nested operation within a conversation turn.
+
         Args:
             query: The user query
             top_k: Number of top chunks to retrieve
             min_score: Minimum relevance score threshold
             expand_context: Whether to expand context with related chunks
-            
+
         Returns:
             Dictionary with 'chunks', 'sources', 'context_text' keys
         """
+        # Add retrieval operation metadata
+        add_session_metadata(
+            operation_type="context_retrieval",
+            query_length=len(query),
+            top_k=top_k,
+            min_score=min_score,
+            expand_context=expand_context
+        )
         # Generate query embedding
         query_embedding = await self.llm_service.generate_embedding(query)
         
@@ -221,7 +231,8 @@ class RetrievalService:
         top_k: int = 5
     ) -> Dict[str, Any]:
         """
-        Retrieve context using full page content, similar to parent ChatService pattern.
+        NESTED CALL: Retrieve context using full page content, similar to parent ChatService pattern.
+        This is a nested operation within a conversation turn.
 
         Args:
             query: The user query
@@ -230,6 +241,12 @@ class RetrievalService:
         Returns:
             Dictionary with 'pages', 'sources', 'context_text' keys
         """
+        # Add page retrieval operation metadata
+        add_session_metadata(
+            operation_type="page_retrieval",
+            query_length=len(query),
+            top_k=top_k
+        )
         # Get settings from admin backend
         settings_service = get_settings_service()
         settings = await settings_service.get_chat_settings()

@@ -3,11 +3,13 @@ RAG Service for Query Processing
 
 Orchestrates the full RAG pipeline: retrieval + generation.
 All methods are decorated with @weave.op() for observability.
+Uses Weave threads to track conversation sessions.
 """
 from typing import Dict, Any, AsyncGenerator, Optional
 import weave
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
+from app.utils.weave_utils import add_session_metadata
 
 
 class RAGService:
@@ -59,16 +61,24 @@ Answer:"""
         top_k: int = 5
     ) -> Dict[str, Any]:
         """
-        Process a query through the RAG pipeline.
-        
+        TURN-LEVEL OPERATION: Process a query through the RAG pipeline.
+        This represents one conversation turn in the thread.
+
         Args:
             query: The user query
-            session_id: Optional session ID for tracking
+            session_id: Optional session ID for tracking (used as thread_id)
             top_k: Number of context chunks to retrieve
-            
+
         Returns:
             Dictionary with 'response', 'sources', 'metadata' keys
         """
+        # Add session metadata to the current operation
+        add_session_metadata(
+            session_id=session_id,
+            operation_type="rag_query",
+            query_length=len(query),
+            top_k=top_k
+        )
         # Retrieve relevant context
         context_result = await self.retrieval_service.retrieve_context(
             query=query,
@@ -108,19 +118,28 @@ Answer:"""
         top_k: int = 5
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Process a query through the RAG pipeline with streaming response.
+        TURN-LEVEL OPERATION: Process a query through the RAG pipeline with streaming response.
+        This represents one conversation turn in the thread.
 
         Args:
             query: The user query
-            session_id: Optional session ID for tracking (also tracked by Weave)
+            session_id: Optional session ID for tracking (used as thread_id)
             top_k: Number of context chunks to retrieve
 
         Yields:
             Dictionaries with 'type' and 'data' keys:
             - type='context': Context retrieval complete
-            - type='chunk': Response text chunk
+            - type='thinking': Thinking process chunk
+            - type='response': Response text chunk
             - type='done': Response complete with metadata
         """
+        # Add session metadata to the current operation
+        add_session_metadata(
+            session_id=session_id,
+            operation_type="rag_streaming",
+            query_length=len(query),
+            top_k=top_k
+        )
         # Retrieve relevant context using page-based approach (like parent ChatService)
         context_result = await self.retrieval_service.retrieve_page_context(
             query=query,
@@ -231,17 +250,27 @@ Answer:"""
             }
         }
     
+    @weave.op()
     def _build_prompt(self, query: str, context: str) -> str:
         """
-        Build the prompt with context and query.
-        
+        NESTED CALL: Build the prompt with context and query.
+        This captures the full prompt construction process.
+
         Args:
             query: The user query
             context: The retrieved context
-            
+
         Returns:
-            Formatted prompt
+            Formatted prompt with context and query
         """
+        # Add prompt building metadata
+        add_session_metadata(
+            operation_type="prompt_building",
+            query_length=len(query),
+            context_length=len(context),
+            context_chunks=context.count("---") + 1 if context else 0
+        )
+
         return self.CONTEXT_TEMPLATE.format(
             context=context,
             query=query

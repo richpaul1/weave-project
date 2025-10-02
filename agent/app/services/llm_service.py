@@ -17,6 +17,7 @@ from app.config import (
     MAX_TOKENS,
     TEMPERATURE
 )
+from app.utils.weave_utils import add_session_metadata
 
 
 class LLMService:
@@ -54,18 +55,28 @@ class LLMService:
         system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Generate a text completion.
-        
+        NESTED CALL: Generate a text completion.
+        This is a nested operation within a conversation turn.
+
         Args:
             prompt: The user prompt
             model: Model to use (defaults to configured model)
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             system_prompt: Optional system prompt
-            
+
         Returns:
             Dictionary with 'text', 'model', 'tokens' keys
         """
+        # Add LLM operation metadata
+        add_session_metadata(
+            operation_type="llm_completion",
+            model=model or self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            prompt_length=len(prompt),
+            has_system_prompt=system_prompt is not None
+        )
         if self.provider == "ollama":
             return await self._generate_completion_ollama(
                 prompt, model, max_tokens, temperature, system_prompt
@@ -154,18 +165,28 @@ class LLMService:
         system_prompt: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
-        Generate a streaming text completion.
-        
+        NESTED CALL: Generate a streaming text completion.
+        This is a nested operation within a conversation turn.
+
         Args:
             prompt: The user prompt
             model: Model to use (defaults to configured model)
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             system_prompt: Optional system prompt
-            
+
         Yields:
             Text chunks as they are generated
         """
+        # Add LLM streaming operation metadata
+        add_session_metadata(
+            operation_type="llm_streaming",
+            model=model or self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            prompt_length=len(prompt),
+            has_system_prompt=system_prompt is not None
+        )
         if self.provider == "ollama":
             async for chunk in self._generate_streaming_ollama(
                 prompt, model, max_tokens, temperature, system_prompt
