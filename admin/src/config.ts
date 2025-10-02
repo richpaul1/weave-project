@@ -44,7 +44,8 @@ function getOptionalEnv(key: string, defaultValue: string): string {
 
 export const config = {
   // Server
-  port: parseInt(getRequiredEnv('ADMIN_PORT', 'Port for admin backend server'), 10),
+  port: parseInt(getRequiredEnv('ADMIN_BACKEND_PORT', 'Port for admin backend server'), 10),
+  clientPort: parseInt(getRequiredEnv('ADMIN_CLIENT_PORT', 'Port for admin client frontend'), 10),
 
   // Content Storage
   contentStoragePath: getRequiredEnv('CONTENT_STORAGE_PATH', 'Path where markdown content files will be stored'),

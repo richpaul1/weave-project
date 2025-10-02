@@ -116,6 +116,13 @@ def mock_storage_service(sample_page, sample_chunks):
     storage.search_by_vector = Mock(return_value=sample_chunks)
     storage.get_chunk_by_id = Mock(return_value=sample_chunks[0])
     storage.get_related_chunks = Mock(return_value=sample_chunks[1:])
+
+    # Add get_relevant_pages for functional tests
+    storage.get_relevant_pages = Mock(return_value=[sample_page])
+
+    # Add load_markdown_from_file for functional tests
+    storage.load_markdown_from_file = AsyncMock(return_value="Test markdown content for Weave testing.")
+
     return storage
 
 
@@ -148,7 +155,7 @@ def mock_llm_service(sample_embedding):
 def mock_retrieval_service(sample_chunks):
     """Mock RetrievalService"""
     retrieval = Mock()
-    
+
     retrieval.retrieve_context = AsyncMock(return_value={
         "chunks": sample_chunks,
         "sources": [
@@ -162,7 +169,33 @@ def mock_retrieval_service(sample_chunks):
         "num_chunks": len(sample_chunks),
         "num_sources": 1
     })
-    
+
+    # Also mock retrieve_page_context for streaming tests
+    sample_pages = [
+        {
+            "id": "test-page-1",
+            "url": "https://example.com/test",
+            "title": "Test Page",
+            "domain": "example.com",
+            "score": 0.95,
+            "content": "This is test page content for Weave testing."
+        }
+    ]
+
+    retrieval.retrieve_page_context = AsyncMock(return_value={
+        "pages": sample_pages,
+        "sources": [
+            {
+                "url": "https://example.com/test",
+                "title": "Test Page",
+                "domain": "example.com"
+            }
+        ],
+        "context_text": "Test context",
+        "num_pages": len(sample_pages),
+        "num_sources": 1
+    })
+
     return retrieval
 
 

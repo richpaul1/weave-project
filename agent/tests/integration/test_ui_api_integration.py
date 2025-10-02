@@ -10,12 +10,20 @@ import requests
 import json
 import time
 import uuid
+import os
 from datetime import datetime
 from typing import Dict, Any
+from pathlib import Path
+from dotenv import load_dotenv
 
-# Test configuration
-AGENT_BACKEND_URL = "http://localhost:8000"
-AGENT_FRONTEND_URL = "http://localhost:8001"
+# Load environment variables from parent .env.local
+env_path = Path(__file__).parent.parent.parent.parent / ".env.local"
+if env_path.exists():
+    load_dotenv(env_path)
+
+# Test configuration using environment variables
+AGENT_BACKEND_URL = f"http://localhost:{os.getenv('AGENT_BACKEND_PORT', '3001')}"
+AGENT_FRONTEND_URL = f"http://localhost:{os.getenv('AGENT_CLIENT_PORT', '3000')}"
 
 class TestUIAPIIntegration:
     """Integration tests for UI/API communication"""
@@ -183,9 +191,16 @@ class TestUIAPIIntegration:
         response = requests.get(f"{self.base_url}/api/chat/messages/{self.test_session_id}")
         assert len(response.json()) >= 1
         
-        # Delete messages
-        response = requests.delete(f"{self.base_url}/api/chat/messages/{self.test_session_id}")
-        
+        # Delete messages with required request body
+        delete_request = {
+            "requesting_session_id": self.test_session_id,
+            "reason": "integration_test_cleanup"
+        }
+        response = requests.delete(
+            f"{self.base_url}/api/chat/messages/{self.test_session_id}",
+            json=delete_request
+        )
+
         assert response.status_code == 200
         data = response.json()
         assert "success" in data
@@ -409,8 +424,15 @@ class TestUIAPIIntegration:
         assert test_session_found, "Test session not found in recent sessions"
         print("   ✅ Step 4: Session appears in recent sessions list")
 
-        # Step 4: Delete session
-        response = requests.delete(f"{self.base_url}/api/chat/messages/{test_session}")
+        # Step 4: Delete session with required request body
+        delete_request = {
+            "requesting_session_id": test_session,
+            "reason": "integration_test_cleanup"
+        }
+        response = requests.delete(
+            f"{self.base_url}/api/chat/messages/{test_session}",
+            json=delete_request
+        )
         assert response.status_code == 200
 
         # Verify messages are deleted
@@ -467,41 +489,7 @@ class TestUIAPIIntegration:
         assert ai_response_content.strip(), "No AI response content received"
         print(f"   ✅ Step 2: Received AI response ({len(ai_response_content)} chars)")
 
-        # Step 3: Manually save user message (simulating frontend behavior)
-        user_message = {
-            "sessionId": test_session,
-            "sender": "user",
-            "message": request_data["query"],
-            "thinking": "",
-            "timestamp": datetime.now().isoformat()
-        }
-
-        save_response = requests.post(
-            f"{self.base_url}/api/chat/messages",
-            json=user_message,
-            headers={"Content-Type": "application/json"}
-        )
-        assert save_response.status_code == 200
-        print("   ✅ Step 3: User message saved")
-
-        # Step 4: Manually save AI response (simulating frontend completion handler)
-        ai_message = {
-            "sessionId": test_session,
-            "sender": "ai",
-            "message": ai_response_content.strip(),
-            "thinking": thinking_content.strip(),
-            "timestamp": datetime.now().isoformat()
-        }
-
-        save_response = requests.post(
-            f"{self.base_url}/api/chat/messages",
-            json=ai_message,
-            headers={"Content-Type": "application/json"}
-        )
-        assert save_response.status_code == 200
-        print("   ✅ Step 4: AI response saved")
-
-        # Step 5: Verify both messages are in database
+        # Step 3: Verify both messages are automatically saved by streaming endpoint
         messages_response = requests.get(f"{self.base_url}/api/chat/messages/{test_session}")
         assert messages_response.status_code == 200
 
@@ -514,11 +502,12 @@ class TestUIAPIIntegration:
         assert user_msg is not None, "User message not found"
         assert ai_msg is not None, "AI message not found"
         assert user_msg["message"] == request_data["query"]
-        assert ai_msg["message"] == ai_response_content.strip()
+        # Compare content with normalized whitespace
+        assert ai_msg["message"].strip() == ai_response_content.strip()
 
-        print("   ✅ Step 5: Both messages verified in database")
+        print("   ✅ Step 3: Both messages verified in database")
 
-        # Step 6: Verify session appears in sessions list
+        # Step 4: Verify session appears in sessions list
         sessions_response = requests.get(f"{self.base_url}/api/chat/sessions?limit=10")
         assert sessions_response.status_code == 200
 
@@ -526,10 +515,17 @@ class TestUIAPIIntegration:
         test_session_found = any(s["sessionId"] == test_session for s in sessions)
         assert test_session_found, "Session not found in sessions list"
 
-        print("   ✅ Step 6: Session appears in sessions list")
+        print("   ✅ Step 4: Session appears in sessions list")
 
-        # Cleanup
-        requests.delete(f"{self.base_url}/api/chat/messages/{test_session}")
+        # Cleanup with proper request body
+        delete_request = {
+            "requesting_session_id": test_session,
+            "reason": "integration_test_cleanup"
+        }
+        requests.delete(
+            f"{self.base_url}/api/chat/messages/{test_session}",
+            json=delete_request
+        )
 
         print(f"🎉 Streaming AI response save test passed!")
         print(f"   Session ID: {test_session}")
@@ -542,7 +538,7 @@ class TestUIAPIIntegration:
         response = requests.options(
             f"{self.base_url}/api/chat/messages/{self.test_session_id}",
             headers={
-                "Origin": "http://localhost:8001",
+                "Origin": AGENT_FRONTEND_URL,
                 "Access-Control-Request-Method": "GET"
             }
         )
@@ -554,7 +550,7 @@ class TestUIAPIIntegration:
         # Test actual request with origin
         response = requests.get(
             f"{self.base_url}/api/chat/messages/{self.test_session_id}",
-            headers={"Origin": "http://localhost:8001"}
+            headers={"Origin": AGENT_FRONTEND_URL}
         )
 
         assert response.status_code == 200

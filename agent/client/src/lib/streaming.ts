@@ -1,6 +1,11 @@
 export interface StreamingResponse {
-  type: 'thinking' | 'response' | 'done' | 'related_content';
-  content: string | any; // Allow any type for related_content
+  type: 'thinking' | 'response' | 'done' | 'related_content' | 'user_saved' | 'complete' | 'error';
+  content?: string | any; // Allow any type for related_content
+  message_id?: string;
+  user_message_id?: string;
+  ai_message_id?: string;
+  session_id?: string;
+  data?: any;
 }
 
 export class StreamingClient {
@@ -11,7 +16,7 @@ export class StreamingClient {
     data: any,
     onThinking: (content: string) => void,
     onResponse: (content: string) => void,
-    onComplete: () => void,
+    onComplete: (completionData?: any) => void,
     onError: (error: Error) => void,
     onRelatedContent?: (content: any) => void
   ): Promise<void> {
@@ -57,6 +62,9 @@ export class StreamingClient {
               console.log('📡 Streaming data received:', data);
 
               switch (data.type) {
+                case 'user_saved':
+                  console.log('💾 User message saved with ID:', data.message_id);
+                  break;
                 case 'thinking':
                   // Backend sends data.data.text
                   const thinkingText = (data as any).data?.text || data.content as string;
@@ -75,10 +83,23 @@ export class StreamingClient {
                     onRelatedContent(data.content);
                   }
                   break;
+                case 'complete':
+                  console.log('✅ Streaming complete with server-side storage:', data);
+                  completeCalled = true;
+                  onComplete({
+                    user_message_id: data.user_message_id,
+                    ai_message_id: data.ai_message_id,
+                    session_id: data.session_id
+                  });
+                  return;
                 case 'done':
-                  console.log('✅ Streaming done event received');
+                  console.log('✅ Streaming done event received (legacy)');
                   completeCalled = true;
                   onComplete();
+                  return;
+                case 'error':
+                  console.error('❌ Server error:', data.data);
+                  onError(new Error(data.data?.error || 'Server error'));
                   return;
               }
             } catch (e) {

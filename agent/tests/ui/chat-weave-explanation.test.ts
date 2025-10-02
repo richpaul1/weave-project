@@ -9,8 +9,8 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config({ path: '../.env.local' });
 
-const CLIENT_URL = process.env.AGENT_CLIENT_URL || 'http://localhost:8001';
-const BACKEND_URL = process.env.AGENT_BACKEND_URL || 'http://localhost:8000';
+const CLIENT_URL = process.env.AGENT_CLIENT_URL || `http://localhost:${process.env.AGENT_CLIENT_PORT || '3000'}`;
+const BACKEND_URL = process.env.AGENT_BACKEND_URL || `http://localhost:${process.env.AGENT_BACKEND_PORT || '3001'}`;
 
 describe('Agent Chat Weave Explanation Tests', () => {
   let browser: Browser;

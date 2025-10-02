@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, User, Loader2, Brain, Bug } from "lucide-react";
+import { Send, Bot, User, Loader2, Brain, Bug, Trash2 } from "lucide-react";
 import type { ChatMessage } from "@/types/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { streamingClient } from "@/lib/streaming";
@@ -51,6 +51,9 @@ export default function ChatPage() {
       }
     },
     enabled: !!sessionId,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnReconnect: false,
   });
 
   // Load Weave configuration on mount
@@ -106,9 +109,10 @@ export default function ChatPage() {
     setMessage("");
     setIsStreaming(true);
 
-    // Add user message to UI immediately
+    // Add user message to UI immediately (will be replaced with server-confirmed version)
+    const tempUserMessageId = uuidv4();
     const userMessageObj: StreamingMessage = {
-      id: uuidv4(),
+      id: tempUserMessageId,
       role: "user",
       content: userMessage,
       thinking: "",
@@ -119,21 +123,6 @@ export default function ChatPage() {
     };
 
     setStreamingMessages((prev) => [...prev, userMessageObj]);
-
-    // Save user message to database
-    try {
-      await apiRequest('POST', '/api/chat/messages', {
-        sessionId: sessionId,
-        sender: 'user',
-        message: userMessage,
-        thinking: '',
-        timestamp: new Date(timestamp).toISOString(),
-      });
-    } catch (error) {
-      console.error('Error saving user message:', error);
-      setIsStreaming(false);
-      return;
-    }
 
     const assistantId = uuidv4();
     const initialAssistantMessage: StreamingMessage = {
@@ -152,9 +141,8 @@ export default function ChatPage() {
     currentThinkingRef.current = "";
 
     setStreamingMessages((prev) => [...prev, initialAssistantMessage]);
-    // Don't auto-open thinking panel - keep it collapsed by default
 
-    // Start streaming
+    // Start streaming with new server-side storage flow
     try {
       await streamingClient.startStream(
         "/api/chat/stream",
@@ -171,7 +159,6 @@ export default function ChatPage() {
         (newResponse) => {
           console.log('💬 Response chunk received:', newResponse);
           currentResponseRef.current += newResponse;
-          console.log('📝 Accumulated response so far:', currentResponseRef.current);
           setStreamingMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantId ? {
@@ -182,45 +169,38 @@ export default function ChatPage() {
             )
           );
         },
-        async () => {
-          console.log('✅ Streaming completed');
-          console.log('💾 Final accumulated response:', currentResponseRef.current);
-          console.log('💾 Final thinking content:', currentThinkingRef.current);
+        (completionData?: any) => {
+          console.log('✅ Streaming completed with server-side storage');
+          console.log('💾 Server saved messages:', completionData);
 
-          // Save the AI response to database using refs
-          if (currentResponseRef.current.trim()) {
-            console.log('💾 Saving AI response:', {
-              content: currentResponseRef.current,
-              thinking: currentThinkingRef.current,
-              sessionId: sessionId
-            });
+          // Update user message with server-confirmed ID if provided
+          if (completionData?.user_message_id) {
+            setStreamingMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempUserMessageId ? { ...msg, id: completionData.user_message_id } : msg
+              )
+            );
+          }
 
-            try {
-              await apiRequest('POST', '/api/chat/messages', {
-                sessionId: sessionId,
-                sender: 'ai',
-                message: currentResponseRef.current.trim(),
-                thinking: currentThinkingRef.current,
-                timestamp: new Date().toISOString(),
-              });
-              console.log('✅ AI response saved successfully');
-            } catch (error) {
-              console.error('❌ Error saving AI response:', error);
-            }
-          } else {
-            console.warn('⚠️ No AI response content to save');
+          // Update AI message with server-confirmed ID if provided
+          if (completionData?.ai_message_id) {
+            setStreamingMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId ? { ...msg, id: completionData.ai_message_id } : msg
+              )
+            );
           }
 
           console.log('🧹 Clearing streaming state');
           setIsStreaming(false);
-          setStreamingMessages([]);
 
-          console.log('🔄 Refreshing queries');
-          // Refresh both chat messages and sessions list
-          console.log('🔄 Invalidating chat messages query for session:', sessionId);
-          queryClient.invalidateQueries({ queryKey: [`/api/chat/messages/${sessionId}`] });
-          console.log('🔄 Invalidating sessions query');
+          // Keep messages in UI - no need to refresh from server since we have the data
+          // Only invalidate sessions list to update "last message" info
+          console.log('🔄 Invalidating sessions query only');
           queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+
+          // Move streaming messages to permanent state
+          setStreamingMessages([]);
         },
         (error) => {
           console.error('Streaming error:', error);
@@ -248,6 +228,41 @@ export default function ChatPage() {
     openWeaveUI(sessionId);
   };
 
+  // Clear history mutation with requesting session ID
+  const clearHistoryMutation = useMutation({
+    mutationFn: async () => {
+      console.log('🗑️ Clearing chat history for session:', sessionId);
+      console.log('🔍 Requesting session ID:', sessionId);
+
+      return apiRequest("DELETE", `/api/chat/messages/${sessionId}`, {
+        requesting_session_id: sessionId,
+        reason: "user_requested_clear_history"
+      });
+    },
+    onSuccess: (response) => {
+      console.log('✅ Chat history cleared successfully:', response);
+
+      // Clear local state
+      setStreamingMessages([]);
+      setMessage("");
+
+      // Invalidate and refetch chat history
+      queryClient.invalidateQueries({ queryKey: [`/api/chat/messages/${sessionId}`] });
+
+      toast.success("Chat history cleared successfully");
+    },
+    onError: (error) => {
+      console.error('❌ Error clearing chat history:', error);
+      toast.error("Failed to clear chat history");
+    },
+  });
+
+  const handleClearHistory = () => {
+    if (window.confirm("Are you sure you want to clear all chat history for this session? This action cannot be undone.")) {
+      clearHistoryMutation.mutate();
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background">
       <header className="bg-surface border-b px-6 py-4">
@@ -256,27 +271,40 @@ export default function ChatPage() {
             <h2 className="text-xl font-semibold text-foreground">RAG Chat Interface</h2>
             <p className="text-sm text-muted-foreground">Ask questions about the crawled content</p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleOpenWeaveUI}
-            className={`flex items-center gap-2 ${
-              weaveConfig?.enabled
-                ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            title={
-              weaveConfig?.enabled
-                ? "Open Weave UI for debugging and observability"
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearHistory}
+              disabled={clearHistoryMutation.isPending || isStreaming}
+              className="flex items-center gap-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              title="Clear chat history for this session"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear History
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleOpenWeaveUI}
+              className={`flex items-center gap-2 ${
+                weaveConfig?.enabled
+                  ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title={
+                weaveConfig?.enabled
+                  ? "Open Weave UI for debugging and observability"
                 : weaveConfig?.message || "Weave tracking is disabled"
             }
           >
             <Bug className="h-4 w-4" />
-            <span className="hidden sm:inline">Debug</span>
+            <span className="hidden sm:inline">Debug In Weave</span>
             {weaveConfig?.enabled && (
               <div className="w-2 h-2 bg-green-500 rounded-full" />
             )}
           </Button>
+          </div>
         </div>
       </header>
 
@@ -359,7 +387,7 @@ export default function ChatPage() {
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             placeholder="Ask me anything about the content..."
             className="flex-1 min-h-[80px] max-h-[200px] resize-none bg-background"
             disabled={isStreaming}

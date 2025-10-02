@@ -1,6 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import dotenv from 'dotenv'
+
+// Load environment variables from parent .env.local
+const envPath = path.resolve(__dirname, '../../.env.local')
+dotenv.config({ path: envPath })
+
+// Get ports from environment variables
+const clientPort = parseInt(process.env.AGENT_CLIENT_PORT || '3000', 10)
+const backendPort = parseInt(process.env.AGENT_BACKEND_PORT || '3001', 10)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -15,10 +24,10 @@ export default defineConfig({
     include: ['react', 'react-dom'],
   },
   server: {
-    port: 8001,
+    port: clientPort,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
     },

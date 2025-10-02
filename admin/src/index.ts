@@ -28,7 +28,7 @@ app.use(cors({
     // Allow same-origin requests and dev server
     const allowedOrigins = [
       `http://localhost:${config.port}`,
-      `http://localhost:${config.port + 1}`, // Dev frontend typically runs on port + 1
+      `http://localhost:${config.clientPort}`, // Admin client frontend
     ];
 
     if (allowedOrigins.includes(origin)) {

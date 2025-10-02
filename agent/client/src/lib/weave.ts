@@ -25,12 +25,10 @@ export async function getWeaveConfig(): Promise<WeaveConfig | null> {
     console.warn('Could not fetch Weave config from API:', error);
   }
 
-  // Fallback to hardcoded values (from .env.local)
+  // No fallback - if API fails, Weave is not available
   return {
-    enabled: true,
-    entity: 'richpaul1-stealth',
-    project: 'support-app',
-    baseUrl: 'https://wandb.ai'
+    enabled: false,
+    message: 'Could not connect to backend for Weave configuration'
   };
 }
 
@@ -45,12 +43,43 @@ export function buildWeaveUrl(config: WeaveConfig, sessionId?: string): string |
   const baseUrl = `${config.baseUrl}/${config.entity}/${config.project}/weave`;
 
   if (sessionId) {
-    // Add session-specific filters or parameters if needed
-    // For now, just open the main Weave UI
-    return baseUrl;
+    // Build session-specific traces URL with filters
+    return buildSessionTracesUrl(config, sessionId);
   }
 
   return baseUrl;
+}
+
+/**
+ * Build Weave traces URL filtered by session ID
+ */
+function buildSessionTracesUrl(config: WeaveConfig, sessionId: string): string {
+  const baseUrl = `${config.baseUrl}/${config.entity}/${config.project}/weave/traces`;
+
+  // Create filter object for session ID
+  const filters = {
+    items: [
+      {
+        id: 0,
+        field: "started_at",
+        operator: "(date): after",
+        value: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // Last 24 hours
+      },
+      {
+        id: 1,
+        field: "inputs.session_id",
+        operator: "(string): contains",
+        value: sessionId
+      }
+    ],
+    logicOperator: "and"
+  };
+
+  // URL encode the filters
+  const encodedFilters = encodeURIComponent(JSON.stringify(filters));
+
+  // Build the complete URL with filters
+  return `${baseUrl}?view=traces_default&filters=${encodedFilters}`;
 }
 
 /**

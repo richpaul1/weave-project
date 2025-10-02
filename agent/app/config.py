@@ -40,8 +40,8 @@ def get_optional_env(key: str, default_value: str) -> str:
 # ============================================================================
 # Server Configuration
 # ============================================================================
-AGENT_PORT = int(get_optional_env("AGENT_PORT", "8000"))
-CLIENT_PORT = int(get_optional_env("CLIENT_PORT", "5174"))
+AGENT_BACKEND_PORT = int(get_optional_env("AGENT_BACKEND_PORT", "3001"))
+AGENT_CLIENT_PORT = int(get_optional_env("AGENT_CLIENT_PORT", "3000"))
 
 # ============================================================================
 # Neo4j Configuration
@@ -67,7 +67,8 @@ OPENAI_EMBEDDING_MODEL = get_optional_env("OPENAI_EMBEDDING_MODEL", "text-embedd
 # ============================================================================
 # Weave Configuration
 # ============================================================================
-WEAVE_PROJECT_NAME = get_optional_env("WEAVE_PROJECT_NAME", "weave-rag-demo")
+WANDB_PROJECT = get_optional_env("WANDB_PROJECT", "support-app")
+WANDB_ENTITY = get_optional_env("WANDB_ENTITY", "richpaul1-stealth")
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")  # Optional
 
 # ============================================================================

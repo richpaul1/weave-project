@@ -44,6 +44,20 @@ def mock_storage():
     # Mock get_related_chunks to return empty list (no expansion)
     storage.get_related_chunks = Mock(return_value=[])
 
+    # Mock get_relevant_pages for streaming tests
+    storage.get_relevant_pages = Mock(return_value=[
+        {
+            "id": "page1",
+            "url": "https://example.com/weave",
+            "title": "Weave Documentation",
+            "domain": "example.com",
+            "score": 0.95
+        }
+    ])
+
+    # Mock load_markdown_from_file for streaming tests
+    storage.load_markdown_from_file = AsyncMock(return_value="Weave is a lightweight toolkit for tracking and evaluating LLM applications.")
+
     return storage
 
 
@@ -132,9 +146,9 @@ class TestRAGPipeline:
         assert events[0]["type"] == "context"
         assert "sources" in events[0]["data"]
         
-        # Middle events should be chunks
-        chunk_events = [e for e in events if e["type"] == "chunk"]
-        assert len(chunk_events) > 0
+        # Middle events should be response chunks
+        response_events = [e for e in events if e["type"] == "response"]
+        assert len(response_events) > 0
         
         # Last event should be done
         assert events[-1]["type"] == "done"

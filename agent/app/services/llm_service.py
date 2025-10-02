@@ -69,9 +69,10 @@ class LLMService:
             Dictionary with 'text', 'model', 'tokens' keys
         """
         # Add LLM operation metadata
+        default_model = self.ollama_model if self.provider == "ollama" else self.openai_model
         add_session_metadata(
             operation_type="llm_completion",
-            model=model or self.model,
+            model=model or default_model,
             max_tokens=max_tokens,
             temperature=temperature,
             prompt_length=len(prompt),
@@ -179,9 +180,10 @@ class LLMService:
             Text chunks as they are generated
         """
         # Add LLM streaming operation metadata
+        default_model = self.ollama_model if self.provider == "ollama" else self.openai_model
         add_session_metadata(
             operation_type="llm_streaming",
-            model=model or self.model,
+            model=model or default_model,
             max_tokens=max_tokens,
             temperature=temperature,
             prompt_length=len(prompt),

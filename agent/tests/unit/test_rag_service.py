@@ -68,14 +68,14 @@ class TestRAGService:
         ):
             events.append(event)
         
-        # Should have context, chunk, and done events
+        # Should have context, response, and done events
         assert len(events) > 0
         assert any(e["type"] == "context" for e in events)
-        assert any(e["type"] == "chunk" for e in events)
+        assert any(e["type"] == "response" for e in events)
         assert any(e["type"] == "done" for e in events)
-        
+
         # Verify retrieval service was called
-        mock_retrieval_service.retrieve_context.assert_called_once()
+        mock_retrieval_service.retrieve_page_context.assert_called_once()
     
     def test_build_prompt(
         self,

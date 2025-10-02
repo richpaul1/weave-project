@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    port = int(os.getenv("AGENT_PORT", "8000"))
+    port = int(os.getenv("AGENT_BACKEND_PORT", "3001"))
     print("=" * 50)
     print("🚀 Agent Backend Server Started")
     print("=" * 50)
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     print("  DELETE /api/chat/messages/{session_id}")
     print("  GET    /api/weave/config")
     print("=" * 50)
-    client_port = int(os.getenv("AGENT_CLIENT_PORT", "8001"))
+    client_port = int(os.getenv("AGENT_CLIENT_PORT", "3000"))
     print(f"Agent Backend URL: http://localhost:{port}/")
     print(f"Agent Client URL: http://localhost:{client_port}/")
     yield
@@ -65,7 +65,7 @@ app = FastAPI(
 )
 
 # Configure CORS for frontend
-client_port = int(os.getenv("AGENT_CLIENT_PORT", "8001"))
+client_port = int(os.getenv("AGENT_CLIENT_PORT", "3000"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -119,8 +119,8 @@ async def get_graph_nodes():
 if __name__ == "__main__":
     import uvicorn
 
-    # Get port from environment variable, default to 8000
-    port = int(os.getenv("AGENT_PORT", "8000"))
+    # Get port from environment variable, default to 3001
+    port = int(os.getenv("AGENT_BACKEND_PORT", "3001"))
 
     print(f"🚀 Starting server on port {port}")
     uvicorn.run(

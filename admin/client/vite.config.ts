@@ -2,9 +2,18 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import dotenv from 'dotenv'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables from parent .env.local
+const envPath = path.resolve(__dirname, '../../.env.local')
+dotenv.config({ path: envPath })
+
+// Get ports from environment variables
+const clientPort = parseInt(process.env.ADMIN_CLIENT_PORT || '8000', 10)
+const backendPort = parseInt(process.env.ADMIN_BACKEND_PORT || '8001', 10)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -20,8 +29,13 @@ export default defineConfig({
   },
   root: path.resolve(__dirname),
   server: {
-    // Port not used when served through backend middleware
-    // Backend serves frontend on ADMIN_PORT (3002)
+    port: clientPort,
+    proxy: {
+      '/api': {
+        target: `http://localhost:${backendPort}`,
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: path.resolve(__dirname, '../dist/public'),
