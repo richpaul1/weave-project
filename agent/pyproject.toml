@@ -8,6 +8,12 @@ requires-python = ">=3.10"
 testpaths = ["tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "ui: marks tests as UI tests",
+    "chat: marks tests as chat functionality tests",
+    "weave: marks tests related to Weave functionality"
+]
 
 [tool.black]
 line-length = 100

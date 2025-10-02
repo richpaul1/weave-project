@@ -20,13 +20,8 @@ export default defineConfig({
   },
   root: path.resolve(__dirname),
   server: {
-    port: 3003,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3002',
-        changeOrigin: true,
-      },
-    },
+    // Port not used when served through backend middleware
+    // Backend serves frontend on ADMIN_PORT (3002)
   },
   build: {
     outDir: path.resolve(__dirname, '../dist/public'),

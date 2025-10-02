@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { chromium, Browser, Page } from 'playwright';
 
-const BASE_URL = process.env.FRONTEND_PORT ? `http://localhost:${process.env.FRONTEND_PORT}` : 'http://localhost:3003';
+const BASE_URL = process.env.ADMIN_PORT ? `http://localhost:${process.env.ADMIN_PORT}` : 'http://localhost:3002';
 
 describe('Settings Page Basic UI Tests', () => {
   let browser: Browser;

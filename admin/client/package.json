@@ -4,18 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
     "build:check": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:unit": "vitest run tests/unit",
-    "test:functional": "vitest run tests/functional",
-    "test:integration": "vitest run tests/integration",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",

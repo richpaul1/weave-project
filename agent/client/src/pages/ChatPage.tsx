@@ -6,14 +6,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, User, Loader2, Brain } from "lucide-react";
-import type { ChatMessage } from "../../../shared/schema";
+import { Send, Bot, User, Loader2, Brain, Bug } from "lucide-react";
+import type { ChatMessage } from "@/types/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { streamingClient } from "@/lib/streaming";
 import MarkdownRenderer from "@/components/markdown-renderer";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { openWeaveUI, getWeaveConfig, type WeaveConfig } from "@/lib/weave";
 
 interface StreamingMessage extends ChatMessage {
   isStreaming?: boolean;
@@ -27,6 +28,7 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessages, setStreamingMessages] = useState<StreamingMessage[]>([]);
   const [thinkingOpen, setThinkingOpen] = useState<Record<string, boolean>>({});
+  const [weaveConfig, setWeaveConfig] = useState<WeaveConfig | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -50,6 +52,11 @@ export default function ChatPage() {
     },
     enabled: !!sessionId,
   });
+
+  // Load Weave configuration on mount
+  useEffect(() => {
+    getWeaveConfig().then(setWeaveConfig);
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -223,11 +230,40 @@ export default function ChatPage() {
     }
   };
 
+  const handleOpenWeaveUI = () => {
+    openWeaveUI(sessionId);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background">
       <header className="bg-surface border-b px-6 py-4">
-        <h2 className="text-xl font-semibold text-foreground">RAG Chat Interface</h2>
-        <p className="text-sm text-muted-foreground">Ask questions about the crawled content</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">RAG Chat Interface</h2>
+            <p className="text-sm text-muted-foreground">Ask questions about the crawled content</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenWeaveUI}
+            className={`flex items-center gap-2 ${
+              weaveConfig?.enabled
+                ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title={
+              weaveConfig?.enabled
+                ? "Open Weave UI for debugging and observability"
+                : weaveConfig?.message || "Weave tracking is disabled"
+            }
+          >
+            <Bug className="h-4 w-4" />
+            <span className="hidden sm:inline">Debug</span>
+            {weaveConfig?.enabled && (
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+            )}
+          </Button>
+        </div>
       </header>
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-6">

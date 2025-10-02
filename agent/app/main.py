@@ -42,6 +42,11 @@ async def lifespan(app: FastAPI):
     print("  POST   /api/chat/message")
     print("  POST   /api/chat/stream")
     print("  GET    /api/chat/health")
+    print("  GET    /api/chat/sessions")
+    print("  GET    /api/chat/messages/{session_id}")
+    print("  POST   /api/chat/messages")
+    print("  DELETE /api/chat/messages/{session_id}")
+    print("  GET    /api/weave/config")
     print("=" * 50)
     print("Agent Backend URL: http://localhost:8000/")
     print("Agent Client URL: http://localhost:8001/")
@@ -90,8 +95,9 @@ async def root():
     }
 
 # Import and include routers
-from app.routes import chat
-app.include_router(chat.router, tags=["chat"])
+from app.routes import chat, weave
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(weave.router, tags=["weave"])
 
 print("✅ Registered routes:")
 for route in app.routes:

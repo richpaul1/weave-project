@@ -26,7 +26,7 @@ const chatSettingsSchema = z.object({
   search_score_threshold: z.number().min(0.5, "Threshold must be at least 0.5").max(1.0, "Threshold must be at most 1.0"),
   enable_title_matching: z.boolean(),
   enable_full_page_content: z.boolean(),
-  max_pages: z.number().min(1, "Must be at least 1").max(20, "Must be at most 20"),
+  max_pages: z.number().min(1, "Must be at least 1").max(1000, "Must be at most 1000"),
   empty_search_default_response: z.string().min(10, "Please enter a valid default response"),
   enable_full_validation_testing: z.boolean(),
 });

@@ -1,4 +1,4 @@
-import { GraphNode, GraphEdge } from "@shared/schema";
+import { GraphNode, GraphEdge } from "@/types/schema";
 
 export const mockGraphData = {
   nodes: [
