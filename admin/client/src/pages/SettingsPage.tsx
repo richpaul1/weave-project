@@ -190,7 +190,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6" data-testid="settings-page">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <SettingsIcon className="h-6 w-6" />
@@ -209,7 +209,7 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         {/* Chat Settings */}
-        <Card>
+        <Card data-testid="chat-settings-card">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <MessageSquare className="h-5 w-5" />
@@ -283,6 +283,7 @@ export default function SettingsPage() {
                           <Switch
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            data-testid="enable-title-matching-switch"
                           />
                         </FormControl>
                       </FormItem>

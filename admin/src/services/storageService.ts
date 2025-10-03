@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { weave } from '../weave/init.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
+import { llmService } from './llmService.js';
 
 export interface PageMetadata {
   id: string;
@@ -230,26 +231,99 @@ export class StorageService {
    */
   @weave.op()
   async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
-    // Save to Neo4j
-    const metadata = await this.savePage(url, title, crawlDepth);
+    const session = this.getSession();
 
-    // Save markdown to file system
-    await this.saveMarkdownFile(metadata.domain, metadata.slug, markdown);
+    try {
+      // Generate metadata
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname;
+      const slug = this.generateSlug(url);
+      const id = uuidv4();
+      const now = new Date().toISOString();
 
-    // Save metadata to file system
-    await this.saveMetadataFile(metadata.domain, metadata.slug, metadata);
+      const metadata: PageMetadata = {
+        id,
+        url,
+        title,
+        domain,
+        slug,
+        crawlDepth,
+        createdAt: now,
+        updatedAt: now,
+      };
 
-    // Create and save chunks
-    await this.createPageChunks(metadata.id, markdown);
+      // Generate page embedding
+      const pageEmbedding = await llmService.generateEmbedding(markdown);
 
-    weave.logEvent('complete_page_saved', {
-      id: metadata.id,
-      url,
-      domain: metadata.domain,
-      slug: metadata.slug,
-    });
+      // Save page to Neo4j in single transaction with embedding
+      await session.run(
+        `
+        MERGE (p:Page {url: $url})
+        SET p.id = $id,
+            p.title = $title,
+            p.domain = $domain,
+            p.slug = $slug,
+            p.crawlDepth = $crawlDepth,
+            p.createdAt = $createdAt,
+            p.updatedAt = $updatedAt,
+            p.embedding = $embedding
+        RETURN p
+        `,
+        { ...metadata, embedding: pageEmbedding }
+      );
 
-    return metadata;
+      // Create chunks in the same session/transaction with embeddings
+      const chunks = chunkMarkdown(markdown, 1000);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkId = uuidv4();
+
+        // Generate embedding for chunk text
+        const chunkEmbedding = await llmService.generateEmbedding(chunk.text);
+
+        await session.run(`
+          MATCH (p:Page {id: $pageId})
+          CREATE (c:Chunk {
+            id: $chunkId,
+            pageId: $pageId,
+            text: $text,
+            chunkIndex: $chunkIndex,
+            startPosition: $startPosition,
+            endPosition: $endPosition,
+            embedding: $embedding,
+            createdAt: datetime()
+          })
+          CREATE (p)-[:HAS_CHUNK]->(c)
+          RETURN c.id as chunkId
+        `, {
+          pageId: id,
+          chunkId,
+          text: chunk.text,
+          chunkIndex: chunk.index,
+          startPosition: chunk.startPosition,
+          endPosition: chunk.endPosition,
+          embedding: chunkEmbedding
+        });
+      }
+
+      // Save markdown to file system
+      await this.saveMarkdownFile(metadata.domain, metadata.slug, markdown);
+
+      // Save metadata to file system
+      await this.saveMetadataFile(metadata.domain, metadata.slug, metadata);
+
+      weave.logEvent('complete_page_saved', {
+        id: metadata.id,
+        url,
+        domain: metadata.domain,
+        slug: metadata.slug,
+        chunksCreated: chunks.length
+      });
+
+      return metadata;
+    } finally {
+      await session.close();
+    }
   }
 
   /**
@@ -360,6 +434,146 @@ export class StorageService {
 
       const node = result.records[0].get('p');
       return node.properties as PageMetadata;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get chunks for a specific page
+   */
+  @weave.op()
+  async getPageChunks(pageId: string): Promise<ChunkData[]> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(
+        `
+        MATCH (p:Page {id: $pageId})-[:HAS_CHUNK]->(c:Chunk)
+        RETURN c
+        ORDER BY c.chunkIndex
+        `,
+        { pageId }
+      );
+
+      const chunks: ChunkData[] = [];
+      for (const record of result.records) {
+        const chunkNode = record.get('c');
+        chunks.push({
+          id: chunkNode.properties.id,
+          pageId: chunkNode.properties.pageId,
+          text: chunkNode.properties.text,
+          chunkIndex: chunkNode.properties.chunkIndex,
+          embedding: chunkNode.properties.embedding || undefined
+        });
+      }
+
+      return chunks;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Search pages by vector similarity
+   */
+  @weave.op()
+  async searchPagesByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<PageMetadata & { score: number }>> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(
+        `
+        MATCH (p:Page)
+        WHERE p.embedding IS NOT NULL
+        WITH p,
+             reduce(dot = 0.0, i in range(0, size(p.embedding)-1) | dot + p.embedding[i] * $embedding[i]) as dotProduct,
+             sqrt(reduce(norm1 = 0.0, i in range(0, size(p.embedding)-1) | norm1 + p.embedding[i] * p.embedding[i])) as norm1,
+             sqrt(reduce(norm2 = 0.0, i in range(0, size($embedding)-1) | norm2 + $embedding[i] * $embedding[i])) as norm2
+        WITH p, dotProduct / (norm1 * norm2) AS score
+        WHERE score >= $scoreThreshold
+        RETURN p, score
+        ORDER BY score DESC
+        LIMIT $limit
+        `,
+        { embedding, scoreThreshold, limit: neo4j.int(limit) }
+      );
+
+      const pages: Array<PageMetadata & { score: number }> = [];
+      for (const record of result.records) {
+        const pageNode = record.get('p');
+        const score = record.get('score');
+        pages.push({
+          id: pageNode.properties.id,
+          url: pageNode.properties.url,
+          title: pageNode.properties.title,
+          domain: pageNode.properties.domain,
+          slug: pageNode.properties.slug,
+          crawlDepth: pageNode.properties.crawlDepth,
+          createdAt: pageNode.properties.createdAt,
+          updatedAt: pageNode.properties.updatedAt,
+          score: score
+        });
+      }
+
+      weave.logEvent('pages_searched_by_vector', {
+        resultsCount: pages.length,
+        scoreThreshold,
+        limit
+      });
+
+      return pages;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Search chunks by vector similarity
+   */
+  @weave.op()
+  async searchChunksByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<ChunkData & { score: number }>> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(
+        `
+        MATCH (c:Chunk)
+        WHERE c.embedding IS NOT NULL
+        WITH c,
+             reduce(dot = 0.0, i in range(0, size(c.embedding)-1) | dot + c.embedding[i] * $embedding[i]) as dotProduct,
+             sqrt(reduce(norm1 = 0.0, i in range(0, size(c.embedding)-1) | norm1 + c.embedding[i] * c.embedding[i])) as norm1,
+             sqrt(reduce(norm2 = 0.0, i in range(0, size($embedding)-1) | norm2 + $embedding[i] * $embedding[i])) as norm2
+        WITH c, dotProduct / (norm1 * norm2) AS score
+        WHERE score >= $scoreThreshold
+        RETURN c, score
+        ORDER BY score DESC
+        LIMIT $limit
+        `,
+        { embedding, scoreThreshold, limit: neo4j.int(limit) }
+      );
+
+      const chunks: Array<ChunkData & { score: number }> = [];
+      for (const record of result.records) {
+        const chunkNode = record.get('c');
+        const score = record.get('score');
+        chunks.push({
+          id: chunkNode.properties.id,
+          pageId: chunkNode.properties.pageId,
+          text: chunkNode.properties.text,
+          chunkIndex: chunkNode.properties.chunkIndex,
+          embedding: chunkNode.properties.embedding,
+          score: score
+        });
+      }
+
+      weave.logEvent('chunks_searched_by_vector', {
+        resultsCount: chunks.length,
+        scoreThreshold,
+        limit
+      });
+
+      return chunks;
     } finally {
       await session.close();
     }

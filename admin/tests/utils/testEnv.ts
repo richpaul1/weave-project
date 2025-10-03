@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load weave-project/.env.local file
-const envPath = path.resolve(__dirname, '../../.env.local');
+const envPath = path.resolve(__dirname, '../../../.env.local');
 const result = dotenv.config({ path: envPath });
 
 if (result.error) {
@@ -16,8 +16,6 @@ if (result.error) {
   console.error(`   Please create a .env.local file in the weave-project/ directory.`);
   process.exit(1);
 }
-
-console.log(`✅ Loaded environment configuration from: ${envPath}`);
 
 /**
  * Helper function to get required environment variable
@@ -42,12 +40,13 @@ function getOptionalEnv(key: string, defaultValue: string): string {
   return process.env[key] || defaultValue;
 }
 
-export const config = {
-  // Server (serves both frontend and backend)
-  port: parseInt(getRequiredEnv('ADMIN_PORT', 'Port for admin server'), 10),
+export const testEnv = {
+  // Admin Application Port (serves both frontend and backend)
+  adminPort: parseInt(getRequiredEnv('ADMIN_PORT', 'Port for admin server'), 10),
 
-  // Content Storage
-  contentStoragePath: getRequiredEnv('CONTENT_STORAGE_PATH', 'Path where markdown content files will be stored'),
+  // Agent Application Ports
+  agentBackendPort: parseInt(getRequiredEnv('AGENT_BACKEND_PORT', 'Port for agent backend server'), 10),
+  agentClientPort: parseInt(getRequiredEnv('AGENT_CLIENT_PORT', 'Port for agent client frontend'), 10),
 
   // Neo4j - All required
   neo4jUri: getRequiredEnv('NEO4J_URI', 'Neo4j database URI (e.g., neo4j://localhost:7687)'),
@@ -55,24 +54,25 @@ export const config = {
   neo4jPassword: getRequiredEnv('NEO4J_PASSWORD', 'Neo4j database password'),
   neo4jDatabase: getRequiredEnv('NEO4J_DB_NAME', 'Neo4j database name'),
 
-  // Ollama - Required for embeddings and LLM
-  ollamaBaseUrl: getRequiredEnv('OLLAMA_BASE_URL', 'Ollama API base URL (e.g., http://localhost:11434)'),
-  ollamaModel: getRequiredEnv('OLLAMA_MODEL', 'Ollama model name for text generation'),
-  ollamaEmbeddingModel: getRequiredEnv('OLLAMA_EMBEDDING_MODEL', 'Ollama model name for embeddings'),
+  // Computed URLs
+  get adminUrl(): string {
+    return `http://localhost:${this.adminPort}`;
+  },
 
-  // OpenAI - Optional (alternative to Ollama)
-  openaiApiKey: getOptionalEnv('OPENAI_API_KEY', ''),
-  openaiModel: getOptionalEnv('OPENAI_MODEL', 'gpt-4'),
-  openaiEmbeddingModel: getOptionalEnv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
+  // Legacy aliases for backward compatibility
+  get adminBackendUrl(): string {
+    return this.adminUrl;
+  },
 
-  // Weave - Use same env vars as agent backend for consistency
-  wandbProject: getOptionalEnv('WANDB_PROJECT', 'support-app'),
-  wandbEntity: getOptionalEnv('WANDB_ENTITY', ''),
-  wandbApiKey: getOptionalEnv('WANDB_API_KEY', ''), // Optional - can use local mode
+  get adminClientUrl(): string {
+    return this.adminUrl;
+  },
 
-  // Computed Weave project name (entity/project or just project)
-  get weaveProjectName(): string {
-    return this.wandbEntity ? `${this.wandbEntity}/${this.wandbProject}` : this.wandbProject;
+  get agentBackendUrl(): string {
+    return `http://localhost:${this.agentBackendPort}`;
+  },
+
+  get agentClientUrl(): string {
+    return `http://localhost:${this.agentClientPort}`;
   },
 };
-

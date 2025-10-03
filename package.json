@@ -13,7 +13,7 @@
     "install:all": "npm install && cd admin && npm install && cd client && npm install && cd ../../agent && pip install -r requirements.txt && cd client && npm install",
     "dev": "node scripts/dev-with-urls.js",
     "dev:raw": "concurrently -n \"admin,agent-be,agent-fe\" -c \"blue,green,yellow\" \"npm run dev:admin\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
-    "dev:agent-backend": "cd agent && python -m uvicorn app.main:app --reload --port 8000",
+    "dev:agent-backend": "cd agent && python -m uvicorn app.main:app --reload --port ${AGENT_BACKEND_PORT:-3001}",
     "dev:agent-frontend": "cd agent/client && npx vite",
     "dev:admin": "cd admin && npm run dev",
     "dev:agent": "concurrently -n \"agent-be,agent-fe\" -c \"green,yellow\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",

@@ -11,9 +11,8 @@ const __dirname = path.dirname(__filename);
 const envPath = path.resolve(__dirname, '../../.env.local')
 dotenv.config({ path: envPath })
 
-// Get ports from environment variables
-const clientPort = parseInt(process.env.ADMIN_CLIENT_PORT || '8000', 10)
-const backendPort = parseInt(process.env.ADMIN_BACKEND_PORT || '8001', 10)
+// Get port from environment variables (admin serves both frontend and backend)
+const adminPort = parseInt(process.env.ADMIN_PORT || '8001', 10)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -29,10 +28,10 @@ export default defineConfig({
   },
   root: path.resolve(__dirname),
   server: {
-    port: clientPort,
+    port: adminPort,
     proxy: {
       '/api': {
-        target: `http://localhost:${backendPort}`,
+        target: `http://localhost:${adminPort}`,
         changeOrigin: true,
       },
     },

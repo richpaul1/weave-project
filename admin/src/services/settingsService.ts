@@ -72,7 +72,7 @@ export class SettingsService {
         search_score_threshold: settings.search_score_threshold ?? 0.9,
         enable_title_matching: settings.enable_title_matching ?? true,
         enable_full_page_content: settings.enable_full_page_content ?? true,
-        max_pages: settings.max_pages ?? 100,
+        max_pages: settings.max_pages ?? 5,
         empty_search_default_response: settings.empty_search_default_response || "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing your question or asking about a different topic that might be covered in the available documentation.",
         enable_full_validation_testing: settings.enable_full_validation_testing ?? false
       };
@@ -110,7 +110,7 @@ export class SettingsService {
       search_score_threshold: 0.9,
       enable_title_matching: true,
       enable_full_page_content: true,
-      max_pages: 100,
+      max_pages: 5,
       empty_search_default_response: "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing your question or asking about a different topic that might be covered in the available documentation.",
       enable_full_validation_testing: false
     };
