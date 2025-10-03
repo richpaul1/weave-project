@@ -116,6 +116,16 @@ describe('API Integration Tests', () => {
         0
       );
 
+      // Wait a bit for the page to be fully committed
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify the page exists first
+      const allPages = await storage.getAllPages();
+      const pageExists = allPages.some(p => p.id === metadata.id);
+      if (!pageExists) {
+        console.warn(`Page ${metadata.id} not found in getAllPages, available pages:`, allPages.map(p => p.id));
+      }
+
       const response = await request(app)
         .get(`/api/content/pages/${metadata.id}`)
         .expect(200);

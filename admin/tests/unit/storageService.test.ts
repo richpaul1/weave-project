@@ -50,17 +50,45 @@ describe('StorageService Unit Tests', () => {
 
       await storage.initializeSchema();
 
-      // Should create 2 constraints and 2 indexes
-      expect(mockSession.run).toHaveBeenCalledTimes(4);
-      
-      // Check constraint creation
+      // Should create 4 constraints (2 page + 2 course) and 6 indexes (2 page + 4 course) = 10 total
+      expect(mockSession.run).toHaveBeenCalledTimes(10);
+
+      // Check page constraint creation
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('CREATE CONSTRAINT')
+        expect.stringContaining('CREATE CONSTRAINT page_id_unique')
       );
-      
-      // Check index creation
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('CREATE INDEX')
+        expect.stringContaining('CREATE CONSTRAINT chunk_id_unique')
+      );
+
+      // Check course constraint creation
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE CONSTRAINT course_id_unique')
+      );
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE CONSTRAINT course_chunk_id_unique')
+      );
+
+      // Check page index creation
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX page_url_index')
+      );
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX page_domain_index')
+      );
+
+      // Check course index creation
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX course_url_index')
+      );
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX course_slug_index')
+      );
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX course_difficulty_index')
+      );
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE INDEX course_active_index')
       );
     });
 
@@ -401,19 +429,57 @@ describe('StorageService Unit Tests', () => {
 
   describe('resetAllContent', () => {
     it('should delete all pages from Neo4j', async () => {
-      mockSession.run.mockResolvedValue({});
+      // Mock the count query result
+      const mockCountResult = {
+        records: [{
+          get: vi.fn()
+            .mockReturnValueOnce({ toNumber: () => 5 }) // pageCount
+            .mockReturnValueOnce({ toNumber: () => 10 }) // chunkCount
+            .mockReturnValueOnce({ toNumber: () => 3 }) // courseCount
+            .mockReturnValueOnce({ toNumber: () => 8 }) // courseChunkCount
+            .mockReturnValueOnce({ toNumber: () => 26 }), // totalNodes
+        }],
+      };
+
+      mockSession.run
+        .mockResolvedValueOnce(mockCountResult) // First call: count query
+        .mockResolvedValueOnce({}) // Second call: delete query
+        .mockResolvedValueOnce({}); // Third call: cleanup query
+
       mockedFs.rm.mockResolvedValue(undefined);
       mockedFs.mkdir.mockResolvedValue(undefined);
 
       await storage.resetAllContent();
 
+      // Verify count query includes courses
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('MATCH (p:Page)')
+        expect.stringContaining('n:Page OR n:Chunk OR n:Course OR n:CourseChunk')
+      );
+
+      // Verify delete query includes courses
+      expect(mockSession.run).toHaveBeenCalledWith(
+        expect.stringContaining('n:Page OR n:Chunk OR n:Course OR n:CourseChunk')
       );
     });
 
     it('should delete all markdown files', async () => {
-      mockSession.run.mockResolvedValue({});
+      // Mock the count query result
+      const mockCountResult = {
+        records: [{
+          get: vi.fn()
+            .mockReturnValueOnce({ toNumber: () => 2 }) // pageCount
+            .mockReturnValueOnce({ toNumber: () => 5 }) // chunkCount
+            .mockReturnValueOnce({ toNumber: () => 1 }) // courseCount
+            .mockReturnValueOnce({ toNumber: () => 3 }) // courseChunkCount
+            .mockReturnValueOnce({ toNumber: () => 11 }), // totalNodes
+        }],
+      };
+
+      mockSession.run
+        .mockResolvedValueOnce(mockCountResult)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+
       mockedFs.rm.mockResolvedValue(undefined);
       mockedFs.mkdir.mockResolvedValue(undefined);
 
@@ -426,7 +492,23 @@ describe('StorageService Unit Tests', () => {
     });
 
     it('should recreate storage directory', async () => {
-      mockSession.run.mockResolvedValue({});
+      // Mock the count query result
+      const mockCountResult = {
+        records: [{
+          get: vi.fn()
+            .mockReturnValueOnce({ toNumber: () => 0 }) // pageCount
+            .mockReturnValueOnce({ toNumber: () => 0 }) // chunkCount
+            .mockReturnValueOnce({ toNumber: () => 0 }) // courseCount
+            .mockReturnValueOnce({ toNumber: () => 0 }) // courseChunkCount
+            .mockReturnValueOnce({ toNumber: () => 0 }), // totalNodes
+        }],
+      };
+
+      mockSession.run
+        .mockResolvedValueOnce(mockCountResult)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+
       mockedFs.rm.mockResolvedValue(undefined);
       mockedFs.mkdir.mockResolvedValue(undefined);
 

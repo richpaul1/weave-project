@@ -46,6 +46,159 @@ class LLMService:
             self.openai_embedding_model = OPENAI_EMBEDDING_MODEL
     
     @weave.op()
+    async def generate_completion_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None,
+        session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate completion with tool calling support.
+
+        Args:
+            messages: Conversation messages
+            tools: Available tools in OpenAI format
+            system_prompt: System prompt
+            session_id: Session ID for tracking
+
+        Returns:
+            Response with potential tool calls
+        """
+        print(f"🤖 LLM Service: Generating completion with tools")
+        print(f"   Provider: {self.provider}")
+        print(f"   Available tools: {len(tools)}")
+
+        add_session_metadata(
+            session_id=session_id,
+            operation_type="llm_tool_calling",
+            provider=self.provider,
+            num_tools=len(tools),
+            num_messages=len(messages)
+        )
+
+        if self.provider == "openai":
+            return await self._generate_openai_completion_with_tools(
+                messages, tools, system_prompt
+            )
+        else:
+            # For Ollama, we'll simulate tool calling since it doesn't support it natively
+            return await self._simulate_tool_calling_ollama(
+                messages, tools, system_prompt
+            )
+
+    async def _generate_openai_completion_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate completion with tools using OpenAI."""
+        try:
+            # Add system message if provided
+            if system_prompt and (not messages or messages[0]["role"] != "system"):
+                messages = [{"role": "system", "content": system_prompt}] + messages
+
+            response = await self.openai_client.chat.completions.create(
+                model=self.openai_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE
+            )
+
+            message = response.choices[0].message
+
+            result = {
+                "content": message.content,
+                "tool_calls": []
+            }
+
+            if message.tool_calls:
+                for tool_call in message.tool_calls:
+                    result["tool_calls"].append({
+                        "id": tool_call.id,
+                        "type": tool_call.type,
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments
+                        }
+                    })
+
+            return result
+
+        except Exception as e:
+            print(f"❌ LLM Service: OpenAI tool calling failed: {str(e)}")
+            return {
+                "content": f"I apologize, but I encountered an error: {str(e)}",
+                "tool_calls": []
+            }
+
+    async def _simulate_tool_calling_ollama(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Simulate tool calling for Ollama by analyzing the query."""
+        # Get the user's latest message
+        user_message = ""
+        for msg in reversed(messages):
+            if msg["role"] == "user":
+                user_message = msg["content"]
+                break
+
+        # Simple heuristic to determine if we should call tools
+        learning_keywords = [
+            "learn", "course", "tutorial", "study", "training", "education",
+            "teach", "how to", "guide", "lesson", "skill", "knowledge"
+        ]
+
+        should_search_courses = any(keyword in user_message.lower() for keyword in learning_keywords)
+
+        if should_search_courses:
+            # Extract learning topic from the query
+            query = user_message
+            # Simple extraction - in a real implementation, you might use NLP
+            for keyword in learning_keywords:
+                if keyword in query.lower():
+                    # Try to extract the topic after the keyword
+                    parts = query.lower().split(keyword)
+                    if len(parts) > 1:
+                        topic = parts[1].strip()
+                        # Clean up common words
+                        topic = topic.replace("about", "").replace("how to", "").strip()
+                        if topic:
+                            query = topic
+                            break
+
+            return {
+                "content": None,
+                "tool_calls": [{
+                    "id": "simulated_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "search_courses",
+                        "arguments": f'{{"query": "{query}", "limit": 5}}'
+                    }
+                }]
+            }
+        else:
+            # For non-learning queries, use knowledge search
+            return {
+                "content": None,
+                "tool_calls": [{
+                    "id": "simulated_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "search_knowledge",
+                        "arguments": f'{{"query": "{user_message}", "context_limit": 5}}'
+                    }
+                }]
+            }
+
+    @weave.op()
     async def generate_completion(
         self,
         prompt: str,

@@ -224,8 +224,16 @@ describe('WebCrawler Integration Tests', () => {
 
       expect(markdownExists).toBe(true);
 
+      // Wait for page to be committed to Neo4j
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       // Verify page exists in Neo4j
       const savedPage = await storage.getPageById(metadata.id);
+      if (!savedPage) {
+        // Debug: Check if page exists with different query
+        const allPages = await storage.getAllPages();
+        console.log(`Page ${metadata.id} not found. Available pages:`, allPages.map(p => ({ id: p.id, url: p.url })));
+      }
       expect(savedPage).toBeTruthy();
       expect(savedPage?.url).toBe(firstResult.url);
 
@@ -287,14 +295,20 @@ describe('WebCrawler Integration Tests', () => {
       try {
         const metadata = await storage.saveCompletePage(page.url, page.title, page.markdown, 0);
         createdMetadata.push(metadata);
+        console.log(`✅ Successfully saved page: ${page.url}`);
       } catch (error: any) {
-        console.error(`Failed to save page ${page.url}:`, error.message);
+        console.error(`❌ Failed to save page ${page.url}:`, error.message);
         throw error;
       }
     }
 
     // Verify all pages exist in Neo4j
     let pages = await storage.getAllPages();
+    console.log(`📊 Expected ${testPages.length} pages, found ${pages.length} pages`);
+    if (pages.length !== testPages.length) {
+      console.log('Pages found:', pages.map(p => ({ url: p.url, title: p.title })));
+      console.log('Expected pages:', testPages.map(p => ({ url: p.url, title: p.title })));
+    }
     expect(pages.length).toBe(testPages.length);
 
     // Verify all markdown files exist

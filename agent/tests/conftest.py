@@ -2,9 +2,29 @@
 Pytest configuration and fixtures for all tests
 """
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
+import sys
+import os
+from unittest.mock import Mock, AsyncMock, MagicMock, patch
 from typing import List, Dict, Any
 from fastapi.testclient import TestClient
+
+# Add the agent directory to the Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+# Mock environment variables before importing any modules
+@pytest.fixture(scope="session", autouse=True)
+def mock_environment():
+    """Mock environment variables for testing."""
+    with patch.dict(os.environ, {
+        'NEO4J_URI': 'neo4j://localhost:7687',
+        'NEO4J_USERNAME': 'test_user',
+        'NEO4J_PASSWORD': 'test_password',
+        'OLLAMA_BASE_URL': 'http://localhost:11434',
+        'ADMIN_BASE_URL': 'http://localhost:8001',
+        'WEAVE_PROJECT': 'test-project',
+        'WANDB_API_KEY': 'test-key'
+    }):
+        yield
 
 
 # ============================================================================

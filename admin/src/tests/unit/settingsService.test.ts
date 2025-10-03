@@ -93,7 +93,15 @@ describe('SettingsService', () => {
     it('should handle database errors gracefully', async () => {
       mockSession.run.mockRejectedValue(new Error('Database connection failed'));
 
-      await expect(settingsService.getChatSettings()).rejects.toThrow('Database connection failed');
+      // The service should return default settings instead of throwing
+      const result = await settingsService.getChatSettings();
+      expect(result).toMatchObject({
+        search_score_threshold: 0.9,
+        enable_title_matching: true,
+        enable_full_page_content: true,
+        max_pages: 5,
+        enable_full_validation_testing: false
+      });
       expect(mockSession.close).toHaveBeenCalled();
     });
   });

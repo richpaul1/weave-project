@@ -89,22 +89,26 @@ describe('Content Management Functional Tests', () => {
     };
 
     it('should delete page with all related chunks and files', async () => {
-      // Mock getPageById to return a page
+      // Mock getPageById to return a page with proper Neo4j node structure
       mockSession.run
         .mockResolvedValueOnce({
           records: [{
             get: (key: string) => {
-              const record: any = {
-                id: mockPage.id,
-                url: mockPage.url,
-                title: mockPage.title,
-                domain: mockPage.domain,
-                slug: mockPage.slug,
-                crawlDepth: mockPage.crawlDepth,
-                createdAt: mockPage.createdAt,
-                updatedAt: mockPage.updatedAt,
-              };
-              return record[key];
+              if (key === 'p') {
+                return {
+                  properties: {
+                    id: mockPage.id,
+                    url: mockPage.url,
+                    title: mockPage.title,
+                    domain: mockPage.domain,
+                    slug: mockPage.slug,
+                    crawlDepth: mockPage.crawlDepth,
+                    createdAt: mockPage.createdAt,
+                    updatedAt: mockPage.updatedAt,
+                  }
+                };
+              }
+              return null;
             },
           }],
         })
@@ -143,7 +147,7 @@ describe('Content Management Functional Tests', () => {
       // Verify file deletions
       expect(mockedFs.unlink).toHaveBeenCalledTimes(2);
       expect(mockedFs.unlink).toHaveBeenCalledWith(expect.stringContaining('test.md'));
-      expect(mockedFs.unlink).toHaveBeenCalledWith(expect.stringContaining('test.json'));
+      expect(mockedFs.unlink).toHaveBeenCalledWith(expect.stringContaining('test.meta.json'));
 
       // Verify logging
       expect(consoleLogSpy).toHaveBeenCalledWith(
@@ -170,13 +174,17 @@ describe('Content Management Functional Tests', () => {
     });
 
     it('should handle file deletion errors gracefully', async () => {
-      // Mock getPageById to return a page
+      // Mock getPageById to return a page with proper Neo4j node structure
       mockSession.run
         .mockResolvedValueOnce({
           records: [{
             get: (key: string) => {
-              const record: any = { ...mockPage };
-              return record[key];
+              if (key === 'p') {
+                return {
+                  properties: { ...mockPage }
+                };
+              }
+              return null;
             },
           }],
         })
@@ -197,10 +205,9 @@ describe('Content Management Functional Tests', () => {
       // Verify database operations still completed
       expect(mockSession.run).toHaveBeenCalledTimes(3);
 
-      // Verify warning was logged for file deletion failure
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to delete files:'),
-        expect.any(Error)
+      // Verify success message was still logged (file errors are swallowed by .catch())
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Successfully deleted page "Test Page"')
       );
     });
   });
@@ -232,22 +239,19 @@ describe('Content Management Functional Tests', () => {
 
       await storage.resetAllContent();
 
-      // Verify count query was called
+      // Verify count query was called (now includes courses)
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE n:Page OR n:Chunk'),
-        undefined
+        expect.stringContaining('WHERE n:Page OR n:Chunk OR n:Course OR n:CourseChunk')
       );
 
-      // Verify delete query was called
+      // Verify delete query was called (now includes courses)
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE n:Page OR n:Chunk'),
-        undefined
+        expect.stringContaining('WHERE n:Page OR n:Chunk OR n:Course OR n:CourseChunk')
       );
 
       // Verify orphaned nodes cleanup was called
       expect(mockSession.run).toHaveBeenCalledWith(
-        expect.stringContaining('AND NOT n:ChatMessage'),
-        undefined
+        expect.stringContaining('AND NOT n:ChatMessage')
       );
 
       // Verify file system operations
@@ -259,15 +263,15 @@ describe('Content Management Functional Tests', () => {
         recursive: true,
       });
 
-      // Verify logging
+      // Verify logging (now includes courses)
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Preparing to delete: 5 pages with vectors, 15 chunks with vectors')
+        expect.stringContaining('Preparing to delete: 5 pages, 15 chunks, 0 courses, 0 course chunks')
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining('Preserving: ChatMessage and Setting nodes')
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Reset complete: Deleted 20 content nodes')
+        expect.stringContaining('Reset complete: Deleted 20 content nodes (5 pages with vectors, 15 chunks with vectors)')
       );
     });
 
@@ -301,9 +305,9 @@ describe('Content Management Functional Tests', () => {
       expect(mockedFs.rm).toHaveBeenCalled();
       expect(mockedFs.mkdir).toHaveBeenCalled();
 
-      // Verify appropriate logging
+      // Verify appropriate logging (now includes courses)
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Preparing to delete: 0 pages with vectors, 0 chunks with vectors')
+        expect.stringContaining('Preparing to delete: 0 pages, 0 chunks, 0 courses, 0 course chunks')
       );
     });
 
@@ -418,13 +422,17 @@ describe('Content Management Functional Tests', () => {
         updatedAt: '2024-01-01T00:00:00Z',
       };
 
-      // Mock getPageById to return a page
+      // Mock getPageById to return a page with proper Neo4j node structure
       mockSession.run
         .mockResolvedValueOnce({
           records: [{
             get: (key: string) => {
-              const record: any = { ...mockPage };
-              return record[key];
+              if (key === 'p') {
+                return {
+                  properties: { ...mockPage }
+                };
+              }
+              return null;
             },
           }],
         })

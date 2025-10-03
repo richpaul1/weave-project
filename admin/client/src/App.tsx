@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import Navigation from "@/components/navigation";
 import AdminPage from "@/pages/AdminPage";
+import CoursesPage from "@/pages/CoursesPage";
 import GraphPage from "@/pages/GraphPage";
 import SettingsPage from "@/pages/SettingsPage";
 
@@ -24,6 +25,7 @@ function Router() {
             }}
           </Route>
           <Route path="/admin" component={AdminPage} />
+          <Route path="/courses" component={CoursesPage} />
           <Route path="/graph" component={GraphPage} />
           <Route path="/settings" component={SettingsPage} />
         </Switch>

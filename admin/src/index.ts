@@ -7,6 +7,7 @@ import { initializeWeave } from './weave/init.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
 import graphRoutes from './routes/graphRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import { setupVite, serveStatic } from './vite.js';
@@ -76,6 +77,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // API routes
 app.use('/api/crawler', crawlerRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/courses', courseRoutes);
 app.use('/api/graph', graphRoutes);
 app.use('/api/duplicates', graphRoutes);
 app.use('/api/settings', settingsRoutes);
@@ -152,6 +154,13 @@ async function startServer() {
       console.log(`  GET    /api/content/pages/:id/markdown`);
       console.log(`  DELETE /api/content/pages/:id`);
       console.log(`  GET    /api/content/stats`);
+      console.log(`  GET    /api/courses`);
+      console.log(`  GET    /api/courses/stats`);
+      console.log(`  GET    /api/courses/search`);
+      console.log(`  GET    /api/courses/:id`);
+      console.log(`  GET    /api/courses/:id/markdown`);
+      console.log(`  POST   /api/courses/crawl`);
+      console.log(`  DELETE /api/courses/:id`);
       console.log(`  GET    /api/graph/nodes`);
       console.log(`  GET    /api/graph/edges`);
       console.log(`  GET    /api/graph/search`);
