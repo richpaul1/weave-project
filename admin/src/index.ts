@@ -1,8 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { config } from './config.js';
 import { initializeWeave } from './weave/init.js';
@@ -11,10 +9,7 @@ import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
 import graphRoutes from './routes/graphRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
-import { setupVite, serveStatic, log } from './vite.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { setupVite, serveStatic } from './vite.js';
 
 const app = express();
 const server = createServer(app);
@@ -28,7 +23,7 @@ app.use(cors({
     // Allow same-origin requests and dev server
     const allowedOrigins = [
       `http://localhost:${config.port}`,
-      `http://localhost:${config.clientPort}`, // Admin client frontend
+      'http://localhost:3003', // Admin client frontend
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -42,14 +37,29 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+// Request logging middleware (filter out Vite internal requests)
+app.use((req, _res, next) => {
+  // Skip logging for Vite internal requests and static assets
+  const skipPaths = [
+    '/@fs/',           // Vite file system access
+    '/@vite/',         // Vite internal modules
+    '/@id/',           // Vite module IDs
+    '/node_modules/',  // Node modules
+    '/__vite_ping',    // Vite ping
+    '/favicon.ico',    // Favicon requests
+  ];
+
+  const shouldSkip = skipPaths.some(path => req.path.startsWith(path)) ||
+                     req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/);
+
+  if (!shouldSkip) {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  }
   next();
 });
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     service: 'admin-backend',
@@ -71,7 +81,7 @@ app.use('/api/duplicates', graphRoutes);
 app.use('/api/settings', settingsRoutes);
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: any) => {
+app.use((err: Error, _req: Request, res: Response, _next: any) => {
   console.error('Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',

@@ -85,6 +85,12 @@ async def chat_message(request: ChatRequest):
     Returns:
         Chat response with answer, sources, and metadata
     """
+    print(f"🚀 Chat API: Received message request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+    print(f"   Top K: {request.top_k}")
+    print(f"   Stream: {request.stream}")
+
     init_services()
 
     try:
@@ -95,11 +101,17 @@ async def chat_message(request: ChatRequest):
             print(f"🧵 Processing message in thread: {thread_ctx.thread_id}")
 
             # Process query through RAG pipeline (this becomes a turn in the thread)
+            print(f"🔄 Chat API: Starting RAG pipeline...")
             result = await rag_service.process_query(
                 query=request.query,
                 session_id=request.session_id,
                 top_k=request.top_k
             )
+
+            print(f"📊 Chat API: RAG pipeline results:")
+            print(f"   Response length: {len(result['response'])}")
+            print(f"   Sources count: {len(result['sources'])}")
+            print(f"   Metadata: {result['metadata']}")
 
             # Run hallucination detection (nested call within the thread)
             hallucination_result = await hallucination_service.detect_hallucination(

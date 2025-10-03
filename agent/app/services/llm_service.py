@@ -274,18 +274,30 @@ class LLMService:
     ) -> List[float]:
         """
         Generate an embedding vector for text.
-        
+
         Args:
             text: Text to embed
             model: Embedding model to use (defaults to configured model)
-            
+
         Returns:
             Embedding vector as list of floats
         """
+        print(f"🧮 LLM Service: Generating embedding")
+        print(f"   Text length: {len(text)}")
+        print(f"   Text preview: '{text[:100]}...'")
+        print(f"   Provider: {self.provider}")
+        print(f"   Model: {model or (self.ollama_embedding_model if self.provider == 'ollama' else self.openai_embedding_model)}")
+
         if self.provider == "ollama":
-            return await self._generate_embedding_ollama(text, model)
+            embedding = await self._generate_embedding_ollama(text, model)
         else:
-            return await self._generate_embedding_openai(text, model)
+            embedding = await self._generate_embedding_openai(text, model)
+
+        print(f"✅ LLM Service: Embedding generated")
+        print(f"   Embedding length: {len(embedding)}")
+        print(f"   Embedding sample: {embedding[:5]}...")
+
+        return embedding
     
     async def _generate_embedding_ollama(
         self,

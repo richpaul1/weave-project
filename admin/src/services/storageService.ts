@@ -580,66 +580,137 @@ export class StorageService {
   }
 
   /**
-   * Delete page
+   * Delete page and all related nodes (chunks with vector embeddings) and files
    */
   @weave.op()
   async deletePage(id: string): Promise<void> {
     const session = this.getSession();
-    
+
     try {
       // Get page metadata first
       const page = await this.getPageById(id);
-      if (!page) return;
+      if (!page) {
+        console.warn(`⚠️ Page with id ${id} not found`);
+        return;
+      }
 
-      // Delete from Neo4j
+      // First, count what we're about to delete for logging
+      const countResult = await session.run(
+        `
+        MATCH (p:Page {id: $id})
+        OPTIONAL MATCH (p)-[:HAS_CHUNK]->(c:Chunk)
+        RETURN count(c) as chunkCount
+        `,
+        { id }
+      );
+      const chunkCount = countResult.records[0]?.get('chunkCount')?.toNumber() || 0;
+
+      console.log(`🗑️ Deleting page "${page.title}" with ${chunkCount} chunks and vector embeddings`);
+
+      // Delete page and all related chunks in a single transaction
       await session.run(
         `
         MATCH (p:Page {id: $id})
-        DETACH DELETE p
+        OPTIONAL MATCH (p)-[:HAS_CHUNK]->(c:Chunk)
+        DETACH DELETE p, c
         `,
         { id }
       );
 
-      // Delete files
+      // Delete associated files
       try {
         const mdPath = this.getMarkdownPath(page.domain, page.slug);
         const metaPath = this.getMetadataPath(page.domain, page.slug);
-        
+
         await fs.unlink(mdPath).catch(() => {});
         await fs.unlink(metaPath).catch(() => {});
+
+        console.log(`✅ Deleted files: ${page.slug}.md and ${page.slug}.json`);
       } catch (e) {
-        console.warn('Failed to delete files:', e);
+        console.warn('⚠️ Failed to delete files:', e);
       }
 
-      weave.logEvent('page_deleted', { id, url: page.url });
+      console.log(`✅ Successfully deleted page "${page.title}" and ${chunkCount} related chunks with vector embeddings`);
+
+      weave.logEvent('page_deleted', {
+        id,
+        url: page.url,
+        title: page.title,
+        chunksDeleted: chunkCount,
+        vectorEmbeddingsCleared: chunkCount + 1, // +1 for page embedding
+        filesDeleted: true
+      });
     } finally {
       await session.close();
     }
   }
 
   /**
-   * Reset all content
+   * Reset all content - deletes page-related nodes and vector embeddings only
+   * Preserves ChatMessage and Setting nodes
    */
   @weave.op()
   async resetAllContent(): Promise<void> {
     const session = this.getSession();
 
     try {
-      // Delete all pages from Neo4j
-      await session.run(`
-        MATCH (p:Page)
-        DETACH DELETE p
+      // First, get count of content nodes to be deleted for logging
+      const countResult = await session.run(`
+        MATCH (n)
+        WHERE n:Page OR n:Chunk
+        RETURN
+          count(CASE WHEN n:Page THEN 1 END) as pageCount,
+          count(CASE WHEN n:Chunk THEN 1 END) as chunkCount,
+          count(n) as totalNodes
       `);
 
-      // Delete all files
+      const record = countResult.records[0];
+      const pageCount = record?.get('pageCount')?.toNumber() || 0;
+      const chunkCount = record?.get('chunkCount')?.toNumber() || 0;
+      const totalNodes = record?.get('totalNodes')?.toNumber() || 0;
+
+      console.log(`🗑️ Preparing to delete: ${pageCount} pages with vectors, ${chunkCount} chunks with vectors`);
+      console.log(`💾 Preserving: ChatMessage and Setting nodes`);
+
+      // Delete only Page and Chunk nodes (which contain vector embeddings)
+      // This preserves chat history and settings while clearing all crawled content
+      await session.run(`
+        MATCH (n)
+        WHERE n:Page OR n:Chunk
+        DETACH DELETE n
+      `);
+
+      // Additional cleanup: Delete any orphaned nodes that were connected only to pages/chunks
+      // but preserve ChatMessage and Setting nodes
+      await session.run(`
+        MATCH (n)
+        WHERE NOT EXISTS((n)--())
+          AND NOT n:ChatMessage
+          AND NOT n:Setting
+        DELETE n
+      `);
+
+      // Delete all files from the content storage directory
       try {
         await fs.rm(config.contentStoragePath, { recursive: true, force: true });
         await fs.mkdir(config.contentStoragePath, { recursive: true });
+        console.log(`✅ Deleted content storage directory: ${config.contentStoragePath}`);
       } catch (e) {
-        console.warn('Failed to delete content directory:', e);
+        console.warn('⚠️ Failed to delete content directory:', e);
       }
 
-      weave.logEvent('all_content_reset');
+      console.log(`✅ Reset complete: Deleted ${totalNodes} content nodes (${pageCount} pages with vectors, ${chunkCount} chunks with vectors)`);
+      console.log(`💾 Preserved: Chat history and settings`);
+
+      weave.logEvent('all_content_reset', {
+        pageCount,
+        chunkCount,
+        totalContentNodesDeleted: totalNodes,
+        vectorEmbeddingsCleared: pageCount + chunkCount,
+        storageCleared: true,
+        chatHistoryPreserved: true,
+        settingsPreserved: true
+      });
     } finally {
       await session.close();
     }
