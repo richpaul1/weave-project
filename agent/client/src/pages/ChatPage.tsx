@@ -309,7 +309,7 @@ export default function ChatPage() {
       </header>
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-6">
-        <div className="flex flex-col space-y-8 max-w-4xl mx-auto">
+        <div data-testid="chat-messages" className="flex flex-col space-y-8 max-w-4xl mx-auto">
           {allMessages.length === 0 && !isLoading && (
             <div className="text-center py-12">
               <Bot className="h-16 w-16 mx-auto mb-4 text-primary" />

@@ -14,7 +14,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import axios from 'axios';
 
 // Environment configuration for weave-project
-const AGENT_BACKEND_PORT = process.env.AGENT_BACKEND_PORT || '8000'; // Currently hardcoded to 8000 in package.json
+const AGENT_BACKEND_PORT = process.env.AGENT_BACKEND_PORT || '3001'; // Now properly using environment configuration
 const AGENT_CLIENT_PORT = process.env.AGENT_CLIENT_PORT || '3000';
 const BASE_URL = `http://localhost:${AGENT_BACKEND_PORT}`;
 

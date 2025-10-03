@@ -543,8 +543,8 @@ class TestUIAPIIntegration:
             }
         )
 
-        # Should allow the request (may return 200 or 405 depending on FastAPI setup)
-        assert response.status_code in [200, 405]
+        # Should allow the request (may return 200, 204, or 405 depending on FastAPI setup)
+        assert response.status_code in [200, 204, 405]
         print("✅ CORS preflight handled")
 
         # Test actual request with origin

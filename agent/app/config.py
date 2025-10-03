@@ -1,85 +1,55 @@
 """
 Configuration management for Agent Backend
 
-Reads from weave-project/.env.local with no default values.
-Throws helpful errors for missing required variables.
+Reads from weave-project/.env.local with centralized environment utilities.
+Provides all configuration constants for the agent application.
 """
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables from parent .env.local
-env_path = Path(__file__).parent.parent.parent / ".env.local"
-if env_path.exists():
-    load_dotenv(env_path)
-    print(f"✅ Loaded environment configuration from: {env_path.absolute()}")
-else:
-    print(f"⚠️  Warning: .env.local not found at {env_path.absolute()}")
-
-
-def get_required_env(key: str, description: str) -> str:
-    """
-    Get a required environment variable.
-    Throws an error with helpful message if not found.
-    """
-    value = os.getenv(key)
-    if not value:
-        print(f"\n❌ Missing required environment variable: {key}")
-        print(f"   Description: {description}")
-        print(f"   Please add this to weave-project/.env.local file.")
-        print(f"   Example: {key}=your-value-here\n")
-        raise ValueError(f"Missing required environment variable: {key}")
-    return value
-
-
-def get_optional_env(key: str, default_value: str) -> str:
-    """Get an optional environment variable with a default value."""
-    return os.getenv(key, default_value)
+from app.utils.env import env_config
 
 
 # ============================================================================
 # Server Configuration
 # ============================================================================
-AGENT_BACKEND_PORT = int(get_optional_env("AGENT_BACKEND_PORT", "3001"))
-AGENT_CLIENT_PORT = int(get_optional_env("AGENT_CLIENT_PORT", "3000"))
+AGENT_BACKEND_PORT = env_config.get_int("AGENT_BACKEND_PORT", 3001)
+AGENT_CLIENT_PORT = env_config.get_int("AGENT_CLIENT_PORT", 3000)
 
 # ============================================================================
 # Neo4j Configuration
 # ============================================================================
-NEO4J_URI = get_required_env("NEO4J_URI", "Neo4j database URI (e.g., neo4j://localhost:7687)")
-NEO4J_USER = get_required_env("NEO4J_USER", "Neo4j database username")
-NEO4J_PASSWORD = get_required_env("NEO4J_PASSWORD", "Neo4j database password")
-NEO4J_DB_NAME = get_required_env("NEO4J_DB_NAME", "Neo4j database name")
+NEO4J_URI = env_config.get_required("NEO4J_URI", "Neo4j database URI (e.g., neo4j://localhost:7687)")
+NEO4J_USER = env_config.get_required("NEO4J_USER", "Neo4j database username")
+NEO4J_PASSWORD = env_config.get_required("NEO4J_PASSWORD", "Neo4j database password")
+NEO4J_DB_NAME = env_config.get_required("NEO4J_DB_NAME", "Neo4j database name")
 
 # ============================================================================
 # LLM Configuration
 # ============================================================================
 # Ollama (local LLM)
-OLLAMA_BASE_URL = get_optional_env("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = get_optional_env("OLLAMA_MODEL", "qwen3:0.6b")
-OLLAMA_EMBEDDING_MODEL = get_optional_env("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
+OLLAMA_BASE_URL = env_config.get_optional("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = env_config.get_optional("OLLAMA_MODEL", "qwen3:0.6b")
+OLLAMA_EMBEDDING_MODEL = env_config.get_optional("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
 
 # OpenAI (alternative)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Optional
-OPENAI_MODEL = get_optional_env("OPENAI_MODEL", "gpt-4")
-OPENAI_EMBEDDING_MODEL = get_optional_env("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+OPENAI_API_KEY = env_config.get_optional("OPENAI_API_KEY", "")  # Optional
+OPENAI_MODEL = env_config.get_optional("OPENAI_MODEL", "gpt-4")
+OPENAI_EMBEDDING_MODEL = env_config.get_optional("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
 # ============================================================================
 # Weave Configuration
 # ============================================================================
-WANDB_PROJECT = get_optional_env("WANDB_PROJECT", "support-app")
-WANDB_ENTITY = get_optional_env("WANDB_ENTITY", "richpaul1-stealth")
-WANDB_API_KEY = os.getenv("WANDB_API_KEY")  # Optional
+WANDB_PROJECT = env_config.get_optional("WANDB_PROJECT", "support-app")
+WANDB_ENTITY = env_config.get_optional("WANDB_ENTITY", "richpaul1-stealth")
+WANDB_API_KEY = env_config.get_optional("WANDB_API_KEY", "")  # Optional
 
 # ============================================================================
 # RAG Configuration
 # ============================================================================
 # Retrieval settings
-DEFAULT_TOP_K = int(get_optional_env("RAG_TOP_K", "5"))
-MAX_CONTEXT_LENGTH = int(get_optional_env("RAG_MAX_CONTEXT_LENGTH", "4000"))
-MIN_RELEVANCE_SCORE = float(get_optional_env("RAG_MIN_RELEVANCE_SCORE", "0.7"))
+DEFAULT_TOP_K = env_config.get_int("RAG_TOP_K", 5)
+MAX_CONTEXT_LENGTH = env_config.get_int("RAG_MAX_CONTEXT_LENGTH", 4000)
+MIN_RELEVANCE_SCORE = float(env_config.get_optional("RAG_MIN_RELEVANCE_SCORE", "0.7"))
 
 # LLM settings
-MAX_TOKENS = int(get_optional_env("LLM_MAX_TOKENS", "2000"))
-TEMPERATURE = float(get_optional_env("LLM_TEMPERATURE", "0.7"))
+MAX_TOKENS = env_config.get_int("LLM_MAX_TOKENS", 2000)
+TEMPERATURE = float(env_config.get_optional("LLM_TEMPERATURE", "0.7"))
 

@@ -2,8 +2,9 @@
  * Basic UI tests for the agent chat interface using Vitest + Playwright
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, Browser, Page } from 'playwright';
+import { expect } from '@playwright/test';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -97,8 +98,8 @@ describe('Agent Chat Basic UI Tests', () => {
     // Click send
     await sendButton.click();
     
-    // Check that the message appears in the chat
-    await expect(page.locator(`text=${testMessage}`)).toBeVisible();
+    // Check that the message appears in the chat (use more specific selector)
+    await expect(page.locator('[data-testid="chat-messages"]').locator(`text=${testMessage}`).first()).toBeVisible();
     
     // Check that the textarea is cleared
     await expect(textarea).toHaveValue('');
@@ -120,8 +121,8 @@ describe('Agent Chat Basic UI Tests', () => {
     // Press Enter to send
     await textarea.press('Enter');
     
-    // Check that the message appears in the chat
-    await expect(page.locator(`text=${testMessage}`)).toBeVisible();
+    // Check that the message appears in the chat (use more specific selector)
+    await expect(page.locator('[data-testid="chat-messages"]').locator(`text=${testMessage}`).first()).toBeVisible();
     
     // Check that the textarea is cleared
     await expect(textarea).toHaveValue('');
@@ -148,8 +149,8 @@ describe('Agent Chat Basic UI Tests', () => {
     const expectedContent = `${firstLine}\n${secondLine}`;
     await expect(textarea).toHaveValue(expectedContent);
     
-    // Message should not have been sent yet
-    await expect(page.locator(`text=${firstLine}`)).not.toBeVisible();
+    // Message should not have been sent yet (check that it's not in chat messages area)
+    await expect(page.locator('[data-testid="chat-messages"]').locator(`text=${firstLine}`)).not.toBeVisible();
   });
 
   it('should work on different screen sizes', async () => {
