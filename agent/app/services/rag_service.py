@@ -320,20 +320,26 @@ Answer:"""
     
     def _post_process_response(self, response: str) -> str:
         """
-        Post-process the LLM response.
-        
+        Post-process the LLM response to remove thinking tags and clean up.
+
         Args:
             response: Raw LLM response
-            
+
         Returns:
-            Cleaned response
+            Cleaned response without thinking tags
         """
+        # Remove thinking tags if they exist
+        if "<think>" in response and "</think>" in response:
+            think_start = response.find("<think>")
+            think_end = response.find("</think>") + 8
+            response = response[:think_start] + response[think_end:]
+
         # Remove leading/trailing whitespace
         response = response.strip()
-        
+
         # Remove any "Answer:" prefix if present
         if response.lower().startswith("answer:"):
             response = response[7:].strip()
-        
+
         return response
 

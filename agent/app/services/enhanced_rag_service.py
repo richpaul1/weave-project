@@ -436,28 +436,123 @@ Question: {query}
 
 Please provide a helpful and accurate answer based on the context provided."""
 
-        # Stream LLM response
+        # Stream LLM response with thinking process separation
         full_response = ""
+        response_content = ""
+        in_thinking = False
+        thinking_complete = False
+
         async for chunk in self.llm_service.generate_streaming(
             prompt=prompt,
             system_prompt=self.GENERAL_SYSTEM_PROMPT
         ):
             full_response += chunk
-            yield {
-                "type": "response",
-                "data": {"text": chunk}
-            }
 
-        # Send completion
+            # Check for thinking tags
+            if "<think>" in full_response and not in_thinking:
+                in_thinking = True
+                # Send any content before <think> as response
+                pre_think = full_response.split("<think>")[0]
+                if pre_think.strip() and len(pre_think) > len(response_content):
+                    new_pre_think = pre_think[len(response_content):]
+                    response_content += new_pre_think
+                    yield {
+                        "type": "response",
+                        "data": {"text": new_pre_think}
+                    }
+
+            if in_thinking and not thinking_complete:
+                # We're in thinking mode
+                if "</think>" in full_response:
+                    # Thinking is complete
+                    thinking_complete = True
+                    in_thinking = False
+
+                    # Extract thinking content
+                    think_start = full_response.find("<think>") + 7
+                    think_end = full_response.find("</think>")
+                    thinking_content = full_response[think_start:think_end]
+
+                    # Send thinking content
+                    yield {
+                        "type": "thinking",
+                        "data": {"text": thinking_content}
+                    }
+
+                    # Send any content after </think> as response
+                    post_think = full_response[think_end + 8:]
+                    if post_think.strip():
+                        response_content += post_think
+                        yield {
+                            "type": "response",
+                            "data": {"text": post_think}
+                        }
+                else:
+                    # Still accumulating thinking content, don't send chunks yet
+                    continue
+            elif thinking_complete or not in_thinking:
+                # Send as response content
+                if thinking_complete:
+                    # Only send the new chunk after thinking
+                    think_end = full_response.find("</think>") + 8
+                    new_content = full_response[think_end:]
+                    if len(new_content) > len(response_content):
+                        new_chunk = new_content[len(response_content):]
+                        response_content += new_chunk
+                        yield {
+                            "type": "response",
+                            "data": {"text": new_chunk}
+                        }
+                else:
+                    # No thinking tags, send as response
+                    if len(full_response) > len(response_content):
+                        new_chunk = full_response[len(response_content):]
+                        response_content += new_chunk
+                        yield {
+                            "type": "response",
+                            "data": {"text": new_chunk}
+                        }
+
+        # Post-process and yield final response
+        response_text = self._post_process_response(full_response)
+
         yield {
             "type": "done",
             "data": {
+                "response": response_text,
                 "sources": context_result["sources"],
                 "metadata": {
+                    "session_id": session_id,
                     "query_type": query_type,
                     "classification": classification,
                     "num_chunks": context_result["num_chunks"],
+                    "num_sources": context_result["num_sources"],
                     "response_length": len(full_response)
                 }
             }
         }
+
+    def _post_process_response(self, response: str) -> str:
+        """
+        Post-process the LLM response to remove thinking tags and clean up.
+
+        Args:
+            response: Raw LLM response
+
+        Returns:
+            Cleaned response without thinking tags
+        """
+        # Remove thinking tags if they exist
+        if "<think>" in response and "</think>" in response:
+            think_start = response.find("<think>")
+            think_end = response.find("</think>") + 8
+            response = response[:think_start] + response[think_end:]
+
+        # Remove leading/trailing whitespace
+        response = response.strip()
+
+        # Remove any "Answer:" prefix if present
+        if response.lower().startswith("answer:"):
+            response = response[7:].strip()
+
+        return response
