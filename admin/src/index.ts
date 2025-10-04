@@ -4,6 +4,7 @@ import fs from 'fs';
 import { createServer } from 'http';
 import { config } from './config.js';
 import { initializeWeave } from './weave/init.js';
+import { WeaveService } from './weave/weaveService.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
@@ -74,6 +75,16 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+// API health check endpoint (to handle /api/health requests)
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    service: 'admin-backend',
+    timestamp: new Date().toISOString(),
+    message: 'Admin backend is healthy'
+  });
+});
+
 // API routes
 app.use('/api/crawler', crawlerRoutes);
 app.use('/api/content', contentRoutes);
@@ -108,12 +119,24 @@ async function startServer() {
     console.log('Initializing Weave...');
     await initializeWeave();
 
+    // Initialize WeaveService singleton
+    console.log('Initializing WeaveService...');
+    new WeaveService();
+    console.log('WeaveService initialized');
+
     // Initialize database schema
     console.log('Initializing database schema...');
-    const storage = new StorageService();
-    await storage.initializeSchema();
-    await storage.close();
-    console.log('Database schema initialized');
+    const storage = StorageService.getInstance();
+
+    // Initialize database schema
+    try {
+      await storage.initializeSchema();
+      console.log('Database schema initialized');
+    } catch (error) {
+      console.error('Failed to initialize database schema:', error);
+      throw error;
+    }
+    // Note: Don't close the storage connection as it's a singleton used by all routes
 
     // Setup Vite in development or serve static files in production
     const isDevelopment = process.env.NODE_ENV !== 'production';

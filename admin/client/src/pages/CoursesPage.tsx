@@ -32,6 +32,9 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from 'sonner';
 
 // Types based on our course schema
@@ -67,6 +70,19 @@ const fetchCourses = async (): Promise<Course[]> => {
   return response.json();
 };
 
+const searchCourses = async (query: string): Promise<Course[]> => {
+  if (!query.trim()) {
+    return fetchCourses();
+  }
+
+  const response = await fetch(`/api/courses/search?q=${encodeURIComponent(query)}&useVector=true&limit=50`);
+  if (!response.ok) {
+    throw new Error('Failed to search courses');
+  }
+  const result = await response.json();
+  return result.results || [];
+};
+
 const fetchCourseStats = async (): Promise<CourseStats> => {
   const response = await fetch('/api/courses/stats');
   if (!response.ok) {
@@ -98,16 +114,21 @@ export default function CoursesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [courseMarkdown, setCourseMarkdown] = useState('');
+  const [loadingMarkdown, setLoadingMarkdown] = useState(false);
   const queryClient = useQueryClient();
 
+  // Debounce search term to avoid too many API calls
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
   // Queries
-  const { 
-    data: courses = [], 
-    isLoading: coursesLoading, 
-    error: coursesError 
+  const {
+    data: courses = [],
+    isLoading: coursesLoading,
+    error: coursesError
   } = useQuery({
-    queryKey: ['courses'],
-    queryFn: fetchCourses,
+    queryKey: ['courses', debouncedSearchTerm],
+    queryFn: () => searchCourses(debouncedSearchTerm),
   });
 
   const { 
@@ -143,16 +164,29 @@ export default function CoursesPage() {
     },
   });
 
-  // Filter courses based on search term
-  const filteredCourses = courses.filter(course =>
-    course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.topics?.some(topic => topic.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Courses are already filtered by the search API
+  const filteredCourses = courses;
 
-  const handleViewCourse = (course: Course) => {
+  const handleViewCourse = async (course: Course) => {
     setSelectedCourse(course);
     setIsViewModalOpen(true);
+
+    // Fetch course markdown content
+    setLoadingMarkdown(true);
+    try {
+      const response = await fetch(`/api/courses/${course.id}/markdown`);
+      if (response.ok) {
+        const markdown = await response.text();
+        setCourseMarkdown(markdown);
+      } else {
+        setCourseMarkdown('Failed to load course content.');
+      }
+    } catch (error) {
+      console.error('Error fetching course markdown:', error);
+      setCourseMarkdown('Error loading course content.');
+    } finally {
+      setLoadingMarkdown(false);
+    }
   };
 
   const handleDeleteCourse = (courseId: string) => {
@@ -404,60 +438,80 @@ export default function CoursesPage() {
           </DialogHeader>
           
           {selectedCourse && (
-            <div className="space-y-6">
-              {/* Course metadata */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Course Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><strong>URL:</strong> <a href={selectedCourse.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{selectedCourse.url}</a></div>
-                    <div><strong>Difficulty:</strong> {selectedCourse.difficulty || 'Not specified'}</div>
-                    <div><strong>Duration:</strong> {selectedCourse.duration || 'Not specified'}</div>
-                    <div><strong>Instructor:</strong> {selectedCourse.instructor || 'Not specified'}</div>
+            <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="details">Course Details</TabsTrigger>
+                <TabsTrigger value="content">Content</TabsTrigger>
+                <TabsTrigger value="preview">Live Preview</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="details" className="flex-1 min-h-0 space-y-6">
+                {/* Course metadata */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-semibold mb-2">Course Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div><strong>URL:</strong> <a href={selectedCourse.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{selectedCourse.url}</a></div>
+                      <div><strong>Difficulty:</strong> {selectedCourse.difficulty || 'Not specified'}</div>
+                      <div><strong>Duration:</strong> {selectedCourse.duration || 'Not specified'}</div>
+                      <div><strong>Instructor:</strong> {selectedCourse.instructor || 'Not specified'}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Timestamps</h4>
+                    <div className="space-y-2 text-sm">
+                      <div><strong>Created:</strong> {new Date(selectedCourse.createdAt).toLocaleString()}</div>
+                      <div><strong>Updated:</strong> {new Date(selectedCourse.updatedAt).toLocaleString()}</div>
+                      <div><strong>Last Crawled:</strong> {selectedCourse.lastCrawledAt ? new Date(selectedCourse.lastCrawledAt).toLocaleString() : 'Never'}</div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold mb-2">Timestamps</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><strong>Created:</strong> {new Date(selectedCourse.createdAt).toLocaleString()}</div>
-                    <div><strong>Updated:</strong> {new Date(selectedCourse.updatedAt).toLocaleString()}</div>
-                    <div><strong>Last Crawled:</strong> {selectedCourse.lastCrawledAt ? new Date(selectedCourse.lastCrawledAt).toLocaleString() : 'Never'}</div>
+
+                {/* Description */}
+                {selectedCourse.description && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Description</h4>
+                    <p className="text-sm text-muted-foreground">{selectedCourse.description}</p>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* Description */}
-              {selectedCourse.description && (
-                <div>
-                  <h4 className="font-semibold mb-2">Description</h4>
-                  <p className="text-sm text-muted-foreground">{selectedCourse.description}</p>
-                </div>
-              )}
-
-              {/* Topics */}
-              {selectedCourse.topics && selectedCourse.topics.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-2">Topics</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedCourse.topics.map((topic, index) => (
-                      <Badge key={index} variant="secondary">{topic}</Badge>
-                    ))}
+                {/* Topics */}
+                {selectedCourse.topics && selectedCourse.topics.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Topics</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCourse.topics.map((topic, index) => (
+                        <Badge key={index} variant="secondary">{topic}</Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </TabsContent>
 
-              {/* Course preview iframe */}
-              <div>
-                <h4 className="font-semibold mb-2">Course Preview</h4>
-                <div className="border rounded-lg overflow-hidden">
+              <TabsContent value="content" className="flex-1 min-h-0">
+                <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
+                  {loadingMarkdown ? (
+                    <div className="flex items-center justify-center h-32">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <pre className="text-sm whitespace-pre-wrap font-mono">
+                      {courseMarkdown}
+                    </pre>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="preview" className="flex-1 min-h-0">
+                <div className="border rounded-lg overflow-hidden h-[60vh]">
                   <iframe
                     src={selectedCourse.url}
-                    className="w-full h-96"
+                    className="w-full h-full"
                     title={`Preview of ${selectedCourse.title}`}
                   />
                 </div>
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           )}
         </DialogContent>
       </Dialog>

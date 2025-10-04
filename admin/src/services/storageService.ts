@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { weave } from '../weave/init.js';
+import { weaveOp } from '../weave/weaveService.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 import { llmService } from './llmService.js';
 
@@ -55,13 +56,43 @@ export interface CourseChunkData {
 }
 
 export class StorageService {
+  private static instance: StorageService | null = null;
+  private static driver: Driver | null = null;
   private driver: Driver;
 
-  constructor() {
-    this.driver = neo4j.driver(
-      config.neo4jUri,
-      neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
-    );
+  private constructor() {
+    if (StorageService.driver) {
+      this.driver = StorageService.driver;
+      return;
+    }
+
+    try {
+      console.log('🔌 Initializing Neo4j driver...');
+      console.log(`   URI: ${config.neo4jUri}`);
+      console.log(`   User: ${config.neo4jUser}`);
+      console.log(`   Database: ${config.neo4jDatabase}`);
+
+      this.driver = neo4j.driver(
+        config.neo4jUri,
+        neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
+      );
+
+      StorageService.driver = this.driver;
+      console.log('✅ Neo4j driver initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Neo4j driver:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get singleton instance of StorageService
+   */
+  public static getInstance(): StorageService {
+    if (!StorageService.instance) {
+      StorageService.instance = new StorageService();
+    }
+    return StorageService.instance;
   }
 
   /**
@@ -72,17 +103,33 @@ export class StorageService {
   }
 
   /**
-   * Close the driver
+   * Close the driver (only call this when shutting down the application)
    */
   async close(): Promise<void> {
-    await this.driver.close();
+    if (StorageService.driver) {
+      await StorageService.driver.close();
+      StorageService.driver = null;
+      StorageService.instance = null;
+    }
+  }
+
+  /**
+   * Close the driver for application shutdown
+   */
+  static async shutdown(): Promise<void> {
+    if (StorageService.instance) {
+      await StorageService.instance.close();
+    }
   }
 
   /**
    * Initialize database schema
    */
-  @weave.op()
+  @weaveOp('StorageService.initializeSchema')
   async initializeSchema(): Promise<void> {
+    if (!this.driver) {
+      throw new Error('Neo4j driver not initialized');
+    }
     const session = this.getSession();
     try {
       // Create constraints for existing nodes
@@ -178,7 +225,7 @@ export class StorageService {
   /**
    * Save course markdown content to file system
    */
-  @weave.op()
+  
   async saveCourseMarkdownFile(slug: string, markdown: string): Promise<string> {
     const filePath = this.getCourseMarkdownPath(slug);
     const dir = path.dirname(filePath);
@@ -201,7 +248,7 @@ export class StorageService {
   /**
    * Save course metadata to file system
    */
-  @weave.op()
+  
   async saveCourseMetadataFile(slug: string, metadata: CourseMetadata): Promise<string> {
     const filePath = this.getCourseMetadataPath(slug);
     const dir = path.dirname(filePath);
@@ -224,7 +271,7 @@ export class StorageService {
   /**
    * Delete course files from file system
    */
-  @weave.op()
+  
   async deleteCourseFiles(slug: string): Promise<void> {
     try {
       const markdownPath = this.getCourseMarkdownPath(slug);
@@ -280,7 +327,7 @@ export class StorageService {
   /**
    * Save markdown content to file system
    */
-  @weave.op()
+  
   async saveMarkdownFile(domain: string, slug: string, markdown: string): Promise<string> {
     const filePath = this.getMarkdownPath(domain, slug);
     const dir = path.dirname(filePath);
@@ -306,7 +353,7 @@ export class StorageService {
   /**
    * Save metadata to file system
    */
-  @weave.op()
+  
   async saveMetadataFile(domain: string, slug: string, metadata: PageMetadata): Promise<string> {
     const filePath = this.getMetadataPath(domain, slug);
     const dir = path.dirname(filePath);
@@ -332,7 +379,7 @@ export class StorageService {
   /**
    * Save page to Neo4j
    */
-  @weave.op()
+  
   async savePage(url: string, title: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
     
@@ -380,7 +427,7 @@ export class StorageService {
   /**
    * Save complete page (Neo4j + file system) with chunks
    */
-  @weave.op()
+  
   async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
 
@@ -481,7 +528,7 @@ export class StorageService {
   /**
    * Create chunks for a page and store them in Neo4j
    */
-  @weave.op()
+  
   async createPageChunks(pageId: string, markdown: string): Promise<void> {
     const chunks = chunkMarkdown(markdown, 1000);
 
@@ -498,7 +545,7 @@ export class StorageService {
   /**
    * Create a single chunk node and link it to a page
    */
-  @weave.op()
+  
   async createChunk(pageId: string, chunk: TextChunk): Promise<string> {
     const session = this.getSession();
     const chunkId = uuidv4();
@@ -546,7 +593,7 @@ export class StorageService {
   /**
    * Get all pages
    */
-  @weave.op()
+  @weaveOp('StorageService.getAllPages')
   async getAllPages(): Promise<PageMetadata[]> {
     const session = this.getSession();
     
@@ -569,7 +616,7 @@ export class StorageService {
   /**
    * Get page by ID
    */
-  @weave.op()
+  
   async getPageById(id: string): Promise<PageMetadata | null> {
     const session = this.getSession();
     
@@ -594,7 +641,7 @@ export class StorageService {
   /**
    * Get chunks for a specific page
    */
-  @weave.op()
+  
   async getPageChunks(pageId: string): Promise<ChunkData[]> {
     const session = this.getSession();
 
@@ -629,7 +676,7 @@ export class StorageService {
   /**
    * Search pages by vector similarity
    */
-  @weave.op()
+  
   async searchPagesByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<PageMetadata & { score: number }>> {
     const session = this.getSession();
 
@@ -683,7 +730,7 @@ export class StorageService {
   /**
    * Search chunks by vector similarity
    */
-  @weave.op()
+  
   async searchChunksByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<ChunkData & { score: number }>> {
     const session = this.getSession();
 
@@ -734,7 +781,7 @@ export class StorageService {
   /**
    * Delete page and all related nodes (chunks with vector embeddings) and files
    */
-  @weave.op()
+  
   async deletePage(id: string): Promise<void> {
     const session = this.getSession();
 
@@ -801,7 +848,7 @@ export class StorageService {
    * Reset all content - deletes page-related and course-related nodes and vector embeddings only
    * Preserves ChatMessage and Setting nodes
    */
-  @weave.op()
+  
   async resetAllContent(): Promise<void> {
     const session = this.getSession();
 
@@ -877,7 +924,7 @@ export class StorageService {
   /**
    * Save course to Neo4j with metadata
    */
-  @weave.op()
+  
   async saveCourse(
     url: string,
     title: string,
@@ -989,7 +1036,7 @@ export class StorageService {
   /**
    * Get all courses
    */
-  @weave.op()
+  
   async getAllCourses(): Promise<CourseMetadata[]> {
     const session = this.getSession();
 
@@ -1012,7 +1059,7 @@ export class StorageService {
   /**
    * Search for similar courses using vector similarity
    */
-  @weave.op()
+  
   async searchSimilarCourses(query: string, limit: number = 10): Promise<CourseMetadata[]> {
     const session = this.getSession();
 
@@ -1056,7 +1103,7 @@ export class StorageService {
   /**
    * Get course by ID
    */
-  @weave.op()
+  
   async getCourseById(id: string): Promise<CourseMetadata | null> {
     const session = this.getSession();
 
@@ -1080,7 +1127,7 @@ export class StorageService {
   /**
    * Delete course and all related chunks
    */
-  @weave.op()
+  
   async deleteCourse(id: string): Promise<void> {
     const session = this.getSession();
 
@@ -1116,7 +1163,7 @@ export class StorageService {
   /**
    * Get all graph nodes
    */
-  @weave.op()
+  
   async getGraphNodes(): Promise<any[]> {
     const session = this.getSession();
 
@@ -1143,7 +1190,7 @@ export class StorageService {
   /**
    * Get all graph edges
    */
-  @weave.op()
+  
   async getGraphEdges(): Promise<any[]> {
     const session = this.getSession();
 
@@ -1171,7 +1218,7 @@ export class StorageService {
   /**
    * Search graph nodes by label
    */
-  @weave.op()
+  
   async searchGraphNodes(query: string, limit: number = 50): Promise<any> {
     const session = this.getSession();
 
@@ -1206,7 +1253,7 @@ export class StorageService {
   /**
    * Get node type statistics
    */
-  @weave.op()
+  
   async getNodeTypeStats(): Promise<Record<string, number>> {
     const session = this.getSession();
 
@@ -1233,7 +1280,7 @@ export class StorageService {
   /**
    * Delete a graph node and optionally its connections
    */
-  @weave.op()
+  
   async deleteGraphNode(nodeId: string, cascade: boolean = false): Promise<{ deletedNodes: number; deletedEdges: number }> {
     const session = this.getSession();
 
@@ -1274,4 +1321,3 @@ export class StorageService {
     }
   }
 }
-

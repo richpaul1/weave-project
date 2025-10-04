@@ -22,6 +22,10 @@ export class LLMService {
   constructor() {
     this.baseUrl = config.ollamaBaseUrl;
     this.embeddingModel = config.ollamaEmbeddingModel;
+
+    if (!this.embeddingModel) {
+      console.warn('Warning: OLLAMA_EMBEDDING_MODEL not configured. Embedding generation will fail.');
+    }
   }
 
   /**
@@ -29,6 +33,14 @@ export class LLMService {
    */
   @weave.op()
   async generateEmbedding(text: string): Promise<number[]> {
+    if (!text || text.trim().length === 0) {
+      throw new Error('Text cannot be empty');
+    }
+
+    if (!this.embeddingModel) {
+      throw new Error('Embedding model not configured. Please set OLLAMA_EMBEDDING_MODEL environment variable.');
+    }
+
     try {
       const response = await fetch(`${this.baseUrl}/api/embeddings`, {
         method: 'POST',
@@ -60,7 +72,7 @@ export class LLMService {
       return data.embedding;
     } catch (error) {
       weave.logEvent('embedding_generation_failed', {
-        model: this.embeddingModel,
+        model: this.embeddingModel || 'unknown',
         textLength: text.length,
         error: error instanceof Error ? error.message : 'Unknown error',
       });

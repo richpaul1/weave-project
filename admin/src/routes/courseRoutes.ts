@@ -12,7 +12,7 @@ const router = Router();
  * Get all courses
  */
 router.get('/', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const courses = await storage.getAllCourses();
@@ -21,7 +21,6 @@ router.get('/', async (req: Request, res: Response) => {
     console.error('Error getting courses:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -30,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
  * Get course statistics
  */
 router.get('/stats', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const courses = await storage.getAllCourses();
@@ -75,7 +74,6 @@ router.get('/stats', async (req: Request, res: Response) => {
     console.error('Error getting course stats:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -84,7 +82,7 @@ router.get('/stats', async (req: Request, res: Response) => {
  * Search courses by query with vector similarity and text matching
  */
 router.get('/search', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
 
   try {
     const { q: query, difficulty, instructor, limit = '10', useVector = 'true' } = req.query;
@@ -139,7 +137,6 @@ router.get('/search', async (req: Request, res: Response) => {
     console.error('Error searching courses:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -148,7 +145,7 @@ router.get('/search', async (req: Request, res: Response) => {
  * Get course by ID
  */
 router.get('/:id', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -163,7 +160,6 @@ router.get('/:id', async (req: Request, res: Response) => {
     console.error('Error getting course:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -172,7 +168,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  * Get course markdown content
  */
 router.get('/:id/markdown', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -199,7 +195,6 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
     console.error('Error getting course markdown:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -208,7 +203,7 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
  * Delete a course
  */
 router.delete('/:id', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -219,7 +214,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     console.error('Error deleting course:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -228,7 +222,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
  * Start crawling courses from W&B courses page
  */
 router.post('/crawl', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   const crawler = new WebCrawler();
   
   try {
@@ -304,7 +298,6 @@ router.post('/crawl', async (req: Request, res: Response) => {
     console.error('Error during course crawling:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 

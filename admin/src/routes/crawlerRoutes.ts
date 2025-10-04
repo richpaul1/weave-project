@@ -129,9 +129,8 @@ router.get('/jobs', (req: Request, res: Response) => {
  */
 router.delete('/reset', async (req: Request, res: Response) => {
   try {
-    const storage = new StorageService();
+    const storage = StorageService.getInstance();
     await storage.resetAllContent();
-    await storage.close();
 
     // Clear all jobs
     crawlJobs.clear();
@@ -151,7 +150,7 @@ async function startCrawl(jobId: string, url: string, maxDepth: number) {
   if (!job) return;
 
   const crawler = new WebCrawler();
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
 
   try {
     // Update job status
@@ -196,7 +195,6 @@ async function startCrawl(jobId: string, url: string, maxDepth: number) {
     job.error = error.message;
     job.completedAt = new Date().toISOString();
   } finally {
-    await storage.close();
   }
 }
 

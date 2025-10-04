@@ -18,16 +18,13 @@ export interface SettingsServiceConfig {
 export class SettingsService {
   private driver: Driver;
 
-  constructor(config?: SettingsServiceConfig) {
-    if (config?.driver) {
-      this.driver = config.driver;
+  constructor(serviceConfig?: SettingsServiceConfig) {
+    if (serviceConfig?.driver) {
+      this.driver = serviceConfig.driver;
     } else {
       this.driver = neo4j.driver(
-        process.env.NEO4J_URI || 'neo4j://localhost:7687',
-        neo4j.auth.basic(
-          process.env.NEO4J_USER || 'neo4j',
-          process.env.NEO4J_PASSWORD || 'password'
-        )
+        config.neo4jUri,
+        neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
       );
     }
   }
@@ -36,7 +33,7 @@ export class SettingsService {
    * Get current chat settings from database
    */
   async getChatSettings(): Promise<ChatSettings> {
-    const session = this.driver.session();
+    const session = this.driver.session({ database: config.neo4jDatabase });
     try {
       // Try to get settings from database
       const result = await session.run(`
@@ -101,7 +98,7 @@ export class SettingsService {
    * Update chat settings in database
    */
   async updateChatSettings(settings: ChatSettings): Promise<ChatSettings> {
-    const session = this.driver.session();
+    const session = this.driver.session({ database: config.neo4jDatabase });
     try {
       // Update each setting individually
       for (const [key, value] of Object.entries(settings)) {

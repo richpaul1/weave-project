@@ -89,6 +89,11 @@ describe('Settings API Functional Tests', () => {
 
   describe('GET /api/settings/chat', () => {
     it('should return default settings when no settings exist', async () => {
+      // First reset to ensure we have default settings
+      await request(app)
+        .post('/api/settings/chat/reset')
+        .expect(200);
+
       const response = await request(app)
         .get('/api/settings/chat')
         .expect(200);

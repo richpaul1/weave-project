@@ -60,7 +60,6 @@ describe('Settings Routes', () => {
       });
 
       expect(mockSettingsService.getChatSettings).toHaveBeenCalledOnce();
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
     });
 
     it('should handle service errors', async () => {
@@ -75,7 +74,7 @@ describe('Settings Routes', () => {
         message: 'Database error'
       });
 
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
+
     });
   });
 
@@ -104,7 +103,6 @@ describe('Settings Routes', () => {
       });
 
       expect(mockSettingsService.updateChatSettings).toHaveBeenCalledWith(validSettings);
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
     });
 
     it('should validate request body', async () => {
@@ -138,7 +136,7 @@ describe('Settings Routes', () => {
         message: 'Update failed'
       });
 
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
+
     });
   });
 
@@ -166,7 +164,6 @@ describe('Settings Routes', () => {
       });
 
       expect(mockSettingsService.resetChatSettings).toHaveBeenCalledOnce();
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
     });
 
     it('should handle service errors during reset', async () => {
@@ -181,7 +178,7 @@ describe('Settings Routes', () => {
         message: 'Reset failed'
       });
 
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
+
     });
   });
 
@@ -199,7 +196,6 @@ describe('Settings Routes', () => {
       expect(response.body.timestamp).toBeDefined();
 
       expect(mockSettingsService.getChatSettings).toHaveBeenCalledOnce();
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
     });
 
     it('should return unhealthy status when service fails', async () => {
@@ -214,7 +210,7 @@ describe('Settings Routes', () => {
       expect(response.body.error).toBe('Settings service is unhealthy');
       expect(response.body.message).toBe('Service down');
 
-      expect(mockSettingsService.close).toHaveBeenCalledOnce();
+
     });
   });
 });
