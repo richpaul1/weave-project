@@ -35,7 +35,7 @@ class TestAPIIntegration:
         assert "message" in data
         assert "docs" in data
         assert "health" in data
-        assert data["message"] == "Weave Agent Backend API"
+        assert data["message"] == "IzzyDocs Backend API"
         logger.info("✅ Root endpoint test passed")
     
     def test_health_endpoint(self, client):

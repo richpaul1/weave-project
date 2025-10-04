@@ -313,7 +313,7 @@ export default function ChatPage() {
           {allMessages.length === 0 && !isLoading && (
             <div className="text-center py-12">
               <Bot className="h-16 w-16 mx-auto mb-4 text-primary" />
-              <p className="text-lg mb-2">Welcome to Weave RAG Demo</p>
+              <p className="text-lg mb-2">Welcome to IzzyDocs</p>
               <p className="text-muted-foreground">Ask me anything about the crawled content</p>
             </div>
           )}

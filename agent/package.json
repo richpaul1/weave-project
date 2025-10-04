@@ -1,7 +1,7 @@
 {
   "name": "weave-agent-ui-tests",
   "version": "0.1.0",
-  "description": "UI tests for Weave Agent using Vitest + Playwright",
+  "description": "UI tests for IzzyDocs using Vitest + Playwright",
   "type": "module",
   "scripts": {
     "dev": "concurrently --names \"agent-backend,agent-frontend\" --prefix-colors \"blue,green\" \"python -m app.main\" \"sleep 3 && cd client && npm run dev\"",

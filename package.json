@@ -12,7 +12,7 @@
     "preinstall": "node scripts/check-prerequisites.js || true",
     "install:all": "npm install && cd admin && npm install && cd client && npm install && cd ../../agent && pip install -r requirements.txt && cd client && npm install",
     "dev:admin": "cd admin && npm run dev",
-    "dev:agent": "concurrently -n \"agent-be,agent-fe\" -c \"green,yellow\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
+    "dev:agent": "concurrently -n \"agent-backend,agent-frontend\" -c \"green,yellow\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
     "build": "npm run build:admin && npm run build:agent",
     "build:admin": "cd admin && npm run build",
     "build:agent": "cd agent/client && npm run build",

@@ -41,7 +41,7 @@ describe('Agent Chat Basic UI Tests', () => {
     await page.goto(`${CLIENT_URL}/chat/test-session`);
     
     // Check that the page title is correct
-    await expect(page).toHaveTitle(/Weave Agent/);
+    await expect(page).toHaveTitle(/IzzyDocs/);
     
     // Check that main elements are present
     await expect(page.locator('h2')).toContainText('RAG Chat Interface');
