@@ -111,6 +111,7 @@ export const CONTENT_NODE_TYPES: Record<string, { color: string }> = {
   chunk: { color: '#6B7280' },     // Gray
   entity: { color: '#10B981' },    // Green
   topic: { color: '#A855F7' },     // Purple
+  course: { color: '#06B6D4' },    // Cyan
 };
 
 export type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;
@@ -128,6 +129,7 @@ export function normalizeToContentNodeType(type: string): ContentNodeType {
   if (lowerType === 'chunk' || lowerType === 'text_chunk') return 'chunk';
   if (lowerType === 'entity') return 'entity';
   if (lowerType === 'topic') return 'topic';
+  if (lowerType === 'course') return 'course';
 
   // Default to entity for unknown types
   return 'entity';

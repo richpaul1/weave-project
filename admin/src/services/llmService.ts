@@ -3,7 +3,7 @@
  * Handles embedding generation for pages and chunks
  */
 
-import { weave } from '../weave/init.js';
+import { weaveOp, WeaveService } from '../weave/weaveService.js';
 import { config } from '../config.js';
 
 export interface EmbeddingResponse {
@@ -35,7 +35,7 @@ export class LLMService {
   /**
    * Generate embedding for text using Ollama
    */
-  @weave.op()
+  @weaveOp('LLMService.generateEmbedding')
   async generateEmbedding(text: string): Promise<number[]> {
     if (!text || text.trim().length === 0) {
       throw new Error('Text cannot be empty');
@@ -75,7 +75,7 @@ export class LLMService {
         throw new Error('Invalid embedding response from Ollama');
       }
 
-      weave.logEvent('embedding_generated', {
+      WeaveService.getInstance()?.logEvent('embedding_generated', {
         model: this.embeddingModel,
         textLength: text.length,
         embeddingDimensions: data.embedding.length,
@@ -83,7 +83,7 @@ export class LLMService {
 
       return data.embedding;
     } catch (error) {
-      weave.logEvent('embedding_generation_failed', {
+      WeaveService.getInstance()?.logEvent('embedding_generation_failed', {
         model: this.embeddingModel || 'unknown',
         textLength: text.length,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -95,7 +95,7 @@ export class LLMService {
   /**
    * Generate embeddings for multiple texts in batch
    */
-  @weave.op()
+  @weaveOp('LLMService.generateEmbeddingsBatch')
   async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
     const embeddings: number[][] = [];
     
@@ -104,7 +104,7 @@ export class LLMService {
       embeddings.push(embedding);
     }
 
-    weave.logEvent('batch_embeddings_generated', {
+    WeaveService.getInstance()?.logEvent('batch_embeddings_generated', {
       model: this.embeddingModel,
       batchSize: texts.length,
       totalTextLength: texts.reduce((sum, text) => sum + text.length, 0),
@@ -116,7 +116,7 @@ export class LLMService {
   /**
    * Test connection to Ollama service
    */
-  @weave.op()
+  @weaveOp('LLMService.testConnection')
   async testConnection(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`);
@@ -129,7 +129,7 @@ export class LLMService {
   /**
    * Get available models from Ollama
    */
-  @weave.op()
+  @weaveOp('LLMService.getAvailableModels')
   async getAvailableModels(): Promise<string[]> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`);
@@ -141,7 +141,7 @@ export class LLMService {
       const data = await response.json();
       return data.models?.map((model: any) => model.name) || [];
     } catch (error) {
-      weave.logEvent('model_fetch_failed', {
+      WeaveService.getInstance()?.logEvent('model_fetch_failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       return [];
@@ -151,13 +151,13 @@ export class LLMService {
   /**
    * Validate that the configured embedding model is available
    */
-  @weave.op()
+  @weaveOp('LLMService.validateEmbeddingModel')
   async validateEmbeddingModel(): Promise<boolean> {
     try {
       const models = await this.getAvailableModels();
       const isAvailable = models.includes(this.embeddingModel);
       
-      weave.logEvent('embedding_model_validation', {
+      WeaveService.getInstance()?.logEvent('embedding_model_validation', {
         model: this.embeddingModel,
         available: isAvailable,
         availableModels: models,
@@ -165,7 +165,7 @@ export class LLMService {
 
       return isAvailable;
     } catch (error) {
-      weave.logEvent('embedding_model_validation_failed', {
+      WeaveService.getInstance()?.logEvent('embedding_model_validation_failed', {
         model: this.embeddingModel,
         error: error instanceof Error ? error.message : 'Unknown error',
       });

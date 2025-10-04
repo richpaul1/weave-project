@@ -140,7 +140,9 @@ describe('WebCrawler Domain Filtering', () => {
 
   describe('domain filtering integration', () => {
     it('should include external skip count in completion log', async () => {
-      const { weave } = await import('../../src/weave/init.js');
+      const { WeaveService } = await import('../../src/weave/weaveService.js');
+      const weaveService = WeaveService.getInstance();
+      const logEventSpy = vi.spyOn(weaveService!, 'logEvent');
 
       // Mock a simple failing crawl to test logging
       mockAxios.default.get.mockRejectedValue(new Error('Network error'));
@@ -149,7 +151,7 @@ describe('WebCrawler Domain Filtering', () => {
       await crawler.crawl(startUrl, 1);
 
       // Should log completion with skip count
-      expect(weave.logEvent).toHaveBeenCalledWith('crawl_complete', expect.objectContaining({
+      expect(logEventSpy).toHaveBeenCalledWith('crawl_complete', expect.objectContaining({
         pagesSkippedExternal: expect.any(Number)
       }));
     });

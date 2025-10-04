@@ -264,12 +264,15 @@ export class WeaveService {
 
     /**
      * Initialize W&B connection and test API connectivity
+     * This replaces the separate initializeWeave function
      */
     async initialize(): Promise<void> {
         if (!this.isEnabled) {
             console.log('⚠️ Weave tracking is disabled');
             return;
         }
+
+        console.log(`[Weave] Initializing project: ${this.entity}/${this.projectName}`);
 
         if (!this.apiKey) {
             console.warn('⚠️ WANDB_API_KEY not found - Weave tracking will be limited');
@@ -280,6 +283,14 @@ export class WeaveService {
             // Test API connectivity by making a simple request
             await this.testApiConnectivity();
             console.log('✅ Weave Service ready for trace collection');
+
+            // Log initialization event
+            this.logEvent('weave_admin_initialized', {
+                project: `${this.entity}/${this.projectName}`,
+                timestamp: new Date().toISOString(),
+                environment: 'admin-backend'
+            });
+
         } catch (error) {
             console.error('❌ Failed to initialize Weave:', error);
             console.warn('⚠️ Weave will continue with local logging only');
@@ -720,6 +731,21 @@ export class WeaveService {
         }
 
         console.log(`📈 [Weave Metrics]`, metrics);
+    }
+
+    /**
+     * Get the current trace URL for debugging
+     */
+    getCurrentTraceUrl(): string | null {
+        try {
+            // In the current implementation, we don't have access to the actual Weave instance
+            // that would provide trace URLs. This is a placeholder that returns null.
+            // When we have a real Weave SDK integration, this would return the actual trace URL.
+            return null;
+        } catch (error) {
+            console.error('[Weave] Failed to get trace URL:', error);
+            return null;
+        }
     }
 }
 

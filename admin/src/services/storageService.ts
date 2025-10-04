@@ -3,8 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
-import { weave } from '../weave/init.js';
-import { weaveOp } from '../weave/weaveService.js';
+import { weaveOp, WeaveService } from '../weave/weaveService.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 import { llmService } from './llmService.js';
 
@@ -186,7 +185,7 @@ export class StorageService {
         FOR (c:Course) ON (c.isActive)
       `);
 
-      weave.logEvent('schema_initialized');
+      WeaveService.getInstance()?.logEvent('schema_initialized');
     } finally {
       await session.close();
     }
@@ -237,7 +236,7 @@ export class StorageService {
       // Write markdown file
       await fs.writeFile(filePath, markdown, 'utf-8');
 
-      weave.logEvent('course_markdown_saved', { slug, filePath });
+      WeaveService.getInstance()?.logEvent('course_markdown_saved', { slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save course markdown file: ${error.message}`);
@@ -260,7 +259,7 @@ export class StorageService {
       // Write metadata file
       await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
 
-      weave.logEvent('course_metadata_saved', { slug, filePath });
+      WeaveService.getInstance()?.logEvent('course_metadata_saved', { slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save course metadata file: ${error.message}`);
@@ -280,14 +279,14 @@ export class StorageService {
       // Delete files if they exist
       try {
         await fs.unlink(markdownPath);
-        weave.logEvent('course_markdown_deleted', { slug, path: markdownPath });
+        WeaveService.getInstance()?.logEvent('course_markdown_deleted', { slug, path: markdownPath });
       } catch (e) {
         // File might not exist, that's ok
       }
 
       try {
         await fs.unlink(metadataPath);
-        weave.logEvent('course_metadata_deleted', { slug, path: metadataPath });
+        WeaveService.getInstance()?.logEvent('course_metadata_deleted', { slug, path: metadataPath });
       } catch (e) {
         // File might not exist, that's ok
       }
@@ -342,7 +341,7 @@ export class StorageService {
       // Write markdown file
       await fs.writeFile(filePath, markdown, 'utf-8');
 
-      weave.logEvent('markdown_saved', { domain, slug, filePath });
+      WeaveService.getInstance()?.logEvent('markdown_saved', { domain, slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save markdown file: ${error.message}`);
@@ -368,7 +367,7 @@ export class StorageService {
       // Write metadata file
       await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
 
-      weave.logEvent('metadata_saved', { domain, slug, filePath });
+      WeaveService.getInstance()?.logEvent('metadata_saved', { domain, slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save metadata file: ${error.message}`);
@@ -417,7 +416,7 @@ export class StorageService {
         metadata
       );
 
-      weave.logEvent('page_saved_neo4j', { id, url, domain, slug });
+      WeaveService.getInstance()?.logEvent('page_saved_neo4j', { id, url, domain, slug });
       return metadata;
     } finally {
       await session.close();
@@ -511,7 +510,7 @@ export class StorageService {
       // Save metadata to file system
       await this.saveMetadataFile(metadata.domain, metadata.slug, metadata);
 
-      weave.logEvent('complete_page_saved', {
+      WeaveService.getInstance()?.logEvent('complete_page_saved', {
         id: metadata.id,
         url,
         domain: metadata.domain,
@@ -536,7 +535,7 @@ export class StorageService {
       await this.createChunk(pageId, chunk);
     }
 
-    weave.logEvent('page_chunks_created', {
+    WeaveService.getInstance()?.logEvent('page_chunks_created', {
       pageId,
       chunkCount: chunks.length,
     });
@@ -596,7 +595,7 @@ export class StorageService {
   @weaveOp('StorageService.getAllPages')
   async getAllPages(): Promise<PageMetadata[]> {
     const session = this.getSession();
-    
+
     try {
       const result = await session.run(`
         MATCH (p:Page)
@@ -604,10 +603,18 @@ export class StorageService {
         ORDER BY p.createdAt DESC
       `);
 
-      return result.records.map(record => {
+      const pages = result.records.map(record => {
         const node = record.get('p');
         return node.properties as PageMetadata;
       });
+
+      // Log the count of pages returned for Weave tracking
+      WeaveService.getInstance()?.logEvent('pages_retrieved', {
+        totalPages: pages.length,
+        operation: 'getAllPages'
+      });
+
+      return pages;
     } finally {
       await session.close();
     }
@@ -715,7 +722,7 @@ export class StorageService {
         });
       }
 
-      weave.logEvent('pages_searched_by_vector', {
+      WeaveService.getInstance()?.logEvent('pages_searched_by_vector', {
         resultsCount: pages.length,
         scoreThreshold,
         limit
@@ -766,7 +773,7 @@ export class StorageService {
         });
       }
 
-      weave.logEvent('chunks_searched_by_vector', {
+      WeaveService.getInstance()?.logEvent('chunks_searched_by_vector', {
         resultsCount: chunks.length,
         scoreThreshold,
         limit
@@ -831,7 +838,7 @@ export class StorageService {
 
       console.log(`✅ Successfully deleted page "${page.title}" and ${chunkCount} related chunks with vector embeddings`);
 
-      weave.logEvent('page_deleted', {
+      WeaveService.getInstance()?.logEvent('page_deleted', {
         id,
         url: page.url,
         title: page.title,
@@ -905,7 +912,7 @@ export class StorageService {
       console.log(`✅ Reset complete: Deleted ${totalNodes} content nodes (${pageCount} pages with vectors, ${chunkCount} chunks with vectors)`);
       console.log(`💾 Preserved: Chat history and settings`);
 
-      weave.logEvent('all_content_reset', {
+      WeaveService.getInstance()?.logEvent('all_content_reset', {
         pageCount,
         chunkCount,
         totalContentNodesDeleted: totalNodes,
@@ -1020,7 +1027,7 @@ export class StorageService {
       // Save metadata to file system
       await this.saveCourseMetadataFile(slug, courseMetadata);
 
-      weave.logEvent('course_saved', {
+      WeaveService.getInstance()?.logEvent('course_saved', {
         id: courseMetadata.id,
         url,
         slug: courseMetadata.slug,
@@ -1154,7 +1161,7 @@ export class StorageService {
       // Delete course files
       await this.deleteCourseFiles(slug);
 
-      weave.logEvent('course_deleted', { id, slug });
+      WeaveService.getInstance()?.logEvent('course_deleted', { id, slug });
     } finally {
       await session.close();
     }

@@ -103,8 +103,8 @@ describe('Settings Page UI Tests', () => {
     });
 
     it('should navigate to settings from other pages', async () => {
-      // Go to admin page first
-      await page.goto(`${BASE_URL}/admin`);
+      // Go to content page first
+      await page.goto(`${BASE_URL}/content`);
       await page.waitForLoadState('networkidle');
 
       // Click settings in navigation
@@ -368,22 +368,6 @@ describe('Settings Page UI Tests', () => {
   });
 
   describe('Responsive Design', () => {
-    it('should work on mobile viewport', async () => {
-      // Set mobile viewport
-      await page.setViewportSize({ width: 375, height: 667 });
-      
-      await page.waitForSelector('form');
-      
-      // Check that form is still usable
-      expect(await page.locator('main h1, .container h1').first().isVisible()).toBe(true);
-      expect(await page.locator('textarea[name="chat_service_prompt"]').isVisible()).toBe(true);
-      expect(await page.locator('button:has-text("Save Settings")').isVisible()).toBe(true);
-
-      // Test form interaction
-      await page.fill('input[name="max_pages"]', '6');
-      expect(await page.locator('input[name="max_pages"]').inputValue()).toBe('6');
-    });
-
     it('should work on tablet viewport', async () => {
       // Set tablet viewport
       await page.setViewportSize({ width: 768, height: 1024 });

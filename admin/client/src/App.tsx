@@ -20,11 +20,11 @@ function Router() {
         <Switch>
           <Route path="/">
             {() => {
-              navigate("/admin", { replace: true });
+              navigate("/content", { replace: true });
               return null;
             }}
           </Route>
-          <Route path="/admin" component={AdminPage} />
+          <Route path="/content" component={AdminPage} />
           <Route path="/courses" component={CoursesPage} />
           <Route path="/graph" component={GraphPage} />
           <Route path="/settings" component={SettingsPage} />

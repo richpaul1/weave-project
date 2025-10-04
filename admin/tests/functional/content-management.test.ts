@@ -487,6 +487,11 @@ describe('Content Management Functional Tests', () => {
       mockedFs.rm.mockResolvedValue(undefined);
       mockedFs.mkdir.mockResolvedValue(undefined);
 
+      // Set up WeaveService spy before the operation
+      const { WeaveService } = await import('../../src/weave/weaveService.js');
+      const weaveService = WeaveService.getInstance();
+      const logEventSpy = vi.spyOn(weaveService!, 'logEvent');
+
       await storage.resetAllContent();
 
       // Verify specific vector embedding count logging
@@ -495,8 +500,7 @@ describe('Content Management Functional Tests', () => {
       );
 
       // Check that weave event was logged with correct vector embedding count
-      const { weave } = await import('../../src/weave/init.js');
-      expect(weave.logEvent).toHaveBeenCalledWith('all_content_reset',
+      expect(logEventSpy).toHaveBeenCalledWith('all_content_reset',
         expect.objectContaining({
           pageCount: 7,
           chunkCount: 21,

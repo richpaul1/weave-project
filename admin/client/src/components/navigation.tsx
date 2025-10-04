@@ -1,11 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { FolderOpen, Network, Settings, Sun, Moon, BookOpen } from "lucide-react";
+import { Network, Settings, Sun, Moon, BookOpen, Book } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 
 const navigationItems = [
-  { path: "/admin", label: "Admin", icon: FolderOpen },
+  { path: "/content", label: "Content", icon: Book },
   { path: "/courses", label: "Courses", icon: BookOpen },
   { path: "/graph", label: "Graph", icon: Network },
   { path: "/settings", label: "Settings", icon: Settings },

@@ -2,8 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 import TurndownService from 'turndown';
-import { weave } from '../weave/init.js';
-import { weaveOp } from '../weave/weaveService.js';
+import { weaveOp, WeaveService } from '../weave/weaveService.js';
 
 /**
  * Normalizes a URL for consistent crawling
@@ -130,9 +129,9 @@ export class WebCrawler {
   /**
    * Fetch and parse a single page
    */
-  @weaveOp()
+  @weaveOp('WebCrawler.fetchPage')
   async fetchPage(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
-    weave.logEvent('fetch_page_start', { url });
+    WeaveService.getInstance()?.logEvent('fetch_page_start', { url });
     const startTime = Date.now();
 
     try {
@@ -144,13 +143,13 @@ export class WebCrawler {
       const $ = cheerio.load(response.data);
       const duration = Date.now() - startTime;
 
-      weave.logMetric('fetch_page_duration_ms', duration, { url });
-      weave.logEvent('fetch_page_success', { url, duration });
+      WeaveService.getInstance()?.logMetrics({ fetch_page_duration_ms: duration, url });
+      WeaveService.getInstance()?.logEvent('fetch_page_success', { url, duration });
 
       return { html: response.data, $ };
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      weave.logEvent('fetch_page_error', { url, error: error.message, duration });
+      WeaveService.getInstance()?.logEvent('fetch_page_error', { url, error: error.message, duration });
       throw error;
     }
   }
@@ -273,9 +272,9 @@ export class WebCrawler {
   /**
    * Process a single page
    */
-  @weaveOp()
+  @weaveOp('WebCrawler.processPage')
   async processPage(url: string, depth: number): Promise<CrawlResult> {
-    weave.logEvent('process_page_start', { url, depth });
+    WeaveService.getInstance()?.logEvent('process_page_start', { url, depth });
 
     const { html, $ } = await this.fetchPage(url);
 
@@ -291,7 +290,7 @@ export class WebCrawler {
     // Extract links
     const links = this.extractLinks($, url);
 
-    weave.logEvent('process_page_complete', {
+    WeaveService.getInstance()?.logEvent('process_page_complete', {
       url,
       depth,
       title,
@@ -311,9 +310,9 @@ export class WebCrawler {
   /**
    * Crawl website with breadth-first search
    */
-  @weaveOp()
+  @weaveOp('WebCrawler.crawl')
   async crawl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
-    weave.logEvent('crawl_start', { startUrl, maxDepth });
+    WeaveService.getInstance()?.logEvent('crawl_start', { startUrl, maxDepth });
     const startTime = Date.now();
 
     const normalizedStartUrl = normalizeUrl(startUrl);
@@ -340,7 +339,7 @@ export class WebCrawler {
           if (!isValidSubLink(startUrlParsed, currentUrlParsed)) {
             skippedExternal++;
             console.log(`[Crawl] Skipping external domain: ${url}`);
-            weave.logEvent('crawl_skip_external', { url, startDomain: startUrlParsed.hostname, foundDomain: currentUrlParsed.hostname });
+            WeaveService.getInstance()?.logEvent('crawl_skip_external', { url, startDomain: startUrlParsed.hostname, foundDomain: currentUrlParsed.hostname });
             continue;
           }
         } catch (error) {
@@ -374,7 +373,8 @@ export class WebCrawler {
           }
         }
 
-        weave.logMetric('crawl_progress', completed, { 
+        WeaveService.getInstance()?.logMetrics({
+          crawl_progress: completed,
           total: visited.size,
           failed,
           queueSize: queue.length,
@@ -382,12 +382,12 @@ export class WebCrawler {
       } catch (error: any) {
         failed++;
         console.error(`Failed to process ${url}:`, error.message);
-        weave.logEvent('crawl_page_error', { url, depth, error: error.message });
+        WeaveService.getInstance()?.logEvent('crawl_page_error', { url, depth, error: error.message });
       }
     }
 
     const duration = Date.now() - startTime;
-    weave.logEvent('crawl_complete', {
+    WeaveService.getInstance()?.logEvent('crawl_complete', {
       startUrl,
       maxDepth,
       pagesProcessed: completed,
@@ -395,7 +395,7 @@ export class WebCrawler {
       pagesSkippedExternal: skippedExternal,
       duration,
     });
-    weave.logMetric('crawl_duration_ms', duration, { startUrl, maxDepth });
+    WeaveService.getInstance()?.logMetrics({ crawl_duration_ms: duration, startUrl, maxDepth });
 
     console.log(`[Crawl] Completed: ${completed} pages processed, ${failed} failed, ${skippedExternal} external domains skipped`);
 

@@ -72,18 +72,18 @@ class StorageService:
     def get_all_pages(self) -> List[Dict[str, Any]]:
         """
         Retrieve all page metadata from Neo4j.
-        
+
         Returns:
             List of page dictionaries with metadata
         """
         with self._get_session() as session:
             result = session.run("""
                 MATCH (p:Page)
-                RETURN p.id as id, p.url as url, p.domain as domain, 
+                RETURN p.id as id, p.url as url, p.domain as domain,
                        p.slug as slug, p.title as title, p.createdAt as createdAt
                 ORDER BY p.createdAt DESC
             """)
-            
+
             pages = []
             for record in result:
                 pages.append({
@@ -94,7 +94,15 @@ class StorageService:
                     "title": record.get("title"),
                     "createdAt": record.get("createdAt")
                 })
-            
+
+            # Log the count of pages returned for Weave tracking
+            import weave
+            weave.log({
+                "operation": "get_all_pages",
+                "total_pages": len(pages),
+                "pages_returned": len(pages)
+            })
+
             return pages
     
     @weave.op()

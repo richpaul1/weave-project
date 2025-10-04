@@ -3,7 +3,6 @@ import cors from 'cors';
 import fs from 'fs';
 import { createServer } from 'http';
 import { config } from './config.js';
-import { initializeWeave } from './weave/init.js';
 import { WeaveService } from './weave/weaveService.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
@@ -115,13 +114,10 @@ async function startServer() {
       console.log(`✅ Content storage directory exists: ${contentStoragePath}`);
     }
 
-    // Initialize Weave
-    console.log('Initializing Weave...');
-    await initializeWeave();
-
-    // Initialize WeaveService singleton
+    // Initialize WeaveService singleton and Weave
     console.log('Initializing WeaveService...');
-    new WeaveService();
+    const weaveService = new WeaveService();
+    await weaveService.initialize();
     console.log('WeaveService initialized');
 
     // Initialize database schema
