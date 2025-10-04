@@ -50,12 +50,24 @@ class RetrievalService:
         Args:
             query: The user query
             top_k: Number of top chunks to retrieve
-            min_score: Minimum relevance score threshold
+            min_score: Minimum relevance score threshold (if None, loads from settings)
             expand_context: Whether to expand context with related chunks
 
         Returns:
             Dictionary with 'chunks', 'sources', 'context_text' keys
         """
+        # Load settings if min_score not provided
+        if min_score is None:
+            settings_service = get_settings_service()
+            settings = await settings_service.get_chat_settings()
+            min_score = settings.get("search_score_threshold", MIN_RELEVANCE_SCORE)
+
+        print(f"🔍 Retrieval Service: Starting context retrieval")
+        print(f"   Query: '{query}'")
+        print(f"   Top K: {top_k}")
+        print(f"   Min score: {min_score}")
+        print(f"   Expand context: {expand_context}")
+
         # Add retrieval operation metadata
         add_session_metadata(
             operation_type="context_retrieval",
@@ -64,36 +76,61 @@ class RetrievalService:
             min_score=min_score,
             expand_context=expand_context
         )
+
         # Generate query embedding
+        print(f"🧮 Retrieval Service: Generating query embedding...")
         query_embedding = await self.llm_service.generate_embedding(query)
-        
+        print(f"   Embedding length: {len(query_embedding)}")
+        print(f"   Embedding sample: {query_embedding[:5]}...")
+
         # Search for relevant chunks
+        print(f"🔎 Retrieval Service: Searching for relevant chunks...")
         chunks = self.storage.search_by_vector(
             embedding=query_embedding,
             limit=top_k,
             min_score=min_score
         )
-        
+        print(f"   Initial chunks found: {len(chunks)}")
+        if chunks:
+            print(f"   Top chunk scores: {[chunk.get('score', 'N/A') for chunk in chunks[:3]]}")
+            print(f"   Top chunk titles: {[chunk.get('title', 'N/A')[:50] for chunk in chunks[:3]]}")
+        else:
+            print(f"   ⚠️ No chunks found with min_score {min_score}")
+
         # Expand context if requested
         if expand_context and chunks:
+            print(f"📈 Retrieval Service: Expanding context graph...")
             chunks = await self._expand_context_graph(chunks, max_additional=top_k)
-        
+            print(f"   Chunks after expansion: {len(chunks)}")
+
         # Rank and filter chunks
+        print(f"📊 Retrieval Service: Ranking and filtering chunks...")
         ranked_chunks = self._rank_context(chunks, query)
-        
+        print(f"   Final ranked chunks: {len(ranked_chunks)}")
+
         # Build context text
+        print(f"📝 Retrieval Service: Building context text...")
         context_text = self._build_context_text(ranked_chunks)
-        
+        print(f"   Context text length: {len(context_text)}")
+
         # Extract unique sources
+        print(f"📚 Retrieval Service: Extracting sources...")
         sources = self._extract_sources(ranked_chunks)
-        
-        return {
+        print(f"   Unique sources: {len(sources)}")
+        print(f"   Source titles: {[s.get('title', 'N/A')[:50] for s in sources]}")
+
+        result = {
             "chunks": ranked_chunks,
             "sources": sources,
             "context_text": context_text,
             "num_chunks": len(ranked_chunks),
             "num_sources": len(sources)
         }
+
+        print(f"✅ Retrieval Service: Context retrieval complete")
+        print(f"   Final result: {len(ranked_chunks)} chunks, {len(sources)} sources")
+
+        return result
     
     @weave.op()
     async def _expand_context_graph(
@@ -247,6 +284,10 @@ class RetrievalService:
             query_length=len(query),
             top_k=top_k
         )
+        print(f"🔍 Retrieval Service: Starting page-based context retrieval")
+        print(f"   Query: '{query}'")
+        print(f"   Top K: {top_k}")
+
         # Get settings from admin backend
         settings_service = get_settings_service()
         settings = await settings_service.get_chat_settings()
@@ -254,17 +295,28 @@ class RetrievalService:
         score_threshold = settings.get("search_score_threshold", 0.9)
         max_pages = settings.get("max_pages", 5)
 
+        print(f"   Score threshold: {score_threshold}")
+        print(f"   Max pages: {max_pages}")
+
         # Generate query embedding
+        print(f"🧮 Retrieval Service: Generating query embedding...")
         query_embedding = await self.llm_service.generate_embedding(query)
+        print(f"   Embedding length: {len(query_embedding)}")
 
         # Get relevant pages with score filtering
+        print(f"🔎 Retrieval Service: Searching for relevant pages...")
         pages = self.storage.get_relevant_pages(
             embedding=query_embedding,
             limit=max_pages,
             score_threshold=score_threshold
         )
+        print(f"   Pages found: {len(pages)}")
+        if pages:
+            print(f"   Top page scores: {[p.get('score', 'N/A') for p in pages[:3]]}")
+            print(f"   Top page titles: {[p.get('title', 'N/A')[:50] for p in pages[:3]]}")
 
         # Load markdown content for each page
+        print(f"📄 Retrieval Service: Loading markdown content for pages...")
         page_contents = []
         sources = []
 
@@ -286,6 +338,9 @@ class RetrievalService:
                     "title": page["title"],
                     "domain": page["domain"]
                 })
+                print(f"   ✅ Loaded: {page['title'][:50]} ({len(markdown_content)} chars)")
+            else:
+                print(f"   ❌ Failed to load: {page['title'][:50]}")
 
         # Build context text from full page contents
         context_text = self._build_page_context_text(page_contents)

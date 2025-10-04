@@ -111,15 +111,18 @@ export default function AdminPage() {
     mutationFn: async () => {
       return apiRequest('DELETE', '/api/crawler/reset');
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['/api/content/pages'] });
       queryClient.invalidateQueries({ queryKey: ['/api/content/stats'] });
       setCurrentJob(null);
-      toast.success('All content reset successfully');
+
+      // Show detailed success message
+      const nodesDeleted = response?.nodesDeleted || 'all';
+      toast.success(`All content reset successfully! Deleted ${nodesDeleted} nodes and cleared storage.`);
     },
     onError: (error: any) => {
       console.error('Error resetting content:', error);
-      toast.error('Failed to reset content');
+      toast.error('Failed to reset content: ' + (error.message || 'Unknown error'));
     },
   });
 

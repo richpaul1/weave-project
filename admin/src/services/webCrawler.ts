@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { URL } from 'url';
 import TurndownService from 'turndown';
 import { weave } from '../weave/init.js';
+import { weaveOp } from '../weave/weaveService.js';
 
 /**
  * Normalizes a URL for consistent crawling
@@ -129,7 +130,7 @@ export class WebCrawler {
   /**
    * Fetch and parse a single page
    */
-  @weave.op()
+  @weaveOp()
   async fetchPage(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
     weave.logEvent('fetch_page_start', { url });
     const startTime = Date.now();
@@ -157,7 +158,6 @@ export class WebCrawler {
   /**
    * Extract main content from page
    */
-  @weave.op()
   extractMainContent($: cheerio.CheerioAPI): string {
     // Try to find main content
     let mainHtml = $('main').html();
@@ -192,7 +192,6 @@ export class WebCrawler {
   /**
    * Extract links from page
    */
-  @weave.op()
   extractLinks($: cheerio.CheerioAPI, baseUrl: string): string[] {
     const links: Set<string> = new Set();
     const baseUrlParsed = new URL(baseUrl);
@@ -257,7 +256,6 @@ export class WebCrawler {
   /**
    * Convert HTML to Markdown
    */
-  @weave.op()
   htmlToMarkdown(html: string, baseUrl?: string): string {
     // Set the base URL for use in TurndownService rules
     this.currentBaseUrl = baseUrl;
@@ -275,7 +273,7 @@ export class WebCrawler {
   /**
    * Process a single page
    */
-  @weave.op()
+  @weaveOp()
   async processPage(url: string, depth: number): Promise<CrawlResult> {
     weave.logEvent('process_page_start', { url, depth });
 
@@ -313,7 +311,7 @@ export class WebCrawler {
   /**
    * Crawl website with breadth-first search
    */
-  @weave.op()
+  @weaveOp()
   async crawl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
     weave.logEvent('crawl_start', { startUrl, maxDepth });
     const startTime = Date.now();

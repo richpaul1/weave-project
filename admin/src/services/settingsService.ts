@@ -18,16 +18,13 @@ export interface SettingsServiceConfig {
 export class SettingsService {
   private driver: Driver;
 
-  constructor(config?: SettingsServiceConfig) {
-    if (config?.driver) {
-      this.driver = config.driver;
+  constructor(serviceConfig?: SettingsServiceConfig) {
+    if (serviceConfig?.driver) {
+      this.driver = serviceConfig.driver;
     } else {
       this.driver = neo4j.driver(
-        process.env.NEO4J_URI || 'neo4j://localhost:7687',
-        neo4j.auth.basic(
-          process.env.NEO4J_USER || 'neo4j',
-          process.env.NEO4J_PASSWORD || 'password'
-        )
+        config.neo4jUri,
+        neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
       );
     }
   }
@@ -36,7 +33,7 @@ export class SettingsService {
    * Get current chat settings from database
    */
   async getChatSettings(): Promise<ChatSettings> {
-    const session = this.driver.session();
+    const session = this.driver.session({ database: config.neo4jDatabase });
     try {
       // Try to get settings from database
       const result = await session.run(`
@@ -53,7 +50,7 @@ export class SettingsService {
       result.records.forEach(record => {
         const key = record.get('key');
         const value = record.get('value');
-        
+
         // Convert string values to appropriate types
         if (key === 'search_score_threshold') {
           settings[key] = parseFloat(value);
@@ -76,8 +73,24 @@ export class SettingsService {
         empty_search_default_response: settings.empty_search_default_response || "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing your question or asking about a different topic that might be covered in the available documentation.",
         enable_full_validation_testing: settings.enable_full_validation_testing ?? false
       };
+    } catch (error) {
+      console.warn('Database error in getChatSettings, returning defaults:', error);
+      // Return default settings if database operation fails
+      return {
+        chat_service_prompt: 'You are a helpful AI assistant. Use the provided context to answer questions accurately and comprehensively. If you cannot find relevant information in the context, say so clearly.\\n\\nContext:\\n{context}\\n\\nQuestion: {query}\\n\\nAnswer:',
+        search_score_threshold: 0.9,
+        enable_title_matching: true,
+        enable_full_page_content: true,
+        max_pages: 5,
+        empty_search_default_response: "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing your question or asking about a different topic that might be covered in the available documentation.",
+        enable_full_validation_testing: false
+      };
     } finally {
-      await session.close();
+      try {
+        await session.close();
+      } catch (error) {
+        console.warn('Error closing session:', error);
+      }
     }
   }
 
@@ -85,7 +98,7 @@ export class SettingsService {
    * Update chat settings in database
    */
   async updateChatSettings(settings: ChatSettings): Promise<ChatSettings> {
-    const session = this.driver.session();
+    const session = this.driver.session({ database: config.neo4jDatabase });
     try {
       // Update each setting individually
       for (const [key, value] of Object.entries(settings)) {
@@ -96,8 +109,15 @@ export class SettingsService {
       }
 
       return settings;
+    } catch (error) {
+      console.warn('Database error in updateChatSettings:', error);
+      throw error; // Re-throw for update operations as they should fail if DB is down
     } finally {
-      await session.close();
+      try {
+        await session.close();
+      } catch (error) {
+        console.warn('Error closing session:', error);
+      }
     }
   }
 
@@ -122,6 +142,11 @@ export class SettingsService {
    * Close the database connection
    */
   async close(): Promise<void> {
-    await this.driver.close();
+    try {
+      await this.driver.close();
+    } catch (error) {
+      console.warn('Error closing driver:', error);
+      // Don't throw on close errors
+    }
   }
 }

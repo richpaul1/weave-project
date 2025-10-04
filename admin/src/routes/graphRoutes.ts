@@ -8,7 +8,7 @@ const router = Router();
  * Get all graph nodes
  */
 router.get('/nodes', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const nodes = await storage.getGraphNodes();
@@ -17,7 +17,6 @@ router.get('/nodes', async (req: Request, res: Response) => {
     console.error('Error getting graph nodes:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -26,7 +25,7 @@ router.get('/nodes', async (req: Request, res: Response) => {
  * Get all graph edges
  */
 router.get('/edges', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const edges = await storage.getGraphEdges();
@@ -35,7 +34,6 @@ router.get('/edges', async (req: Request, res: Response) => {
     console.error('Error getting graph edges:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -44,7 +42,7 @@ router.get('/edges', async (req: Request, res: Response) => {
  * Search graph nodes by label
  */
 router.get('/search', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const query = req.query.q as string || '';
@@ -56,7 +54,6 @@ router.get('/search', async (req: Request, res: Response) => {
     console.error('Error searching graph nodes:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -65,7 +62,7 @@ router.get('/search', async (req: Request, res: Response) => {
  * Get node type statistics
  */
 router.get('/node-types', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const stats = await storage.getNodeTypeStats();
@@ -74,7 +71,6 @@ router.get('/node-types', async (req: Request, res: Response) => {
     console.error('Error getting node type stats:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -83,7 +79,7 @@ router.get('/node-types', async (req: Request, res: Response) => {
  * Delete a graph node
  */
 router.delete('/nodes/:id', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -101,7 +97,6 @@ router.delete('/nodes/:id', async (req: Request, res: Response) => {
     console.error('Error deleting graph node:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -110,7 +105,7 @@ router.delete('/nodes/:id', async (req: Request, res: Response) => {
  * Analyze duplicate nodes and edges
  */
 router.get('/duplicates', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     // Get all nodes and edges
@@ -179,7 +174,6 @@ router.get('/duplicates', async (req: Request, res: Response) => {
     console.error('Error analyzing duplicates:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 

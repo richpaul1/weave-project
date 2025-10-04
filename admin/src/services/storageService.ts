@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { weave } from '../weave/init.js';
+import { weaveOp } from '../weave/weaveService.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 import { llmService } from './llmService.js';
 
@@ -26,14 +27,72 @@ export interface ChunkData {
   embedding?: number[];
 }
 
+export interface CourseMetadata {
+  id: string;
+  url: string;
+  title: string;
+  description?: string;
+  slug: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  duration?: string;
+  topics?: string[];
+  instructor?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastCrawledAt?: string;
+  isActive: boolean;
+}
+
+export interface CourseChunkData {
+  id: string;
+  courseId: string;
+  text: string;
+  chunkIndex: number;
+  startPosition: number;
+  endPosition: number;
+  embedding?: number[];
+  section?: string;
+  createdAt: string;
+}
+
 export class StorageService {
+  private static instance: StorageService | null = null;
+  private static driver: Driver | null = null;
   private driver: Driver;
 
-  constructor() {
-    this.driver = neo4j.driver(
-      config.neo4jUri,
-      neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
-    );
+  private constructor() {
+    if (StorageService.driver) {
+      this.driver = StorageService.driver;
+      return;
+    }
+
+    try {
+      console.log('🔌 Initializing Neo4j driver...');
+      console.log(`   URI: ${config.neo4jUri}`);
+      console.log(`   User: ${config.neo4jUser}`);
+      console.log(`   Database: ${config.neo4jDatabase}`);
+
+      this.driver = neo4j.driver(
+        config.neo4jUri,
+        neo4j.auth.basic(config.neo4jUser, config.neo4jPassword)
+      );
+
+      StorageService.driver = this.driver;
+      console.log('✅ Neo4j driver initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Neo4j driver:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get singleton instance of StorageService
+   */
+  public static getInstance(): StorageService {
+    if (!StorageService.instance) {
+      StorageService.instance = new StorageService();
+    }
+    return StorageService.instance;
   }
 
   /**
@@ -44,20 +103,36 @@ export class StorageService {
   }
 
   /**
-   * Close the driver
+   * Close the driver (only call this when shutting down the application)
    */
   async close(): Promise<void> {
-    await this.driver.close();
+    if (StorageService.driver) {
+      await StorageService.driver.close();
+      StorageService.driver = null;
+      StorageService.instance = null;
+    }
+  }
+
+  /**
+   * Close the driver for application shutdown
+   */
+  static async shutdown(): Promise<void> {
+    if (StorageService.instance) {
+      await StorageService.instance.close();
+    }
   }
 
   /**
    * Initialize database schema
    */
-  @weave.op()
+  @weaveOp('StorageService.initializeSchema')
   async initializeSchema(): Promise<void> {
+    if (!this.driver) {
+      throw new Error('Neo4j driver not initialized');
+    }
     const session = this.getSession();
     try {
-      // Create constraints
+      // Create constraints for existing nodes
       await session.run(`
         CREATE CONSTRAINT page_id_unique IF NOT EXISTS
         FOR (p:Page) REQUIRE p.id IS UNIQUE
@@ -68,7 +143,18 @@ export class StorageService {
         FOR (c:Chunk) REQUIRE c.id IS UNIQUE
       `);
 
-      // Create indexes
+      // Create constraints for course nodes
+      await session.run(`
+        CREATE CONSTRAINT course_id_unique IF NOT EXISTS
+        FOR (c:Course) REQUIRE c.id IS UNIQUE
+      `);
+
+      await session.run(`
+        CREATE CONSTRAINT course_chunk_id_unique IF NOT EXISTS
+        FOR (cc:CourseChunk) REQUIRE cc.id IS UNIQUE
+      `);
+
+      // Create indexes for existing nodes
       await session.run(`
         CREATE INDEX page_url_index IF NOT EXISTS
         FOR (p:Page) ON (p.url)
@@ -77,6 +163,27 @@ export class StorageService {
       await session.run(`
         CREATE INDEX page_domain_index IF NOT EXISTS
         FOR (p:Page) ON (p.domain)
+      `);
+
+      // Create indexes for course nodes
+      await session.run(`
+        CREATE INDEX course_url_index IF NOT EXISTS
+        FOR (c:Course) ON (c.url)
+      `);
+
+      await session.run(`
+        CREATE INDEX course_slug_index IF NOT EXISTS
+        FOR (c:Course) ON (c.slug)
+      `);
+
+      await session.run(`
+        CREATE INDEX course_difficulty_index IF NOT EXISTS
+        FOR (c:Course) ON (c.difficulty)
+      `);
+
+      await session.run(`
+        CREATE INDEX course_active_index IF NOT EXISTS
+        FOR (c:Course) ON (c.isActive)
       `);
 
       weave.logEvent('schema_initialized');
@@ -97,6 +204,97 @@ export class StorageService {
    */
   private getMetadataPath(domain: string, slug: string): string {
     return path.join(config.contentStoragePath, domain, `${slug}.meta.json`);
+  }
+
+  // ===== COURSE FILE SYSTEM METHODS =====
+
+  /**
+   * Get course markdown file path
+   */
+  private getCourseMarkdownPath(slug: string): string {
+    return path.join(config.contentStoragePath, 'courses', `${slug}.md`);
+  }
+
+  /**
+   * Get course metadata file path
+   */
+  private getCourseMetadataPath(slug: string): string {
+    return path.join(config.contentStoragePath, 'courses', `${slug}.metadata.json`);
+  }
+
+  /**
+   * Save course markdown content to file system
+   */
+  
+  async saveCourseMarkdownFile(slug: string, markdown: string): Promise<string> {
+    const filePath = this.getCourseMarkdownPath(slug);
+    const dir = path.dirname(filePath);
+
+    try {
+      // Ensure courses directory exists
+      await fs.mkdir(dir, { recursive: true });
+
+      // Write markdown file
+      await fs.writeFile(filePath, markdown, 'utf-8');
+
+      weave.logEvent('course_markdown_saved', { slug, filePath });
+      return filePath;
+    } catch (error: any) {
+      console.error(`Failed to save course markdown file: ${error.message}`);
+      throw new Error(`Failed to save course markdown file for ${slug}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Save course metadata to file system
+   */
+  
+  async saveCourseMetadataFile(slug: string, metadata: CourseMetadata): Promise<string> {
+    const filePath = this.getCourseMetadataPath(slug);
+    const dir = path.dirname(filePath);
+
+    try {
+      // Ensure courses directory exists
+      await fs.mkdir(dir, { recursive: true });
+
+      // Write metadata file
+      await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
+
+      weave.logEvent('course_metadata_saved', { slug, filePath });
+      return filePath;
+    } catch (error: any) {
+      console.error(`Failed to save course metadata file: ${error.message}`);
+      throw new Error(`Failed to save course metadata file for ${slug}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete course files from file system
+   */
+  
+  async deleteCourseFiles(slug: string): Promise<void> {
+    try {
+      const markdownPath = this.getCourseMarkdownPath(slug);
+      const metadataPath = this.getCourseMetadataPath(slug);
+
+      // Delete files if they exist
+      try {
+        await fs.unlink(markdownPath);
+        weave.logEvent('course_markdown_deleted', { slug, path: markdownPath });
+      } catch (e) {
+        // File might not exist, that's ok
+      }
+
+      try {
+        await fs.unlink(metadataPath);
+        weave.logEvent('course_metadata_deleted', { slug, path: metadataPath });
+      } catch (e) {
+        // File might not exist, that's ok
+      }
+    } catch (error: any) {
+      console.error(`Failed to delete course files: ${error.message}`);
+      throw new Error(`Failed to delete course files for ${slug}: ${error.message}`);
+    }
   }
 
   /**
@@ -129,7 +327,7 @@ export class StorageService {
   /**
    * Save markdown content to file system
    */
-  @weave.op()
+  
   async saveMarkdownFile(domain: string, slug: string, markdown: string): Promise<string> {
     const filePath = this.getMarkdownPath(domain, slug);
     const dir = path.dirname(filePath);
@@ -155,7 +353,7 @@ export class StorageService {
   /**
    * Save metadata to file system
    */
-  @weave.op()
+  
   async saveMetadataFile(domain: string, slug: string, metadata: PageMetadata): Promise<string> {
     const filePath = this.getMetadataPath(domain, slug);
     const dir = path.dirname(filePath);
@@ -181,7 +379,7 @@ export class StorageService {
   /**
    * Save page to Neo4j
    */
-  @weave.op()
+  
   async savePage(url: string, title: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
     
@@ -229,7 +427,7 @@ export class StorageService {
   /**
    * Save complete page (Neo4j + file system) with chunks
    */
-  @weave.op()
+  
   async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
 
@@ -282,7 +480,7 @@ export class StorageService {
         const chunkEmbedding = await llmService.generateEmbedding(chunk.text);
 
         await session.run(`
-          MATCH (p:Page {id: $pageId})
+          MATCH (p:Page {url: $url})
           CREATE (c:Chunk {
             id: $chunkId,
             pageId: $pageId,
@@ -296,6 +494,7 @@ export class StorageService {
           CREATE (p)-[:HAS_CHUNK]->(c)
           RETURN c.id as chunkId
         `, {
+          url,
           pageId: id,
           chunkId,
           text: chunk.text,
@@ -329,7 +528,7 @@ export class StorageService {
   /**
    * Create chunks for a page and store them in Neo4j
    */
-  @weave.op()
+  
   async createPageChunks(pageId: string, markdown: string): Promise<void> {
     const chunks = chunkMarkdown(markdown, 1000);
 
@@ -346,7 +545,7 @@ export class StorageService {
   /**
    * Create a single chunk node and link it to a page
    */
-  @weave.op()
+  
   async createChunk(pageId: string, chunk: TextChunk): Promise<string> {
     const session = this.getSession();
     const chunkId = uuidv4();
@@ -394,7 +593,7 @@ export class StorageService {
   /**
    * Get all pages
    */
-  @weave.op()
+  @weaveOp('StorageService.getAllPages')
   async getAllPages(): Promise<PageMetadata[]> {
     const session = this.getSession();
     
@@ -417,7 +616,7 @@ export class StorageService {
   /**
    * Get page by ID
    */
-  @weave.op()
+  
   async getPageById(id: string): Promise<PageMetadata | null> {
     const session = this.getSession();
     
@@ -442,7 +641,7 @@ export class StorageService {
   /**
    * Get chunks for a specific page
    */
-  @weave.op()
+  
   async getPageChunks(pageId: string): Promise<ChunkData[]> {
     const session = this.getSession();
 
@@ -477,7 +676,7 @@ export class StorageService {
   /**
    * Search pages by vector similarity
    */
-  @weave.op()
+  
   async searchPagesByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<PageMetadata & { score: number }>> {
     const session = this.getSession();
 
@@ -531,7 +730,7 @@ export class StorageService {
   /**
    * Search chunks by vector similarity
    */
-  @weave.op()
+  
   async searchChunksByVector(embedding: number[], limit: number = 5, scoreThreshold: number = 0.9): Promise<Array<ChunkData & { score: number }>> {
     const session = this.getSession();
 
@@ -580,66 +779,382 @@ export class StorageService {
   }
 
   /**
-   * Delete page
+   * Delete page and all related nodes (chunks with vector embeddings) and files
    */
-  @weave.op()
+  
   async deletePage(id: string): Promise<void> {
     const session = this.getSession();
-    
+
     try {
       // Get page metadata first
       const page = await this.getPageById(id);
-      if (!page) return;
+      if (!page) {
+        console.warn(`⚠️ Page with id ${id} not found`);
+        return;
+      }
 
-      // Delete from Neo4j
+      // First, count what we're about to delete for logging
+      const countResult = await session.run(
+        `
+        MATCH (p:Page {id: $id})
+        OPTIONAL MATCH (p)-[:HAS_CHUNK]->(c:Chunk)
+        RETURN count(c) as chunkCount
+        `,
+        { id }
+      );
+      const chunkCount = countResult.records[0]?.get('chunkCount')?.toNumber() || 0;
+
+      console.log(`🗑️ Deleting page "${page.title}" with ${chunkCount} chunks and vector embeddings`);
+
+      // Delete page and all related chunks in a single transaction
       await session.run(
         `
         MATCH (p:Page {id: $id})
-        DETACH DELETE p
+        OPTIONAL MATCH (p)-[:HAS_CHUNK]->(c:Chunk)
+        DETACH DELETE p, c
         `,
         { id }
       );
 
-      // Delete files
+      // Delete associated files
       try {
         const mdPath = this.getMarkdownPath(page.domain, page.slug);
         const metaPath = this.getMetadataPath(page.domain, page.slug);
-        
+
         await fs.unlink(mdPath).catch(() => {});
         await fs.unlink(metaPath).catch(() => {});
+
+        console.log(`✅ Deleted files: ${page.slug}.md and ${page.slug}.json`);
       } catch (e) {
-        console.warn('Failed to delete files:', e);
+        console.warn('⚠️ Failed to delete files:', e);
       }
 
-      weave.logEvent('page_deleted', { id, url: page.url });
+      console.log(`✅ Successfully deleted page "${page.title}" and ${chunkCount} related chunks with vector embeddings`);
+
+      weave.logEvent('page_deleted', {
+        id,
+        url: page.url,
+        title: page.title,
+        chunksDeleted: chunkCount,
+        vectorEmbeddingsCleared: chunkCount + 1, // +1 for page embedding
+        filesDeleted: true
+      });
     } finally {
       await session.close();
     }
   }
 
   /**
-   * Reset all content
+   * Reset all content - deletes page-related and course-related nodes and vector embeddings only
+   * Preserves ChatMessage and Setting nodes
    */
-  @weave.op()
+  
   async resetAllContent(): Promise<void> {
     const session = this.getSession();
 
     try {
-      // Delete all pages from Neo4j
-      await session.run(`
-        MATCH (p:Page)
-        DETACH DELETE p
+      // First, get count of content nodes to be deleted for logging
+      const countResult = await session.run(`
+        MATCH (n)
+        WHERE n:Page OR n:Chunk OR n:Course OR n:CourseChunk
+        RETURN
+          count(CASE WHEN n:Page THEN 1 END) as pageCount,
+          count(CASE WHEN n:Chunk THEN 1 END) as chunkCount,
+          count(CASE WHEN n:Course THEN 1 END) as courseCount,
+          count(CASE WHEN n:CourseChunk THEN 1 END) as courseChunkCount,
+          count(n) as totalNodes
       `);
 
-      // Delete all files
+      const record = countResult.records[0];
+      const pageCount = record?.get('pageCount')?.toNumber() || 0;
+      const chunkCount = record?.get('chunkCount')?.toNumber() || 0;
+      const courseCount = record?.get('courseCount')?.toNumber() || 0;
+      const courseChunkCount = record?.get('courseChunkCount')?.toNumber() || 0;
+      const totalNodes = record?.get('totalNodes')?.toNumber() || 0;
+
+      console.log(`🗑️ Preparing to delete: ${pageCount} pages, ${chunkCount} chunks, ${courseCount} courses, ${courseChunkCount} course chunks`);
+      console.log(`💾 Preserving: ChatMessage and Setting nodes`);
+
+      // Delete Page, Chunk, Course, and CourseChunk nodes (which contain vector embeddings)
+      // This preserves chat history and settings while clearing all crawled content
+      await session.run(`
+        MATCH (n)
+        WHERE n:Page OR n:Chunk OR n:Course OR n:CourseChunk
+        DETACH DELETE n
+      `);
+
+      // Additional cleanup: Delete any orphaned nodes that were connected only to content nodes
+      // but preserve ChatMessage and Setting nodes
+      await session.run(`
+        MATCH (n)
+        WHERE NOT EXISTS((n)--())
+          AND NOT n:ChatMessage
+          AND NOT n:Setting
+        DELETE n
+      `);
+
+      // Delete all files from the content storage directory
       try {
         await fs.rm(config.contentStoragePath, { recursive: true, force: true });
         await fs.mkdir(config.contentStoragePath, { recursive: true });
+        console.log(`✅ Deleted content storage directory: ${config.contentStoragePath}`);
       } catch (e) {
-        console.warn('Failed to delete content directory:', e);
+        console.warn('⚠️ Failed to delete content directory:', e);
       }
 
-      weave.logEvent('all_content_reset');
+      console.log(`✅ Reset complete: Deleted ${totalNodes} content nodes (${pageCount} pages with vectors, ${chunkCount} chunks with vectors)`);
+      console.log(`💾 Preserved: Chat history and settings`);
+
+      weave.logEvent('all_content_reset', {
+        pageCount,
+        chunkCount,
+        totalContentNodesDeleted: totalNodes,
+        vectorEmbeddingsCleared: pageCount + chunkCount,
+        storageCleared: true,
+        chatHistoryPreserved: true,
+        settingsPreserved: true
+      });
+    } finally {
+      await session.close();
+    }
+  }
+
+  // ===== COURSE STORAGE METHODS =====
+
+  /**
+   * Save course to Neo4j with metadata
+   */
+  
+  async saveCourse(
+    url: string,
+    title: string,
+    markdown: string,
+    metadata: Partial<CourseMetadata> = {}
+  ): Promise<CourseMetadata> {
+    const session = this.getSession();
+
+    try {
+      // Generate course metadata
+      const urlObj = new URL(url);
+      const slug = this.generateSlug(url);
+      const id = uuidv4();
+      const now = new Date().toISOString();
+
+      const courseMetadata: CourseMetadata = {
+        id,
+        url,
+        title,
+        description: metadata.description || null,
+        slug,
+        difficulty: metadata.difficulty || null,
+        duration: metadata.duration || null,
+        topics: metadata.topics || [],
+        instructor: metadata.instructor || null,
+        createdAt: now,
+        updatedAt: now,
+        lastCrawledAt: now,
+        isActive: true,
+      };
+
+      // Generate course embedding
+      const courseEmbedding = await llmService.generateEmbedding(markdown);
+
+      // Save course to Neo4j
+      await session.run(
+        `
+        MERGE (c:Course {url: $url})
+        SET c.id = $id,
+            c.title = $title,
+            c.description = $description,
+            c.slug = $slug,
+            c.difficulty = $difficulty,
+            c.duration = $duration,
+            c.topics = $topics,
+            c.instructor = $instructor,
+            c.createdAt = $createdAt,
+            c.updatedAt = $updatedAt,
+            c.lastCrawledAt = $lastCrawledAt,
+            c.isActive = $isActive,
+            c.embedding = $embedding
+        RETURN c
+        `,
+        { ...courseMetadata, embedding: courseEmbedding }
+      );
+
+      // Create chunks for the course content
+      const chunks = chunkMarkdown(markdown, 1000);
+      for (const chunk of chunks) {
+        const chunkId = uuidv4();
+        const chunkEmbedding = await llmService.generateEmbedding(chunk.text);
+
+        await session.run(`
+          MATCH (c:Course {id: $courseId})
+          CREATE (cc:CourseChunk {
+            id: $chunkId,
+            courseId: $courseId,
+            text: $text,
+            chunkIndex: $chunkIndex,
+            startPosition: $startPosition,
+            endPosition: $endPosition,
+            embedding: $embedding,
+            section: $section,
+            createdAt: datetime()
+          })
+          CREATE (c)-[:HAS_CHUNK]->(cc)
+          RETURN cc.id as chunkId
+        `, {
+          courseId: id,
+          chunkId,
+          text: chunk.text,
+          chunkIndex: chunk.index,
+          startPosition: chunk.startPosition,
+          endPosition: chunk.endPosition,
+          embedding: chunkEmbedding,
+          section: metadata.section || null
+        });
+      }
+
+      // Save markdown to file system (in courses subdirectory)
+      await this.saveCourseMarkdownFile(slug, markdown);
+
+      // Save metadata to file system
+      await this.saveCourseMetadataFile(slug, courseMetadata);
+
+      weave.logEvent('course_saved', {
+        id: courseMetadata.id,
+        url,
+        slug: courseMetadata.slug,
+        chunksCreated: chunks.length
+      });
+
+      return courseMetadata;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get all courses
+   */
+  
+  async getAllCourses(): Promise<CourseMetadata[]> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(`
+        MATCH (c:Course)
+        RETURN c
+        ORDER BY c.createdAt DESC
+      `);
+
+      return result.records.map(record => {
+        const node = record.get('c');
+        return node.properties as CourseMetadata;
+      });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Search for similar courses using vector similarity
+   */
+  
+  async searchSimilarCourses(query: string, limit: number = 10): Promise<CourseMetadata[]> {
+    const session = this.getSession();
+
+    try {
+      // Generate embedding for the search query
+      const queryEmbedding = await llmService.generateEmbedding(query);
+
+      // Use vector similarity search to find similar courses
+      // Calculate cosine similarity manually since GDS might not be available
+      const result = await session.run(`
+        MATCH (c:Course)
+        WHERE c.embedding IS NOT NULL
+        WITH c,
+             reduce(dot = 0.0, i in range(0, size(c.embedding)-1) | dot + c.embedding[i] * $queryEmbedding[i]) AS dotProduct,
+             sqrt(reduce(norm1 = 0.0, i in range(0, size(c.embedding)-1) | norm1 + c.embedding[i] * c.embedding[i])) AS norm1,
+             sqrt(reduce(norm2 = 0.0, i in range(0, size($queryEmbedding)-1) | norm2 + $queryEmbedding[i] * $queryEmbedding[i])) AS norm2
+        WITH c, dotProduct / (norm1 * norm2) AS similarity
+        RETURN c, similarity
+        ORDER BY similarity DESC
+        LIMIT $limit
+      `, {
+        queryEmbedding,
+        limit: neo4j.int(limit)
+      });
+
+      return result.records.map(record => {
+        const node = record.get('c');
+        const similarity = record.get('similarity');
+        const courseData = node.properties as CourseMetadata;
+
+        // Add similarity score for debugging/ranking
+        (courseData as any).similarity = similarity;
+
+        return courseData;
+      });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get course by ID
+   */
+  
+  async getCourseById(id: string): Promise<CourseMetadata | null> {
+    const session = this.getSession();
+
+    try {
+      const result = await session.run(
+        `MATCH (c:Course {id: $id}) RETURN c`,
+        { id }
+      );
+
+      if (result.records.length === 0) {
+        return null;
+      }
+
+      const node = result.records[0].get('c');
+      return node.properties as CourseMetadata;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete course and all related chunks
+   */
+  
+  async deleteCourse(id: string): Promise<void> {
+    const session = this.getSession();
+
+    try {
+      // Get course metadata for file cleanup
+      const courseResult = await session.run(
+        `MATCH (c:Course {id: $id}) RETURN c.slug as slug`,
+        { id }
+      );
+
+      if (courseResult.records.length === 0) {
+        throw new Error(`Course with id ${id} not found`);
+      }
+
+      const slug = courseResult.records[0].get('slug');
+
+      // Delete course and all related chunks
+      await session.run(`
+        MATCH (c:Course {id: $id})
+        OPTIONAL MATCH (c)-[:HAS_CHUNK]->(cc:CourseChunk)
+        DETACH DELETE c, cc
+      `, { id });
+
+      // Delete course files
+      await this.deleteCourseFiles(slug);
+
+      weave.logEvent('course_deleted', { id, slug });
     } finally {
       await session.close();
     }
@@ -648,7 +1163,7 @@ export class StorageService {
   /**
    * Get all graph nodes
    */
-  @weave.op()
+  
   async getGraphNodes(): Promise<any[]> {
     const session = this.getSession();
 
@@ -675,7 +1190,7 @@ export class StorageService {
   /**
    * Get all graph edges
    */
-  @weave.op()
+  
   async getGraphEdges(): Promise<any[]> {
     const session = this.getSession();
 
@@ -703,7 +1218,7 @@ export class StorageService {
   /**
    * Search graph nodes by label
    */
-  @weave.op()
+  
   async searchGraphNodes(query: string, limit: number = 50): Promise<any> {
     const session = this.getSession();
 
@@ -738,7 +1253,7 @@ export class StorageService {
   /**
    * Get node type statistics
    */
-  @weave.op()
+  
   async getNodeTypeStats(): Promise<Record<string, number>> {
     const session = this.getSession();
 
@@ -765,7 +1280,7 @@ export class StorageService {
   /**
    * Delete a graph node and optionally its connections
    */
-  @weave.op()
+  
   async deleteGraphNode(nodeId: string, cascade: boolean = false): Promise<{ deletedNodes: number; deletedEdges: number }> {
     const session = this.getSession();
 
@@ -806,4 +1321,3 @@ export class StorageService {
     }
   }
 }
-

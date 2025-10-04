@@ -25,13 +25,13 @@ interface GraphEdge {
   properties?: any;
 }
 
-const CONTENT_NODE_TYPES: Record<string, { color: string }> = {
-  page: { color: '#3B82F6' },
-  video: { color: '#EF4444' },
-  transcript: { color: '#F97316' },
-  chunk: { color: '#6B7280' },
-  entity: { color: '#10B981' },
-  topic: { color: '#A855F7' },
+const CONTENT_NODE_TYPES: Record<string, { color: string; label: string }> = {
+  page: { color: '#3B82F6', label: 'Page' },
+  video: { color: '#EF4444', label: 'Video' },
+  transcript: { color: '#F97316', label: 'Transcript' },
+  chunk: { color: '#6B7280', label: 'Chunk' },
+  entity: { color: '#10B981', label: 'Entity' },
+  topic: { color: '#A855F7', label: 'Topic' },
 };
 
 type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;

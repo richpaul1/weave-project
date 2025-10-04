@@ -160,25 +160,41 @@ class StorageService:
     
     @weave.op()
     def search_by_vector(
-        self, 
-        embedding: List[float], 
+        self,
+        embedding: List[float],
         limit: int = 5,
         min_score: float = 0.0
     ) -> List[Dict[str, Any]]:
         """
         Perform vector similarity search on chunk embeddings.
-        
+
         Args:
             embedding: Query embedding vector
             limit: Maximum number of results to return
             min_score: Minimum similarity score threshold
-            
+
         Returns:
             List of chunks with similarity scores and page metadata
         """
+        print(f"🔍 Storage Service: Starting vector search")
+        print(f"   Embedding length: {len(embedding)}")
+        print(f"   Limit: {limit}")
+        print(f"   Min score: {min_score}")
+
         with self._get_session() as session:
+            # First, let's check how many chunks exist in total
+            count_result = session.run("MATCH (c:Chunk) RETURN count(c) as total_chunks")
+            total_chunks = count_result.single()["total_chunks"]
+            print(f"   Total chunks in database: {total_chunks}")
+
+            # Check how many chunks have embeddings
+            embedding_count_result = session.run("MATCH (c:Chunk) WHERE c.embedding IS NOT NULL RETURN count(c) as chunks_with_embeddings")
+            chunks_with_embeddings = embedding_count_result.single()["chunks_with_embeddings"]
+            print(f"   Chunks with embeddings: {chunks_with_embeddings}")
+
             # Note: This uses cosine similarity (built-in Neo4j 5.x function)
             # In production, you'd use a vector index for better performance
+            print(f"🔎 Storage Service: Executing vector similarity query...")
             result = session.run("""
                 MATCH (c:Chunk)<-[:HAS_CHUNK]-(p:Page)
                 WHERE c.embedding IS NOT NULL
@@ -191,7 +207,7 @@ class StorageService:
                 ORDER BY score DESC
                 LIMIT $limit
             """, embedding=embedding, limit=limit, min_score=min_score)
-            
+
             results = []
             for record in result:
                 results.append({
@@ -204,7 +220,28 @@ class StorageService:
                     "domain": record["domain"],
                     "score": record["score"]
                 })
-            
+
+            print(f"📊 Storage Service: Vector search results:")
+            print(f"   Results found: {len(results)}")
+            if results:
+                print(f"   Top 3 scores: {[r['score'] for r in results[:3]]}")
+                print(f"   Top 3 titles: {[r['title'][:50] if r['title'] else 'No title' for r in results[:3]]}")
+            else:
+                print(f"   ⚠️ No results found with min_score {min_score}")
+                # Let's check what the best score would be without the threshold
+                best_score_result = session.run("""
+                    MATCH (c:Chunk)<-[:HAS_CHUNK]-(p:Page)
+                    WHERE c.embedding IS NOT NULL
+                    WITH c, p,
+                         vector.similarity.cosine(c.embedding, $embedding) as score
+                    RETURN max(score) as best_score
+                """, embedding=embedding)
+                best_score_record = best_score_result.single()
+                if best_score_record and best_score_record["best_score"]:
+                    print(f"   Best possible score: {best_score_record['best_score']}")
+                else:
+                    print(f"   No embeddings found to compare against")
+
             return results
     
     @weave.op()
@@ -483,15 +520,27 @@ class StorageService:
             List of relevant pages with scores above threshold
         """
         with self._get_session() as session:
-            # Query for pages with vector similarity using manual cosine similarity
+            print(f"🔍 Storage Service: Starting page-level vector search")
+            print(f"   Embedding length: {len(embedding)}")
+            print(f"   Limit: {limit}")
+            print(f"   Score threshold: {score_threshold}")
+
+            # Count total pages and pages with embeddings
+            total_pages_result = session.run("MATCH (p:Page) RETURN count(p) as total_pages")
+            total_pages = total_pages_result.single()["total_pages"]
+
+            pages_with_embeddings_result = session.run("MATCH (p:Page) WHERE p.embedding IS NOT NULL RETURN count(p) as pages_with_embeddings")
+            pages_with_embeddings = pages_with_embeddings_result.single()["pages_with_embeddings"]
+
+            print(f"   Total pages in database: {total_pages}")
+            print(f"   Pages with embeddings: {pages_with_embeddings}")
+
+            # Query for pages with vector similarity using Neo4j's built-in function
+            print(f"🔎 Storage Service: Executing page-level vector similarity query...")
             query = """
             MATCH (p:Page)
             WHERE p.embedding IS NOT NULL
-            WITH p,
-                 reduce(dot = 0.0, i in range(0, size(p.embedding)-1) | dot + p.embedding[i] * $embedding[i]) as dotProduct,
-                 sqrt(reduce(norm1 = 0.0, i in range(0, size(p.embedding)-1) | norm1 + p.embedding[i] * p.embedding[i])) as norm1,
-                 sqrt(reduce(norm2 = 0.0, i in range(0, size($embedding)-1) | norm2 + $embedding[i] * $embedding[i])) as norm2
-            WITH p, dotProduct / (norm1 * norm2) AS score
+            WITH p, vector.similarity.cosine(p.embedding, $embedding) as score
             WHERE score >= $score_threshold
             RETURN p.id as id, p.url as url, p.title as title, p.domain as domain,
                    p.slug as slug, p.createdAt as createdAt, score
@@ -516,6 +565,24 @@ class StorageService:
                     "createdAt": self._convert_neo4j_datetime(record["createdAt"]),
                     "score": record["score"]
                 })
+
+            print(f"📊 Storage Service: Page-level vector search results:")
+            print(f"   Results found: {len(pages)}")
+            if pages:
+                print(f"   Top 3 scores: {[p['score'] for p in pages[:3]]}")
+                print(f"   Top 3 titles: {[p['title'] for p in pages[:3]]}")
+            else:
+                print(f"   ⚠️ No pages found with score >= {score_threshold}")
+                # Check what the best possible score would be
+                best_score_result = session.run("""
+                    MATCH (p:Page)
+                    WHERE p.embedding IS NOT NULL
+                    WITH p, vector.similarity.cosine(p.embedding, $embedding) as score
+                    RETURN max(score) as best_score
+                """, embedding=embedding)
+                best_score_record = best_score_result.single()
+                if best_score_record and best_score_record["best_score"]:
+                    print(f"   Best possible page score: {best_score_record['best_score']}")
 
             return pages
 

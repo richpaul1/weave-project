@@ -1,7 +1,7 @@
 {
   "name": "weave-project",
   "version": "1.0.0",
-  "description": "Dual-backend RAG application with comprehensive Weave instrumentation",
+  "description": "Admin and Client RAG application with comprehensive Weave instrumentation",
   "private": true,
   "workspaces": [
     "admin",
@@ -11,31 +11,14 @@
   "scripts": {
     "preinstall": "node scripts/check-prerequisites.js || true",
     "install:all": "npm install && cd admin && npm install && cd client && npm install && cd ../../agent && pip install -r requirements.txt && cd client && npm install",
-    "dev": "node scripts/dev-with-urls.js",
-    "dev:raw": "concurrently -n \"admin,agent-be,agent-fe\" -c \"blue,green,yellow\" \"npm run dev:admin\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
-    "dev:agent-backend": "cd agent && python start_server.py",
-    "dev:agent-frontend": "cd agent/client && npx vite",
     "dev:admin": "cd admin && npm run dev",
     "dev:agent": "concurrently -n \"agent-be,agent-fe\" -c \"green,yellow\" \"npm run dev:agent-backend\" \"npm run dev:agent-frontend\"",
-    "start": "./scripts/start.sh",
-    "start:all": "./scripts/start-all.sh",
     "build": "npm run build:admin && npm run build:agent",
     "build:admin": "cd admin && npm run build",
     "build:agent": "cd agent/client && npm run build",
     "test": "npm run test:admin && npm run test:agent",
     "test:admin": "cd admin && npm test",
     "test:agent": "cd agent && python -m pytest tests/",
-    "test:unit": "npm run test:unit:admin && npm run test:unit:agent",
-    "test:unit:admin": "cd admin && npm run test:unit",
-    "test:unit:agent": "cd agent && python -m pytest tests/unit/",
-    "test:integration": "npm run test:integration:admin && npm run test:integration:agent",
-    "test:integration:admin": "cd admin && npm run test:integration",
-    "test:integration:agent": "cd agent && python -m pytest tests/integration/",
-    "test:functional": "npm run test:functional:admin && npm run test:functional:agent",
-    "test:functional:admin": "cd admin && npm run test:functional",
-    "test:functional:agent": "cd agent && python -m pytest tests/functional/",
-    "test:weave": "cd agent && python -m pytest tests/integration/test_weave_instrumentation.py -v",
-    "test:ui-api": "cd agent && python -m pytest tests/integration/test_ui_api_integration.py -v",
     "test:coverage": "npm run test:coverage:admin && npm run test:coverage:agent",
     "test:coverage:admin": "cd admin && npm run test:coverage",
     "test:coverage:agent": "cd agent && python -m pytest --cov=app --cov-report=html --cov-report=term",
@@ -46,9 +29,6 @@
     "clean:admin": "cd admin && rm -rf node_modules dist coverage && cd client && rm -rf node_modules dist",
     "clean:agent": "cd agent && rm -rf __pycache__ .pytest_cache htmlcov .coverage && cd client && rm -rf node_modules dist",
     "health": "npm run health:admin && npm run health:agent",
-    "health:admin": "curl -s http://localhost:3002/health | jq . || echo '❌ Admin backend not running'",
-    "health:agent": "curl -s http://localhost:8000/health | jq . || echo '❌ Agent backend not running'",
-    "check": "node scripts/check-prerequisites.js",
     "check:prereqs": "node scripts/check-prerequisites.js"
   },
   "devDependencies": {
@@ -60,7 +40,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/weave-project"
+    "url": "https://github.com/richpaul1/weave-project"
   },
   "keywords": [
     "rag",

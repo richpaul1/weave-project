@@ -11,7 +11,7 @@ const router = Router();
  * Get all pages
  */
 router.get('/pages', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const pages = await storage.getAllPages();
@@ -20,7 +20,6 @@ router.get('/pages', async (req: Request, res: Response) => {
     console.error('Error getting pages:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -29,7 +28,7 @@ router.get('/pages', async (req: Request, res: Response) => {
  * Get page by ID
  */
 router.get('/pages/:id', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -44,7 +43,6 @@ router.get('/pages/:id', async (req: Request, res: Response) => {
     console.error('Error getting page:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -53,7 +51,7 @@ router.get('/pages/:id', async (req: Request, res: Response) => {
  * Get page markdown content
  */
 router.get('/pages/:id/markdown', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -80,7 +78,6 @@ router.get('/pages/:id/markdown', async (req: Request, res: Response) => {
     console.error('Error getting markdown:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -89,7 +86,7 @@ router.get('/pages/:id/markdown', async (req: Request, res: Response) => {
  * Delete a page
  */
 router.delete('/pages/:id', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const { id } = req.params;
@@ -100,7 +97,6 @@ router.delete('/pages/:id', async (req: Request, res: Response) => {
     console.error('Error deleting page:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 
@@ -109,7 +105,7 @@ router.delete('/pages/:id', async (req: Request, res: Response) => {
  * Get content statistics
  */
 router.get('/stats', async (req: Request, res: Response) => {
-  const storage = new StorageService();
+  const storage = StorageService.getInstance();
   
   try {
     const pages = await storage.getAllPages();
@@ -134,7 +130,6 @@ router.get('/stats', async (req: Request, res: Response) => {
     console.error('Error getting stats:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    await storage.close();
   }
 });
 

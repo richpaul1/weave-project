@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { MessageCircle, Plus, Trash2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { v4 as uuidv4 } from "uuid";
@@ -102,11 +103,16 @@ export default function SessionsList({ currentSessionId }: SessionsListProps) {
     return date.toLocaleDateString();
   };
 
+  const trimText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + "...";
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with New Chat button */}
       <div className="p-4 border-b border-border">
-        <Button 
+        <Button
           onClick={handleNewChat}
           className="w-full justify-start"
           variant="outline"
@@ -155,14 +161,28 @@ export default function SessionsList({ currentSessionId }: SessionsListProps) {
                       </span>
                     </div>
                     
-                    <p className="text-sm font-medium text-foreground truncate mb-1">
-                      {session.title}
-                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-sm font-medium text-foreground mb-1 cursor-default">
+                          {trimText(session.title, 35)}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs">
+                        <p>{session.title}</p>
+                      </TooltipContent>
+                    </Tooltip>
                     
                     {session.preview && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {session.preview}
-                      </p>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="text-xs text-muted-foreground cursor-default">
+                            {trimText(session.preview, 60)}
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-sm">
+                          <p className="whitespace-pre-wrap">{session.preview}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
 

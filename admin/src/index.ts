@@ -1,20 +1,17 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { config } from './config.js';
 import { initializeWeave } from './weave/init.js';
+import { WeaveService } from './weave/weaveService.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
 import contentRoutes from './routes/contentRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
 import graphRoutes from './routes/graphRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
-import { setupVite, serveStatic, log } from './vite.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { setupVite, serveStatic } from './vite.js';
 
 const app = express();
 const server = createServer(app);
@@ -28,7 +25,7 @@ app.use(cors({
     // Allow same-origin requests and dev server
     const allowedOrigins = [
       `http://localhost:${config.port}`,
-      `http://localhost:${config.clientPort}`, // Admin client frontend
+      'http://localhost:3003', // Admin client frontend
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -42,14 +39,29 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+// Request logging middleware (filter out Vite internal requests)
+app.use((req, _res, next) => {
+  // Skip logging for Vite internal requests and static assets
+  const skipPaths = [
+    '/@fs/',           // Vite file system access
+    '/@vite/',         // Vite internal modules
+    '/@id/',           // Vite module IDs
+    '/node_modules/',  // Node modules
+    '/__vite_ping',    // Vite ping
+    '/favicon.ico',    // Favicon requests
+  ];
+
+  const shouldSkip = skipPaths.some(path => req.path.startsWith(path)) ||
+                     req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/);
+
+  if (!shouldSkip) {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  }
   next();
 });
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     service: 'admin-backend',
@@ -63,15 +75,26 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
+// API health check endpoint (to handle /api/health requests)
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    service: 'admin-backend',
+    timestamp: new Date().toISOString(),
+    message: 'Admin backend is healthy'
+  });
+});
+
 // API routes
 app.use('/api/crawler', crawlerRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/courses', courseRoutes);
 app.use('/api/graph', graphRoutes);
 app.use('/api/duplicates', graphRoutes);
 app.use('/api/settings', settingsRoutes);
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: any) => {
+app.use((err: Error, _req: Request, res: Response, _next: any) => {
   console.error('Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
@@ -96,12 +119,24 @@ async function startServer() {
     console.log('Initializing Weave...');
     await initializeWeave();
 
+    // Initialize WeaveService singleton
+    console.log('Initializing WeaveService...');
+    new WeaveService();
+    console.log('WeaveService initialized');
+
     // Initialize database schema
     console.log('Initializing database schema...');
-    const storage = new StorageService();
-    await storage.initializeSchema();
-    await storage.close();
-    console.log('Database schema initialized');
+    const storage = StorageService.getInstance();
+
+    // Initialize database schema
+    try {
+      await storage.initializeSchema();
+      console.log('Database schema initialized');
+    } catch (error) {
+      console.error('Failed to initialize database schema:', error);
+      throw error;
+    }
+    // Note: Don't close the storage connection as it's a singleton used by all routes
 
     // Setup Vite in development or serve static files in production
     const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -142,6 +177,13 @@ async function startServer() {
       console.log(`  GET    /api/content/pages/:id/markdown`);
       console.log(`  DELETE /api/content/pages/:id`);
       console.log(`  GET    /api/content/stats`);
+      console.log(`  GET    /api/courses`);
+      console.log(`  GET    /api/courses/stats`);
+      console.log(`  GET    /api/courses/search`);
+      console.log(`  GET    /api/courses/:id`);
+      console.log(`  GET    /api/courses/:id/markdown`);
+      console.log(`  POST   /api/courses/crawl`);
+      console.log(`  DELETE /api/courses/:id`);
       console.log(`  GET    /api/graph/nodes`);
       console.log(`  GET    /api/graph/edges`);
       console.log(`  GET    /api/graph/search`);

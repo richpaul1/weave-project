@@ -35,7 +35,6 @@ router.get('/chat', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   } finally {
-    await settingsService.close();
   }
 });
 
@@ -71,7 +70,6 @@ router.put('/chat', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   } finally {
-    await settingsService.close();
   }
 });
 
@@ -96,7 +94,6 @@ router.post('/chat/reset', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   } finally {
-    await settingsService.close();
   }
 });
 
@@ -127,7 +124,6 @@ router.get('/health', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   } finally {
-    await settingsService.close();
   }
 });
 

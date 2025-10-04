@@ -2,8 +2,11 @@
 Weave Utilities
 
 Helper functions for Weave tracing and metadata management.
+Enhanced with tool execution tracing capabilities.
 """
 from typing import Optional, Dict, Any
+import weave
+import time
 
 
 def format_session_metadata(call) -> str:
@@ -150,3 +153,93 @@ def llm_operation_name(call):
 def retrieval_operation_name(call):
     """Custom attribute name for retrieval operations."""
     return format_retrieval_metadata(call)
+
+
+def format_tool_metadata(call) -> str:
+    """
+    Custom attribute formatter for tool execution operations.
+
+    Args:
+        call: Weave call object with attributes
+
+    Returns:
+        Formatted string with tool execution details
+    """
+    if not hasattr(call, 'attributes'):
+        return "unknown_tool_operation"
+
+    attrs = call.attributes
+    tool_name = attrs.get("tool_name", "unknown_tool")
+    operation_type = attrs.get("operation_type", "tool")
+    session_id = attrs.get("session_id", "default")
+
+    # Truncate session ID for readability
+    short_session = session_id[:8] if len(session_id) > 8 else session_id
+
+    # Add success indicator if available
+    success_indicator = ""
+    if "execution_success" in attrs:
+        success_indicator = "✅" if attrs["execution_success"] else "❌"
+
+    return f"{operation_type}__{tool_name}__{short_session}{success_indicator}"
+
+
+def tool_operation_name(call):
+    """Custom attribute name for tool operations."""
+    return format_tool_metadata(call)
+
+
+def create_tool_trace_summary(tool_calls: list) -> Dict[str, Any]:
+    """
+    Create a comprehensive summary of tool executions for Weave dashboard filtering.
+
+    Args:
+        tool_calls: List of tool call results
+
+    Returns:
+        Dictionary with tool execution summary for easy filtering
+    """
+    summary = {
+        "total_tool_calls": len(tool_calls),
+        "tools_used": [],
+        "tool_categories": [],
+        "successful_calls": 0,
+        "failed_calls": 0,
+        "learning_tools_used": False,
+        "general_tools_used": False,
+        "courses_found_total": 0,
+        "knowledge_chunks_total": 0,
+    }
+
+    for call in tool_calls:
+        tool_name = call.get("tool_name", "unknown")
+        result = call.get("result", {})
+
+        # Track tools used
+        if tool_name not in summary["tools_used"]:
+            summary["tools_used"].append(tool_name)
+
+        # Track tool categories
+        if tool_name == "search_courses":
+            summary["learning_tools_used"] = True
+            if "learning" not in summary["tool_categories"]:
+                summary["tool_categories"].append("learning")
+        elif tool_name == "search_knowledge":
+            summary["general_tools_used"] = True
+            if "general" not in summary["tool_categories"]:
+                summary["tool_categories"].append("general")
+
+        # Track success/failure
+        if result.get("success", False):
+            summary["successful_calls"] += 1
+
+            # Extract specific metrics
+            data = result.get("data", {})
+            if tool_name == "search_courses":
+                summary["courses_found_total"] += len(data.get("courses", []))
+            elif tool_name == "search_knowledge":
+                summary["knowledge_chunks_total"] += data.get("num_chunks", 0)
+        else:
+            summary["failed_calls"] += 1
+
+    return summary

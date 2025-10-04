@@ -16,7 +16,14 @@ from app.services.storage import StorageService
 from app.services.llm_service import LLMService
 from app.services.retrieval_service import RetrievalService
 from app.services.rag_service import RAGService
+from app.services.enhanced_rag_service import EnhancedRAGService
+from app.services.course_service import CourseService
+from app.services.query_classifier import QueryClassifier
 from app.services.hallucination_service import HallucinationService
+from app.services.tool_calling_service import ToolCallingService
+from app.tools.tool_executor import ToolExecutor
+from app.utils.weave_utils import create_tool_trace_summary
+from app import config
 
 
 # Request/Response models
@@ -45,31 +52,54 @@ storage_service: Optional[StorageService] = None
 llm_service: Optional[LLMService] = None
 retrieval_service: Optional[RetrievalService] = None
 rag_service: Optional[RAGService] = None
+enhanced_rag_service: Optional[EnhancedRAGService] = None
+course_service: Optional[CourseService] = None
 hallucination_service: Optional[HallucinationService] = None
+tool_calling_service: Optional[ToolCallingService] = None
 
 
 def init_services():
     """Initialize all services"""
-    global storage_service, llm_service, retrieval_service, rag_service, hallucination_service
-    
+    global storage_service, llm_service, retrieval_service, rag_service, enhanced_rag_service, course_service, hallucination_service, tool_calling_service
+
     if storage_service is None:
         storage_service = StorageService()
         storage_service.connect()
-        
+
         llm_service = LLMService(provider="ollama")
-        
+
         retrieval_service = RetrievalService(
             storage=storage_service,
             llm_service=llm_service
         )
-        
+
+        # Initialize both standard and enhanced RAG services
         rag_service = RAGService(
             retrieval_service=retrieval_service,
             llm_service=llm_service
         )
-        
+
+        course_service = CourseService(config.ADMIN_BASE_URL)
+
+        enhanced_rag_service = EnhancedRAGService(
+            retrieval_service=retrieval_service,
+            llm_service=llm_service,
+            course_service=course_service
+        )
+
         hallucination_service = HallucinationService(
             llm_service=llm_service
+        )
+
+        # Initialize tool calling service
+        tool_executor = ToolExecutor(
+            course_service=course_service,
+            retrieval_service=retrieval_service
+        )
+
+        tool_calling_service = ToolCallingService(
+            llm_service=llm_service,
+            tool_executor=tool_executor
         )
 
 
@@ -85,6 +115,12 @@ async def chat_message(request: ChatRequest):
     Returns:
         Chat response with answer, sources, and metadata
     """
+    print(f"🚀 Chat API: Received message request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+    print(f"   Top K: {request.top_k}")
+    print(f"   Stream: {request.stream}")
+
     init_services()
 
     try:
@@ -94,12 +130,18 @@ async def chat_message(request: ChatRequest):
         with weave.thread(thread_id) as thread_ctx:
             print(f"🧵 Processing message in thread: {thread_ctx.thread_id}")
 
-            # Process query through RAG pipeline (this becomes a turn in the thread)
-            result = await rag_service.process_query(
+            # Process query through Enhanced RAG pipeline (this becomes a turn in the thread)
+            print(f"🔄 Chat API: Starting Enhanced RAG pipeline...")
+            result = await enhanced_rag_service.process_query(
                 query=request.query,
                 session_id=request.session_id,
                 top_k=request.top_k
             )
+
+            print(f"📊 Chat API: RAG pipeline results:")
+            print(f"   Response length: {len(result['response'])}")
+            print(f"   Sources count: {len(result['sources'])}")
+            print(f"   Metadata: {result['metadata']}")
 
             # Run hallucination detection (nested call within the thread)
             hallucination_result = await hallucination_service.detect_hallucination(
@@ -179,9 +221,9 @@ async def chat_stream(request: ChatRequest):
                 # Send user message confirmation
                 yield f"data: {json.dumps({'type': 'user_saved', 'message_id': user_message_id})}\n\n"
 
-                # Step 2: Process AI response through RAG pipeline
-                print(f"🧠 Starting AI processing...")
-                async for event in rag_service.process_query_streaming(
+                # Step 2: Process AI response through Enhanced RAG pipeline
+                print(f"🧠 Starting Enhanced AI processing...")
+                async for event in enhanced_rag_service.process_query_streaming(
                     query=request.query,
                     session_id=request.session_id,
                     top_k=request.top_k
@@ -411,4 +453,166 @@ async def get_recent_sessions(limit: int = 10):
         return sessions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/message-with-tools", response_model=ChatResponse)
+async def chat_message_with_tools(request: ChatRequest):
+    """
+    Process a chat message using LLM tool calling.
+    The LLM decides which tools to use based on the query.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Chat response with answer, sources, and metadata including tool usage
+    """
+    print(f"🔧 Chat API: Received tool calling request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    try:
+        # Use session_id as thread_id to track conversation context
+        thread_id = request.session_id or "default_session"
+
+        with weave.thread(thread_id) as thread_ctx:
+            print(f"🧵 Processing tool calling in thread: {thread_ctx.thread_id}")
+
+            # Process query with tool calling
+            result = await tool_calling_service.process_query_with_tools(
+                query=request.query,
+                session_id=request.session_id,
+                max_tool_calls=3
+            )
+
+            # Create comprehensive tool trace summary for Weave
+            tool_trace_summary = create_tool_trace_summary(result["tool_calls_made"])
+
+            # Store the interaction with enhanced tool metadata
+            storage_service.create_chat_message(
+                message_data={
+                    "query": request.query,
+                    "response": result["response"],
+                    "sources": [],  # Tools provide their own context
+                    "metadata": {
+                        "tool_calls": result["tool_calls_made"],
+                        "tools_used": result["metadata"]["tools_used"],
+                        "num_tool_calls": result["metadata"]["num_tool_calls"],
+                        "tool_trace_summary": tool_trace_summary,
+                        "tool_calling_session": True,
+                    }
+                },
+                session_id=request.session_id or "default"
+            )
+
+            return ChatResponse(
+                response=result["response"],
+                sources=[],
+                metadata={
+                    "session_id": request.session_id,
+                    "thread_id": thread_ctx.thread_id,
+                    "tool_calling": True,
+                    "tool_calls_made": result["metadata"]["num_tool_calls"],
+                    "tools_used": result["metadata"]["tools_used"],
+                    "llm_tokens": result["metadata"]["llm_tokens"],
+                    "tool_trace_summary": tool_trace_summary,
+                    # Enhanced flags for Weave filtering
+                    "search_courses_used": result["metadata"].get("search_courses_used", False),
+                    "search_knowledge_used": result["metadata"].get("search_knowledge_used", False),
+                    "learning_query": result["metadata"].get("learning_query", False),
+                    "general_query": result["metadata"].get("general_query", False),
+                }
+            )
+
+    except Exception as e:
+        print(f"❌ Chat API: Tool calling failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Tool calling failed: {str(e)}")
+
+
+@router.post("/stream-with-tools")
+async def stream_chat_with_tools(request: ChatRequest):
+    """
+    Stream a chat response using LLM tool calling.
+    The LLM decides which tools to use and streams the process.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Streaming response with tool execution and final answer
+    """
+    print(f"🔧 Chat API: Received streaming tool calling request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    async def generate_tool_calling_stream():
+        """Generate streaming response with tool calling."""
+        try:
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Processing streaming tool calling in thread: {thread_ctx.thread_id}")
+
+                full_response = ""
+                tool_calls_made = 0
+                tools_used = []
+
+                # Stream tool calling process
+                async for event in tool_calling_service.process_query_with_tools_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    max_tool_calls=3
+                ):
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                    # Track response and tool usage
+                    if event["type"] == "response":
+                        full_response += event["data"]["text"]
+                    elif event["type"] == "tool_execution_result":
+                        tool_calls_made += 1
+                        tool_name = event["data"]["tool_name"]
+                        if tool_name not in tools_used:
+                            tools_used.append(tool_name)
+
+                # Store the interaction
+                storage_service.create_chat_message(
+                    message_data={
+                        "query": request.query,
+                        "response": full_response,
+                        "sources": [],  # Tools provide their own context
+                        "metadata": {
+                            "tool_calls_made": tool_calls_made,
+                            "tools_used": tools_used,
+                            "streaming": True
+                        }
+                    },
+                    session_id=request.session_id or "default"
+                )
+
+                # Send final completion event
+                yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"
+
+        except Exception as e:
+            print(f"❌ Chat API: Streaming tool calling failed: {str(e)}")
+            error_event = {
+                "type": "error",
+                "data": {"error": f"Streaming failed: {str(e)}"}
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        generate_tool_calling_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
 

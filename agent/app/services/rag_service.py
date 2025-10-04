@@ -72,6 +72,11 @@ Answer:"""
         Returns:
             Dictionary with 'response', 'sources', 'metadata' keys
         """
+        print(f"🔍 RAG Service: Starting query processing")
+        print(f"   Query: '{query}'")
+        print(f"   Session ID: {session_id}")
+        print(f"   Top K: {top_k}")
+
         # Add session metadata to the current operation
         add_session_metadata(
             session_id=session_id,
@@ -79,25 +84,41 @@ Answer:"""
             query_length=len(query),
             top_k=top_k
         )
+
         # Retrieve relevant context
+        print(f"📚 RAG Service: Calling retrieval service...")
         context_result = await self.retrieval_service.retrieve_context(
             query=query,
             top_k=top_k
         )
-        
+
+        print(f"📊 RAG Service: Context retrieval results:")
+        print(f"   Num chunks: {context_result['num_chunks']}")
+        print(f"   Num sources: {context_result['num_sources']}")
+        print(f"   Context text length: {len(context_result['context_text'])}")
+        print(f"   Sources: {[s['title'] for s in context_result['sources']]}")
+
         # Build prompt with context
+        print(f"🔨 RAG Service: Building prompt...")
         prompt = self._build_prompt(query, context_result["context_text"])
-        
+        print(f"   Prompt length: {len(prompt)}")
+
         # Generate response
+        print(f"🤖 RAG Service: Generating LLM response...")
         completion = await self.llm_service.generate_completion(
             prompt=prompt,
             system_prompt=self.SYSTEM_PROMPT
         )
-        
+
+        print(f"✅ RAG Service: LLM response generated:")
+        print(f"   Model: {completion['model']}")
+        print(f"   Tokens: {completion['tokens']}")
+        print(f"   Response length: {len(completion['text'])}")
+
         # Post-process response
         response_text = self._post_process_response(completion["text"])
-        
-        return {
+
+        result = {
             "response": response_text,
             "sources": context_result["sources"],
             "metadata": {
@@ -109,6 +130,12 @@ Answer:"""
                 "provider": completion["provider"]
             }
         }
+
+        print(f"🎯 RAG Service: Query processing complete")
+        print(f"   Final response length: {len(response_text)}")
+        print(f"   Final sources count: {len(context_result['sources'])}")
+
+        return result
     
     @weave.op()
     async def process_query_streaming(
@@ -140,26 +167,41 @@ Answer:"""
             query_length=len(query),
             top_k=top_k
         )
-        # Retrieve relevant context using page-based approach (like parent ChatService)
-        context_result = await self.retrieval_service.retrieve_page_context(
+        # Retrieve relevant context using the same method as non-streaming
+        print(f"🔍 RAG Service: Starting query processing")
+        print(f"   Query: '{query}'")
+        print(f"   Session ID: {session_id}")
+        print(f"   Top K: {top_k}")
+
+        print(f"📚 RAG Service: Calling retrieval service...")
+        context_result = await self.retrieval_service.retrieve_context(
             query=query,
             top_k=top_k
         )
+
+        print(f"📊 RAG Service: Context retrieval results:")
+        print(f"   Num chunks: {context_result.get('num_chunks', 0)}")
+        print(f"   Num sources: {len(context_result.get('sources', []))}")
+        print(f"   Context text length: {len(context_result.get('context_text', ''))}")
+        print(f"   Sources: {[s.get('title', 'Unknown') for s in context_result.get('sources', [])]}")
         
         # Yield context information
         yield {
             "type": "context",
             "data": {
                 "sources": context_result["sources"],
-                "num_pages": context_result["num_pages"],
-                "num_sources": context_result["num_sources"]
+                "num_chunks": context_result.get("num_chunks", 0),
+                "num_sources": len(context_result["sources"])
             }
         }
         
         # Build prompt with context
+        print(f"🔨 RAG Service: Building prompt...")
         prompt = self._build_prompt(query, context_result["context_text"])
+        print(f"   Prompt length: {len(prompt)}")
         
         # Stream response with thinking/response separation
+        print(f"🤖 RAG Service: Generating streaming LLM response...")
         full_response = ""
         thinking_content = ""
         response_content = ""
@@ -244,7 +286,7 @@ Answer:"""
                 "sources": context_result["sources"],
                 "metadata": {
                     "session_id": session_id,
-                    "num_pages": context_result["num_pages"],
+                    "num_chunks": context_result.get("num_chunks", 0),
                     "num_sources": context_result["num_sources"]
                 }
             }
