@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./src/tests/setup.ts'],
+    setupFiles: ['./tests/utils/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov', 'json'],
@@ -13,7 +13,7 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'client/',
-        'src/tests/',
+        'tests/',
         '**/*.test.ts',
         '**/*.spec.ts',
       ],
@@ -27,7 +27,6 @@ export default defineConfig({
       }
     },
     include: [
-      'src/tests/**/*.test.ts',
       'tests/**/*.test.ts'
     ],
     exclude: ['node_modules', 'dist', 'client'],
@@ -45,7 +44,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '@tests': resolve(__dirname, './src/tests')
+      '@tests': resolve(__dirname, './tests')
     }
   },
   esbuild: {

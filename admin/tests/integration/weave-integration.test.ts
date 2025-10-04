@@ -10,11 +10,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { adminWeave, initializeWeave } from '../weave/init.js';
+import { adminWeave, initializeWeave } from '../../src/weave/init.js';
 
 // Test service class to demonstrate instrumentation
 class TestCourseService {
-  @adminWeave.op('search_courses')
+
   async searchCourses(query: string, limit: number = 5): Promise<any> {
     console.log(`🔍 Searching for courses: "${query}" (limit: ${limit})`);
     
@@ -39,8 +39,7 @@ class TestCourseService {
     };
   }
 
-  @adminWeave.op('simulate_db_query')
-  private async simulateDbQuery(query: string): Promise<void> {
+  simulateDbQuery = async (query: string): Promise<void> => {
     console.log(`📊 Executing database query for: "${query}"`);
     
     // Simulate async database operation
@@ -60,8 +59,7 @@ class TestCourseService {
     });
   }
 
-  @adminWeave.op('process_results')
-  private async processResults(query: string, limit: number): Promise<any[]> {
+  processResults = async (query: string, limit: number): Promise<any[]> => {
     console.log(`⚙️ Processing results for query: "${query}"`);
     
     // Simulate result processing with child operations
@@ -95,8 +93,7 @@ class TestCourseService {
     return rawResults.slice(0, limit);
   }
 
-  @adminWeave.op('get_course_details')
-  async getCourseDetails(courseId: string): Promise<any> {
+  getCourseDetails = async (courseId: string): Promise<any> => {
     console.log(`📖 Getting details for course: ${courseId}`);
     
     // Simulate error scenario for testing
@@ -118,7 +115,7 @@ class TestCourseService {
 
 // Test crawler service to demonstrate complex nested operations
 class TestCrawlerService {
-  @adminWeave.op('crawl_website')
+
   async crawlWebsite(url: string): Promise<any> {
     console.log(`🕷️ Crawling website: ${url}`);
     
@@ -142,8 +139,7 @@ class TestCrawlerService {
     };
   }
 
-  @adminWeave.op('discover_pages')
-  private async discoverPages(url: string): Promise<string[]> {
+  discoverPages = async (url: string): Promise<string[]> => {
     console.log(`🔍 Discovering pages from: ${url}`);
     
     await adminWeave.createChildTrace('fetch_sitemap', async () => {
@@ -163,13 +159,14 @@ class TestCrawlerService {
     ];
   }
 
-  @adminWeave.op('extract_content')
-  private async extractContent(pages: string[]): Promise<any[]> {
+  extractContent = async (pages: string[]): Promise<any[]> => {
     console.log(`📝 Extracting content from ${pages.length} pages`);
-    
+
     const content = [];
     for (const page of pages) {
-      const pageContent = await adminWeave.createChildTrace(`extract_page_${page}`, async () => {
+      // Sanitize page URL for trace name by replacing invalid characters
+      const sanitizedPageName = page.replace(/[:/]/g, '_');
+      const pageContent = await adminWeave.createChildTrace(`extract_page_${sanitizedPageName}`, async () => {
         console.log(`📄 Extracting content from: ${page}`);
         await new Promise(resolve => setTimeout(resolve, 30));
         return {
@@ -181,17 +178,18 @@ class TestCrawlerService {
       });
       content.push(pageContent);
     }
-    
+
     return content;
   }
 
-  @adminWeave.op('process_content')
-  private async processContent(content: any[]): Promise<any[]> {
+  processContent = async (content: any[]): Promise<any[]> => {
     console.log(`⚙️ Processing ${content.length} content items`);
     
     const processed = [];
     for (const item of content) {
-      const processedItem = await adminWeave.createChildTrace(`process_${item.url}`, async () => {
+      // Sanitize URL for trace name by replacing invalid characters
+      const sanitizedUrl = item.url.replace(/[:/]/g, '_');
+      const processedItem = await adminWeave.createChildTrace(`process_${sanitizedUrl}`, async () => {
         console.log(`🔄 Processing: ${item.url}`);
         
         // Simulate chunking

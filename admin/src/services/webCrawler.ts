@@ -158,7 +158,6 @@ export class WebCrawler {
   /**
    * Extract main content from page
    */
-  @weaveOp()
   extractMainContent($: cheerio.CheerioAPI): string {
     // Try to find main content
     let mainHtml = $('main').html();
@@ -193,7 +192,6 @@ export class WebCrawler {
   /**
    * Extract links from page
    */
-  @weaveOp()
   extractLinks($: cheerio.CheerioAPI, baseUrl: string): string[] {
     const links: Set<string> = new Set();
     const baseUrlParsed = new URL(baseUrl);
@@ -258,7 +256,6 @@ export class WebCrawler {
   /**
    * Convert HTML to Markdown
    */
-  @weaveOp()
   htmlToMarkdown(html: string, baseUrl?: string): string {
     // Set the base URL for use in TurndownService rules
     this.currentBaseUrl = baseUrl;

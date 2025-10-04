@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import settingsRoutes from '../../routes/settingsRoutes.js';
-import { SettingsService } from '../../services/settingsService.js';
+import settingsRoutes from '../../src/routes/settingsRoutes.js';
+import { SettingsService } from '../../src/services/settingsService.js';
 
 // Mock the SettingsService
-vi.mock('../../services/settingsService.js', () => ({
+vi.mock('../../src/services/settingsService.js', () => ({
   SettingsService: vi.fn(),
 }));
 

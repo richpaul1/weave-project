@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PromptEvaluationService } from '../../../services/promptEvaluationService.js';
-import { PromptRLEnvironment } from '../../../services/promptRLEnvironment.js';
-import { PromptRLAgent } from '../../../services/promptRLAgent.js';
-import type { 
-  PromptTemplate, 
+import { PromptEvaluationService } from '../../../src/services/promptEvaluationService.js';
+import { PromptRLEnvironment } from '../../../src/services/promptRLEnvironment.js';
+import { PromptRLAgent } from '../../../src/services/promptRLAgent.js';
+import type {
+  PromptTemplate,
   PromptCriteria,
-  PromptOptimizationSession 
-} from '../../../models/promptOptimization.js';
+  PromptOptimizationSession
+} from '../../../src/models/promptOptimization.js';
 
 // Mock services with realistic behavior
 class MockLLMService {

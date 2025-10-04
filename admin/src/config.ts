@@ -56,9 +56,9 @@ export const config = {
   neo4jDatabase: getRequiredEnv('NEO4J_DB_NAME', 'Neo4j database name'),
 
   // Ollama - Required for embeddings and LLM
-  ollamaBaseUrl: getRequiredEnv('OLLAMA_BASE_URL', 'Ollama API base URL (e.g., http://localhost:11434)'),
-  ollamaModel: getRequiredEnv('OLLAMA_MODEL', 'Ollama model name for text generation'),
-  ollamaEmbeddingModel: getRequiredEnv('OLLAMA_EMBEDDING_MODEL', 'Ollama model name for embeddings'),
+  ollamaBaseUrl: getOptionalEnv('OLLAMA_BASE_URL', 'http://localhost:11434'),
+  ollamaModel: getOptionalEnv('OLLAMA_MODEL', 'llama3.2'),
+  ollamaEmbeddingModel: getOptionalEnv('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text'),
 
   // OpenAI - Optional (alternative to Ollama)
   openaiApiKey: getOptionalEnv('OPENAI_API_KEY', ''),

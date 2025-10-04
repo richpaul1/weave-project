@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { PromptEvaluationService } from '../../../services/promptEvaluationService.js';
-import { PromptRLEnvironment } from '../../../services/promptRLEnvironment.js';
-import { PromptRLAgent } from '../../../services/promptRLAgent.js';
-import type { 
-  PromptTemplate, 
-  PromptCriteria 
-} from '../../../models/promptOptimization.js';
+import { PromptEvaluationService } from '../../../src/services/promptEvaluationService.js';
+import { PromptRLEnvironment } from '../../../src/services/promptRLEnvironment.js';
+import { PromptRLAgent } from '../../../src/services/promptRLAgent.js';
+import type {
+  PromptTemplate,
+  PromptCriteria
+} from '../../../src/models/promptOptimization.js';
 
 // Real Weave integration (if available)
 let realWeave: any = null;
 try {
   // Try to import real Weave if available
-  const weaveModule = await import('../../../weave/init.js');
+  const weaveModule = await import('../../../src/weave/init.js');
   realWeave = weaveModule.adminWeave;
 } catch (error) {
   console.log('Real Weave not available, using mock');

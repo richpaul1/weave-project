@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SettingsService, type ChatSettings } from '../../services/settingsService.js';
+import { SettingsService, type ChatSettings } from '../../src/services/settingsService.js';
 
 // Mock neo4j-driver
 const mockSession = {

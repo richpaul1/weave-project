@@ -223,8 +223,11 @@ describe('Settings Page UI Tests', () => {
       // Try to submit
       await page.click('button:has-text("Save Settings")');
 
-      // Should show validation error
-      expect(await page.locator('text=Please enter a valid prompt').isVisible()).toBe(true);
+      // Should show validation error - FormMessage renders as <p> with class "text-destructive"
+      // Look for the error message with the specific text
+      const errorMessage = page.locator('p.text-destructive:has-text("Please enter a valid prompt")');
+      await errorMessage.waitFor({ timeout: 5000 });
+      expect(await errorMessage.isVisible()).toBe(true);
     });
 
     it('should validate numeric ranges', async () => {
@@ -295,15 +298,18 @@ describe('Settings Page UI Tests', () => {
           body: JSON.stringify({ error: 'Server error' })
         });
       });
-      
+
       await page.waitForSelector('form');
-      
+
       // Try to save
       await page.click('button:has-text("Save Settings")');
-      
-      // Should show error message
-      await page.waitForSelector('text=Failed to update settings', { timeout: 10000 });
-      expect(await page.locator('text=Failed to update settings').isVisible()).toBe(true);
+
+      // Should show error message via toast notification
+      // Sonner toasts appear as list items with data-sonner-toast attribute
+      // Look for the specific toast element containing the error message
+      const errorToast = page.locator('[data-sonner-toast]:has-text("Failed to update settings")');
+      await errorToast.waitFor({ timeout: 10000 });
+      expect(await errorToast.isVisible()).toBe(true);
     });
   });
 

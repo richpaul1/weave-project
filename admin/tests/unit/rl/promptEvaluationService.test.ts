@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PromptEvaluationService } from '../../../services/promptEvaluationService.js';
-import type { 
-  PromptTemplate, 
-  PromptCriteria, 
+import { PromptEvaluationService } from '../../../src/services/promptEvaluationService.js';
+import type {
+  PromptTemplate,
+  PromptCriteria,
   PromptEvaluation,
-  RLState 
-} from '../../../models/promptOptimization.js';
+  RLState
+} from '../../../src/models/promptOptimization.js';
 
 // Mock Weave - will be recreated in beforeEach
 let mockWeave: any;

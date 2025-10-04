@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PromptRLEnvironment } from '../../../services/promptRLEnvironment.js';
-import type { 
-  PromptTemplate, 
-  PromptCriteria, 
+import { PromptRLEnvironment } from '../../../src/services/promptRLEnvironment.js';
+import type {
+  PromptTemplate,
+  PromptCriteria,
   RLAction,
   RLState,
-  PromptEvaluation 
-} from '../../../models/promptOptimization.js';
+  PromptEvaluation
+} from '../../../src/models/promptOptimization.js';
 
 // Mock dependencies
 const mockEvaluationService = {

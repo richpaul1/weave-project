@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PromptRLAgent } from '../../../services/promptRLAgent.js';
-import type { 
+import { PromptRLAgent } from '../../../src/services/promptRLAgent.js';
+import type {
   RLState,
   RLAction,
   RLEpisode,
   PromptTemplate,
   PromptCriteria,
   PromptOptimizationSession
-} from '../../../models/promptOptimization.js';
+} from '../../../src/models/promptOptimization.js';
 
 // Mock dependencies - will be recreated in beforeEach
 let mockWeave: any;
