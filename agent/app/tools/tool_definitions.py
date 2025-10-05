@@ -99,10 +99,81 @@ GENERAL_SEARCH_TOOL = ToolDefinition(
     ]
 )
 
+COURSE_RECOMMENDATION_TOOL = ToolDefinition(
+    name="recommend_learning_path",
+    description="Generate a personalized learning path based on user's goals, current level, and preferences. Use this when users ask for learning roadmaps or structured learning plans.",
+    parameters=[
+        ToolParameter(
+            name="topic",
+            type="string",
+            description="The main topic or skill the user wants to learn (e.g., 'machine learning', 'web development')"
+        ),
+        ToolParameter(
+            name="current_level",
+            type="string",
+            description="User's current knowledge level",
+            required=False,
+            enum=["beginner", "intermediate", "advanced", "unknown"]
+        ),
+        ToolParameter(
+            name="time_commitment",
+            type="string",
+            description="How much time user can dedicate to learning",
+            required=False,
+            enum=["1-2 hours/week", "3-5 hours/week", "6-10 hours/week", "10+ hours/week", "unknown"]
+        ),
+        ToolParameter(
+            name="learning_style",
+            type="string",
+            description="Preferred learning approach",
+            required=False,
+            enum=["hands-on", "theoretical", "mixed", "unknown"]
+        )
+    ]
+)
+
+SKILL_ASSESSMENT_TOOL = ToolDefinition(
+    name="assess_skill_level",
+    description="Assess user's current skill level in a topic by analyzing their questions and providing appropriate next steps. Use when users want to know their level or what to learn next.",
+    parameters=[
+        ToolParameter(
+            name="topic",
+            type="string",
+            description="The topic or skill to assess (e.g., 'Python programming', 'data analysis')"
+        ),
+        ToolParameter(
+            name="user_description",
+            type="string",
+            description="User's description of their current knowledge or experience"
+        )
+    ]
+)
+
+COURSE_COMPARISON_TOOL = ToolDefinition(
+    name="compare_courses",
+    description="Compare multiple courses on similar topics to help users choose the best option. Use when users are deciding between different learning options.",
+    parameters=[
+        ToolParameter(
+            name="topic",
+            type="string",
+            description="The topic to find and compare courses for"
+        ),
+        ToolParameter(
+            name="comparison_criteria",
+            type="array",
+            description="Criteria to compare courses by (e.g., difficulty, duration, cost, rating)",
+            required=False
+        )
+    ]
+)
+
 # Registry of all available tools
 AVAILABLE_TOOLS = {
     "search_courses": COURSE_SEARCH_TOOL,
-    "search_knowledge": GENERAL_SEARCH_TOOL
+    "search_knowledge": GENERAL_SEARCH_TOOL,
+    "recommend_learning_path": COURSE_RECOMMENDATION_TOOL,
+    "assess_skill_level": SKILL_ASSESSMENT_TOOL,
+    "compare_courses": COURSE_COMPARISON_TOOL
 }
 
 

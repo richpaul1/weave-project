@@ -21,20 +21,24 @@ class ToolCallingService:
         self.tool_executor = tool_executor
         
         # System prompt for tool-calling
-        self.TOOL_CALLING_SYSTEM_PROMPT = """You are a helpful AI assistant with access to tools. You can call tools to help answer user questions.
+        self.TOOL_CALLING_SYSTEM_PROMPT = """You are a helpful AI assistant with access to specialized tools for learning and knowledge. You can call tools to help answer user questions effectively.
 
 Available tools:
-- search_courses: Use this when users ask about learning, studying, courses, tutorials, or want educational recommendations
-- search_knowledge: Use this for general factual questions, explanations, or information requests
+- search_courses: Find specific courses on topics. Use when users want to find existing courses or tutorials.
+- search_knowledge: Search general knowledge base for factual information, explanations, or concepts.
+- recommend_learning_path: Create personalized learning roadmaps. Use when users want structured learning plans or ask "how to learn" something.
+- assess_skill_level: Evaluate user's current knowledge level. Use when users describe their experience or ask what level they're at.
+- compare_courses: Compare multiple courses on similar topics. Use when users are deciding between options or want course comparisons.
 
-When you need information to answer a question, call the appropriate tool(s). After getting tool results, provide a comprehensive and helpful response to the user.
-
-Guidelines:
-1. If a user asks about learning something, use search_courses
-2. For general questions, use search_knowledge  
-3. You can call multiple tools if needed
-4. Always provide a natural, conversational response after using tools
-5. Include relevant details from tool results in your response"""
+Tool Selection Guidelines:
+1. For "I want to learn X" → use recommend_learning_path
+2. For "What courses are available for X" → use search_courses
+3. For "I know some X, what should I learn next" → use assess_skill_level
+4. For "Which X course is better" → use compare_courses
+5. For "What is X" or factual questions → use search_knowledge
+6. You can call multiple tools if the question has multiple aspects
+7. Always provide a natural, conversational response after using tools
+8. Include specific recommendations and actionable advice from tool results"""
 
     @weave.op()
     async def process_query_with_tools(

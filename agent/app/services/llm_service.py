@@ -149,30 +149,77 @@ class LLMService:
                 user_message = msg["content"]
                 break
 
-        # Simple heuristic to determine if we should call tools
-        learning_keywords = [
-            "learn", "course", "tutorial", "study", "training", "education",
-            "teach", "how to", "guide", "lesson", "skill", "knowledge"
+        user_lower = user_message.lower()
+
+        # Enhanced tool selection logic
+
+        # 1. Learning path recommendation patterns
+        learning_path_patterns = [
+            "how to learn", "learning path", "roadmap", "where to start", "step by step",
+            "i want to learn", "how do i learn", "learning plan", "study plan"
         ]
 
-        should_search_courses = any(keyword in user_message.lower() for keyword in learning_keywords)
+        if any(pattern in user_lower for pattern in learning_path_patterns):
+            topic = self._extract_topic_from_query(user_message, learning_path_patterns)
+            return {
+                "content": None,
+                "tool_calls": [{
+                    "id": "simulated_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "recommend_learning_path",
+                        "arguments": f'{{"topic": "{topic}", "current_level": "unknown"}}'
+                    }
+                }]
+            }
 
-        if should_search_courses:
-            # Extract learning topic from the query
-            query = user_message
-            # Simple extraction - in a real implementation, you might use NLP
-            for keyword in learning_keywords:
-                if keyword in query.lower():
-                    # Try to extract the topic after the keyword
-                    parts = query.lower().split(keyword)
-                    if len(parts) > 1:
-                        topic = parts[1].strip()
-                        # Clean up common words
-                        topic = topic.replace("about", "").replace("how to", "").strip()
-                        if topic:
-                            query = topic
-                            break
+        # 2. Skill assessment patterns
+        assessment_patterns = [
+            "what level am i", "assess my", "where am i at", "what should i learn next",
+            "i know", "i have experience", "my background", "skill level"
+        ]
 
+        if any(pattern in user_lower for pattern in assessment_patterns):
+            topic = self._extract_topic_from_query(user_message, assessment_patterns)
+            return {
+                "content": None,
+                "tool_calls": [{
+                    "id": "simulated_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "assess_skill_level",
+                        "arguments": f'{{"topic": "{topic}", "user_description": "{user_message}"}}'
+                    }
+                }]
+            }
+
+        # 3. Course comparison patterns
+        comparison_patterns = [
+            "compare", "which course", "best course", "difference between", "vs",
+            "better", "choose between", "recommend course"
+        ]
+
+        if any(pattern in user_lower for pattern in comparison_patterns):
+            topic = self._extract_topic_from_query(user_message, comparison_patterns)
+            return {
+                "content": None,
+                "tool_calls": [{
+                    "id": "simulated_call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "compare_courses",
+                        "arguments": f'{{"topic": "{topic}"}}'
+                    }
+                }]
+            }
+
+        # 4. Course search patterns
+        course_search_patterns = [
+            "course", "courses", "tutorial", "training", "class", "certification"
+        ]
+
+        if any(pattern in user_lower for pattern in course_search_patterns):
+            topic = self._extract_topic_from_query(user_message, course_search_patterns)
             return {
                 "content": None,
                 "tool_calls": [{
@@ -180,23 +227,62 @@ class LLMService:
                     "type": "function",
                     "function": {
                         "name": "search_courses",
-                        "arguments": f'{{"query": "{query}", "limit": 5}}'
+                        "arguments": f'{{"query": "{topic}", "limit": 5}}'
                     }
                 }]
             }
-        else:
-            # For non-learning queries, use knowledge search
+
+        # 5. General learning patterns
+        general_learning_patterns = [
+            "learn", "study", "education", "teach", "skill", "knowledge"
+        ]
+
+        if any(pattern in user_lower for pattern in general_learning_patterns):
+            topic = self._extract_topic_from_query(user_message, general_learning_patterns)
             return {
                 "content": None,
                 "tool_calls": [{
                     "id": "simulated_call_1",
                     "type": "function",
                     "function": {
-                        "name": "search_knowledge",
-                        "arguments": f'{{"query": "{user_message}", "context_limit": 5}}'
+                        "name": "search_courses",
+                        "arguments": f'{{"query": "{topic}", "limit": 5}}'
                     }
                 }]
             }
+
+        # 6. Default to knowledge search for general questions
+        return {
+            "content": None,
+            "tool_calls": [{
+                "id": "simulated_call_1",
+                "type": "function",
+                "function": {
+                    "name": "search_knowledge",
+                    "arguments": f'{{"query": "{user_message}", "context_limit": 5}}'
+                }
+            }]
+        }
+
+    def _extract_topic_from_query(self, query: str, trigger_patterns: List[str]) -> str:
+        """Extract the main topic from a query by removing trigger patterns."""
+        query_lower = query.lower()
+
+        # Remove trigger patterns to isolate the topic
+        for pattern in trigger_patterns:
+            if pattern in query_lower:
+                # Split on the pattern and take the part after it
+                parts = query_lower.split(pattern)
+                if len(parts) > 1:
+                    topic = parts[1].strip()
+                    # Clean up common words
+                    topic = topic.replace("about", "").replace("for", "").replace("in", "")
+                    topic = topic.replace("?", "").replace(".", "").strip()
+                    if topic:
+                        return topic
+
+        # If no clear topic found, return the original query
+        return query
 
     @weave.op()
     async def generate_completion(

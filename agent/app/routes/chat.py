@@ -21,8 +21,10 @@ from app.services.course_service import CourseService
 from app.services.query_classifier import QueryClassifier
 from app.services.hallucination_service import HallucinationService
 from app.services.tool_calling_service import ToolCallingService
+from app.services.tool_strategy_service import ToolStrategyService
 from app.tools.tool_executor import ToolExecutor
 from app.utils.weave_utils import create_tool_trace_summary
+from app.config.tool_config import ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG
 from app import config
 
 
@@ -56,11 +58,12 @@ enhanced_rag_service: Optional[EnhancedRAGService] = None
 course_service: Optional[CourseService] = None
 hallucination_service: Optional[HallucinationService] = None
 tool_calling_service: Optional[ToolCallingService] = None
+tool_strategy_service: Optional[ToolStrategyService] = None
 
 
 def init_services():
     """Initialize all services"""
-    global storage_service, llm_service, retrieval_service, rag_service, enhanced_rag_service, course_service, hallucination_service, tool_calling_service
+    global storage_service, llm_service, retrieval_service, rag_service, enhanced_rag_service, course_service, hallucination_service, tool_calling_service, tool_strategy_service
 
     if storage_service is None:
         storage_service = StorageService()
@@ -100,6 +103,14 @@ def init_services():
         tool_calling_service = ToolCallingService(
             llm_service=llm_service,
             tool_executor=tool_executor
+        )
+
+        # Initialize tool strategy service
+        tool_strategy_service = ToolStrategyService(
+            query_classifier=enhanced_rag_service.query_classifier,
+            tool_calling_service=tool_calling_service,
+            enhanced_rag_service=enhanced_rag_service,
+            config=DEFAULT_TOOL_STRATEGY_CONFIG
         )
 
 
@@ -615,4 +626,181 @@ async def stream_chat_with_tools(request: ChatRequest):
             "Content-Type": "text/event-stream"
         }
     )
+
+
+@router.post("/message-with-strategy", response_model=ChatResponse)
+async def chat_message_with_strategy(request: ChatRequest):
+    """
+    Process a chat message using the intelligent tool strategy.
+    The system decides the best approach based on query analysis and configuration.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Chat response with answer, sources, and metadata including strategy used
+    """
+    print(f"🧠 Chat API: Received tool strategy request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    try:
+        # Use session_id as thread_id to track conversation context
+        thread_id = request.session_id or "default_session"
+
+        with weave.thread(thread_id) as thread_ctx:
+            print(f"🧵 Processing tool strategy in thread: {thread_ctx.thread_id}")
+
+            # Process query with tool strategy
+            result = await tool_strategy_service.process_query(
+                query=request.query,
+                session_id=request.session_id,
+                top_k=request.top_k
+            )
+
+            # Store the interaction with strategy metadata
+            storage_service.create_chat_message(
+                message_data={
+                    "query": request.query,
+                    "response": result["response"],
+                    "sources": result.get("sources", []),
+                    "metadata": {
+                        **result["metadata"],
+                        "tool_strategy_session": True,
+                        "strategy_info": tool_strategy_service.get_strategy_info()
+                    }
+                },
+                session_id=request.session_id or "default"
+            )
+
+            return ChatResponse(
+                response=result["response"],
+                sources=result.get("sources", []),
+                metadata={
+                    "session_id": request.session_id,
+                    "thread_id": thread_ctx.thread_id,
+                    "tool_strategy": True,
+                    **result["metadata"]
+                }
+            )
+
+    except Exception as e:
+        print(f"❌ Chat API: Tool strategy failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Tool strategy failed: {str(e)}")
+
+
+@router.post("/stream-with-strategy")
+async def stream_chat_with_strategy(request: ChatRequest):
+    """
+    Stream a chat response using the intelligent tool strategy.
+    The system decides the best approach and streams the process.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Streaming response with strategy decisions and execution
+    """
+    print(f"🧠 Chat API: Received streaming tool strategy request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    async def generate_tool_strategy_stream():
+        """Generate streaming response with tool strategy."""
+        try:
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Processing streaming tool strategy in thread: {thread_ctx.thread_id}")
+
+                full_response = ""
+                strategy_metadata = {}
+
+                # Stream tool strategy process
+                async for event in tool_strategy_service.process_query_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    top_k=request.top_k
+                ):
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                    # Track response and strategy usage
+                    if event["type"] == "response":
+                        full_response += event["data"]["text"]
+                    elif event["type"] in ["classification", "strategy_decision", "metadata"]:
+                        strategy_metadata.update(event["data"])
+
+                # Store the interaction
+                storage_service.create_chat_message(
+                    message_data={
+                        "query": request.query,
+                        "response": full_response,
+                        "sources": [],
+                        "metadata": {
+                            **strategy_metadata,
+                            "streaming": True,
+                            "tool_strategy_session": True,
+                            "strategy_info": tool_strategy_service.get_strategy_info()
+                        }
+                    },
+                    session_id=request.session_id or "default"
+                )
+
+                # Send final completion event
+                yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id, 'strategy_info': tool_strategy_service.get_strategy_info()}})}\n\n"
+
+        except Exception as e:
+            print(f"❌ Chat API: Streaming tool strategy failed: {str(e)}")
+            error_event = {
+                "type": "error",
+                "data": {"error": f"Streaming failed: {str(e)}"}
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        generate_tool_strategy_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+
+@router.get("/tool-strategy-info")
+async def get_tool_strategy_info():
+    """
+    Get information about the current tool strategy configuration.
+
+    Returns:
+        Tool strategy configuration and status
+    """
+    init_services()
+
+    try:
+        strategy_info = tool_strategy_service.get_strategy_info()
+
+        return {
+            "status": "active",
+            "configuration": strategy_info,
+            "available_strategies": [strategy.value for strategy in ToolStrategy],
+            "endpoints": {
+                "strategy_chat": "/message-with-strategy",
+                "strategy_stream": "/stream-with-strategy",
+                "tool_chat": "/message-with-tools",
+                "tool_stream": "/stream-with-tools",
+                "enhanced_rag": "/message",
+                "enhanced_rag_stream": "/stream"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get strategy info: {str(e)}")
 
