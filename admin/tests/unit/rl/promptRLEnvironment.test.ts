@@ -28,9 +28,10 @@ describe('PromptRLEnvironment', () => {
 
     // Create fresh mock weave for each test
     mockWeave = {
-      createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+      startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+      endTrace: vi.fn(),
       logEvent: vi.fn(),
-      logMetric: vi.fn(),
+      logMetrics: vi.fn(),
       getCurrentTraceUrl: vi.fn().mockReturnValue('https://test-trace-url.com')
     };
 
@@ -111,10 +112,10 @@ describe('PromptRLEnvironment', () => {
         'rl_environment_reset',
         expect.any(Object)
       );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'environment_reset_score',
-        0,
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          environment_reset_score: 0
+        })
       );
     });
 
@@ -216,10 +217,10 @@ describe('PromptRLEnvironment', () => {
         'rl_action_applied',
         expect.any(Object)
       );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'rl_step_reward',
-        expect.any(Number),
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rl_step_reward: expect.any(Number)
+        })
       );
     });
 

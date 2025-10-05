@@ -66,7 +66,13 @@ export class PromptRLAgent {
    * Select action based on current state using policy network
    */
   async selectAction(state: RLState, availableActions: RLAction[]): Promise<RLAction> {
-    return await this.weave.createChildTrace('rl_agent_select_action', async () => {
+    const traceId = this.weave.startTrace('rl_agent_select_action', {
+      stateScore: state.performanceHistory.averageScore,
+      availableActionsCount: availableActions.length,
+      explorationRate: this.explorationRate
+    });
+
+    try {
       console.log(`🎯 Agent selecting action from ${availableActions.length} options`);
 
       // Handle empty action list
@@ -112,22 +118,39 @@ export class PromptRLAgent {
         stateScore: state.performanceHistory.averageScore
       });
 
-      await this.weave.logMetric('action_selection_confidence', actionProbs[selectedActionIndex], {
+      await this.weave.logMetrics({
+        action_selection_confidence: actionProbs[selectedActionIndex],
         actionType: selectedAction.type,
         explorationRate: this.explorationRate
       });
-      
+
       console.log(`✅ Selected action: ${selectedAction.type} - ${selectedAction.description}`);
-      
+
+      this.weave.endTrace(traceId, {
+        selectedActionType: selectedAction.type,
+        actionProbability: actionProbs[selectedActionIndex],
+        explorationUsed,
+        success: true
+      });
+
       return selectedAction;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
    * Train the agent using collected episodes
    */
   async train(episodes: RLEpisode[]): Promise<void> {
-    return await this.weave.createChildTrace('rl_agent_training', async () => {
+    const traceId = this.weave.startTrace('rl_agent_training', {
+      episodesCount: episodes.length,
+      algorithm: this.config.algorithm,
+      learningRate: this.config.hyperparameters.learningRate
+    });
+
+    try {
       console.log(`🎓 Training agent with ${episodes.length} episodes`);
 
       await this.weave.logEvent('rl_training_started', {
@@ -168,23 +191,27 @@ export class PromptRLAgent {
       
       await this.weave.logEvent('rl_training_completed', trainingMetrics);
 
-      await this.weave.logMetric('policy_loss', policyLoss, {
+      await this.weave.logMetrics({
+        policy_loss: policyLoss,
+        value_loss: valueLoss,
+        exploration_rate: this.explorationRate,
         trainingStep: this.trainingHistory.length,
         episodesUsed: episodes.length
       });
 
-      await this.weave.logMetric('value_loss', valueLoss, {
-        trainingStep: this.trainingHistory.length,
-        episodesUsed: episodes.length
-      });
-
-      await this.weave.logMetric('exploration_rate', this.explorationRate, {
-        trainingStep: this.trainingHistory.length,
-        episodesUsed: episodes.length
-      });
-      
       console.log(`✅ Training completed. Policy loss: ${policyLoss.toFixed(4)}, Value loss: ${valueLoss.toFixed(4)}`);
-    });
+
+      this.weave.endTrace(traceId, {
+        policyLoss,
+        valueLoss,
+        explorationRate: this.explorationRate,
+        episodesUsed: episodes.length,
+        success: true
+      });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
@@ -197,7 +224,14 @@ export class PromptRLAgent {
     targetCriteria?: PromptCriteria[],
     contextQuery?: string
   ): Promise<PromptOptimizationSession> {
-    return await this.weave.createChildTrace('rl_optimization_session', async () => {
+    const traceId = this.weave.startTrace('rl_optimization_session', {
+      maxEpisodes,
+      agentConfig: this.config.algorithm,
+      hasBasePrompt: !!basePrompt,
+      hasCriteria: !!targetCriteria
+    });
+
+    try {
       console.log(`🚀 Starting optimization session with ${maxEpisodes} max episodes`);
 
       const sessionId = `session_${Date.now()}`;
@@ -229,7 +263,12 @@ export class PromptRLAgent {
           await environment.startNewEpisode();
         }
 
-        const episode = await this.weave.createChildTrace(`episode_${episodeNum + 1}`, async () => {
+        const episodeTraceId = this.weave.startTrace(`episode_${episodeNum + 1}`, {
+          episodeNumber: episodeNum + 1,
+          sessionId
+        });
+
+        const episode = await (async () => {
           let state = environment.getCurrentState();
           if (!state) {
             throw new Error('Environment not initialized');
@@ -267,24 +306,30 @@ export class PromptRLAgent {
             console.log(`🏆 New best score: ${bestScore.toFixed(3)}`);
           }
           
-          await this.weave.logMetric('episode_total_reward', totalReward, {
+          await this.weave.logMetrics({
+            episode_total_reward: totalReward,
+            episode_final_score: finalScore,
             sessionId,
             episodeNumber: episodeNum + 1,
             stepCount
           });
 
-          await this.weave.logMetric('episode_final_score', finalScore, {
-            sessionId,
-            episodeNumber: episodeNum + 1
-          });
-          
-          return {
+          const episodeResult = {
             episodeNumber: episodeNum + 1,
             totalReward,
             finalScore,
             stepCount
           };
-        });
+
+          this.weave.endTrace(episodeTraceId, {
+            totalReward,
+            finalScore,
+            stepCount,
+            success: true
+          });
+
+          return episodeResult;
+        })();
         
         // Train agent periodically (every 5 episodes)
         if ((episodeNum + 1) % 5 === 0) {
@@ -337,9 +382,21 @@ export class PromptRLAgent {
       });
       
       console.log(`🏁 Optimization session completed. Best score: ${bestScore.toFixed(3)}`);
-      
+
+      this.weave.endTrace(traceId, {
+        sessionId,
+        episodesCompleted: session.episodes.length,
+        bestScore,
+        bestPromptId,
+        converged,
+        success: true
+      });
+
       return session;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**

@@ -24,9 +24,10 @@ describe('PromptRLAgent', () => {
 
     // Create fresh mock weave for each test
     mockWeave = {
-      createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+      startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+      endTrace: vi.fn(),
       logEvent: vi.fn(),
-      logMetric: vi.fn(),
+      logMetrics: vi.fn(),
       getCurrentTraceUrl: vi.fn().mockReturnValue('https://test-trace-url.com')
     };
 
@@ -109,10 +110,10 @@ describe('PromptRLAgent', () => {
         'rl_action_selected',
         expect.any(Object)
       );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'action_selection_confidence',
-        expect.any(Number),
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action_selection_confidence: expect.any(Number)
+        })
       );
     });
 
@@ -217,15 +218,12 @@ describe('PromptRLAgent', () => {
         'rl_training_started',
         expect.any(Object)
       );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'policy_loss',
-        expect.any(Number),
-        expect.any(Object)
-      );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'value_loss',
-        expect.any(Number),
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_loss: expect.any(Number),
+          value_loss: expect.any(Number),
+          exploration_rate: expect.any(Number)
+        })
       );
     });
 
@@ -503,20 +501,12 @@ describe('PromptRLAgent', () => {
       await agent.train(mockEpisodes);
 
       // Assert
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'policy_loss',
-        expect.any(Number),
-        expect.any(Object)
-      );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'value_loss',
-        expect.any(Number),
-        expect.any(Object)
-      );
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'exploration_rate',
-        expect.any(Number),
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_loss: expect.any(Number),
+          value_loss: expect.any(Number),
+          exploration_rate: expect.any(Number)
+        })
       );
     });
 
@@ -540,10 +530,11 @@ describe('PromptRLAgent', () => {
       await agent.runOptimizationSession(mockEnvironment as any, 1);
 
       // Assert
-      expect(mockWeave.createChildTrace).toHaveBeenCalledWith(
+      expect(mockWeave.startTrace).toHaveBeenCalledWith(
         'rl_optimization_session',
-        expect.any(Function)
+        expect.any(Object)
       );
+      expect(mockWeave.endTrace).toHaveBeenCalled();
     });
   });
 

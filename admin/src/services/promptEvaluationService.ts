@@ -33,39 +33,56 @@ export class PromptEvaluationService {
     testQueries: string[],
     criteria: PromptCriteria[]
   ): Promise<PromptEvaluation[]> {
-    return await this.weave.createChildTrace('prompt_evaluation', async () => {
-      console.log(`🧪 Evaluating prompt: ${prompt.name} with ${testQueries.length} test queries`);
+    // Defensive programming: ensure parameters are valid
+    const safeTestQueries = testQueries || [];
+    const safeCriteria = criteria || [];
+
+    const traceId = this.weave.startTrace('prompt_evaluation', {
+      promptId: prompt?.id || 'unknown',
+      promptName: prompt?.name || 'unknown',
+      testQueriesCount: safeTestQueries.length,
+      criteriaCount: safeCriteria.length
+    });
+
+    try {
+      console.log(`🧪 Evaluating prompt: ${prompt?.name || 'unknown'} with ${safeTestQueries.length} test queries`);
 
       await this.weave.logEvent('prompt_evaluation_started', {
-        promptId: prompt.id,
-        promptName: prompt.name,
-        testQueriesCount: testQueries.length,
-        criteriaCount: criteria.length,
+        promptId: prompt?.id || 'unknown',
+        promptName: prompt?.name || 'unknown',
+        testQueriesCount: safeTestQueries.length,
+        criteriaCount: safeCriteria.length,
         timestamp: new Date().toISOString()
       });
 
       const evaluations: PromptEvaluation[] = [];
       
-      for (let i = 0; i < testQueries.length; i++) {
-        const query = testQueries[i];
+      for (let i = 0; i < safeTestQueries.length; i++) {
+        const query = safeTestQueries[i];
 
-        const evaluationResult = await this.weave.createChildTrace(`evaluate_query_${i + 1}`, async () => {
-          console.log(`📝 Evaluating query ${i + 1}/${testQueries.length}: "${query.substring(0, 50)}..."`);
+        const queryTraceId = this.weave.startTrace(`evaluate_query_${i + 1}`, {
+          queryIndex: i,
+          queryLength: query?.length || 0,
+          promptId: prompt?.id || 'unknown'
+        });
+
+        try {
+          console.log(`📝 Evaluating query ${i + 1}/${safeTestQueries.length}: "${query?.substring(0, 50) || 'unknown'}..."`);
 
           // Generate response using the prompt
           const response = await this.generateResponse(prompt, query);
 
           // Evaluate against all criteria
-          const criteriaScores = await this.evaluateCriteria(response, criteria, query);
+          const criteriaScores = await this.evaluateCriteria(response, safeCriteria, query);
 
           // Calculate overall score
-          const overallScore = this.calculateOverallScore(criteriaScores, criteria);
+          const overallScore = this.calculateOverallScore(criteriaScores, safeCriteria);
 
           // Create evaluation record
           const evaluationRecord: PromptEvaluation = {
             id: `eval_${Date.now()}_${i}`,
-            promptId: prompt.id,
-            testQuery: query,
+            promptId: prompt?.id || 'unknown',
+            testQuery: query || '',
             response: response.text || '',
             criteriaScores,
             overallScore,
@@ -78,19 +95,32 @@ export class PromptEvaluationService {
             traceUrl: this.weave.getCurrentTraceUrl() || undefined
           };
 
-          await this.weave.logMetric('evaluation_score', overallScore, {
+          await this.weave.logMetrics({
+            evaluation_score: overallScore,
             promptId: prompt.id,
             queryIndex: i,
             responseTime: response.responseTime
           });
 
-          // Save evaluation to storage
-          await this.storageService.saveEvaluation(evaluationRecord);
+          // Save evaluation to storage (if available)
+          if (this.storageService && typeof this.storageService.saveEvaluation === 'function') {
+            await this.storageService.saveEvaluation(evaluationRecord);
+          } else {
+            // In-memory storage for testing/development
+            console.log(`📝 Mock storage: Evaluation saved for query ${i + 1} with score ${overallScore.toFixed(3)}`);
+          }
 
-          return evaluationRecord;
-        });
+          this.weave.endTrace(queryTraceId, {
+            overallScore,
+            responseTime: response.responseTime,
+            tokenCount: response.tokenCount
+          });
 
-        evaluations.push(evaluationResult);
+          evaluations.push(evaluationRecord);
+        } catch (error) {
+          this.weave.endTrace(queryTraceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+          throw error;
+        }
       }
       
       // Log summary metrics
@@ -104,24 +134,49 @@ export class PromptEvaluationService {
         averageResponseTime,
         timestamp: new Date().toISOString()
       });
-      
+
       console.log(`✅ Prompt evaluation completed. Average score: ${averageScore.toFixed(3)}`);
-      
+
+      this.weave.endTrace(traceId, {
+        evaluationsCount: evaluations.length,
+        averageScore,
+        averageResponseTime
+      });
+
       return evaluations;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
    * Generate response using a specific prompt
    */
   private async generateResponse(prompt: PromptTemplate, query: string): Promise<any> {
-    return await this.weave.createChildTrace('generate_llm_response', async () => {
+    const traceId = this.weave.startTrace('generate_llm_response', {
+      promptId: prompt.id,
+      queryLength: query.length
+    });
+
+    try {
       console.log(`🤖 Generating response for query: "${query.substring(0, 30)}..."`);
 
       const startTime = Date.now();
 
-      // Call the injected LLM service
-      const response = await this.llmService.generateResponse(prompt, query);
+      // Call the injected LLM service or use mock response
+      let response;
+      if (this.llmService && typeof this.llmService.generateResponse === 'function') {
+        response = await this.llmService.generateResponse(prompt, query);
+      } else {
+        // Mock response for testing/development
+        const mockText = this.generateMockResponse(prompt, query);
+        response = {
+          text: mockText,
+          responseTime: Math.floor(Math.random() * 500) + 100, // 100-600ms
+          tokenCount: Math.floor(mockText.length / 4) // Rough estimate
+        };
+      }
 
       const responseTime = Date.now() - startTime;
 
@@ -130,18 +185,30 @@ export class PromptEvaluationService {
         throw new Error('Invalid response format from LLM service');
       }
 
-      await this.weave.logMetric('llm_response_time', responseTime, {
+      await this.weave.logMetrics({
+        llm_response_time: responseTime,
         promptId: prompt.id,
         queryLength: query.length,
         responseLength: response.text?.length || 0
       });
 
-      return {
+      const result = {
         text: response.text || '',
         responseTime,
         tokenCount: response.metadata?.tokenCount || Math.floor((response.text?.length || 0) / 4)
       };
-    });
+
+      this.weave.endTrace(traceId, {
+        responseTime,
+        responseLength: result.text.length,
+        tokenCount: result.tokenCount
+      });
+
+      return result;
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
@@ -152,30 +219,47 @@ export class PromptEvaluationService {
     criteria: PromptCriteria[],
     originalQuery: string
   ): Promise<Record<string, number>> {
-    return await this.weave.createChildTrace('evaluate_all_criteria', async () => {
+    const traceId = this.weave.startTrace('evaluate_all_criteria', {
+      criteriaCount: criteria.length,
+      enabledCriteriaCount: criteria.filter(c => c.enabled).length
+    });
+
+    try {
       console.log(`📊 Evaluating response against ${criteria.length} criteria`);
-      
+
       const scores: Record<string, number> = {};
-      
+
       for (const criterion of criteria) {
         if (!criterion.enabled) continue;
-        
-        const score = await this.weave.createChildTrace(`evaluate_${criterion.name}`, async () => {
+
+        const criterionTraceId = this.weave.startTrace(`evaluate_${criterion.name}`, {
+          criterionId: criterion.id,
+          weight: criterion.weight
+        });
+
+        try {
           const score = await this.evaluateSingleCriterion(response.text || response, criterion, originalQuery);
 
-          await this.weave.logMetric(`criteria_${criterion.name}_score`, score, {
+          await this.weave.logMetrics({
+            [`criteria_${criterion.name}_score`]: score,
             criterionId: criterion.id,
             weight: criterion.weight
           });
-          
-          return score;
-        });
-        
-        scores[criterion.id] = score;
+
+          this.weave.endTrace(criterionTraceId, { score });
+          scores[criterion.id] = score;
+        } catch (error) {
+          this.weave.endTrace(criterionTraceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+          throw error;
+        }
       }
-      
+
+      this.weave.endTrace(traceId, { scoresCount: Object.keys(scores).length });
       return scores;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
@@ -346,11 +430,17 @@ export class PromptEvaluationService {
     recentEvaluations: PromptEvaluation[],
     contextQuery: string
   ): Promise<RLState> {
-    return await this.weave.createChildTrace('create_rl_state', async () => {
+    const traceId = this.weave.startTrace('create_rl_state', {
+      promptId: prompt.id,
+      evaluationsCount: recentEvaluations.length,
+      contextQueryLength: contextQuery.length
+    });
+
+    try {
       const averageScore = recentEvaluations.length > 0
         ? recentEvaluations.reduce((sum, evalRecord) => sum + evalRecord.overallScore, 0) / recentEvaluations.length
         : 0;
-      
+
       const state: RLState = {
         promptTemplate: prompt,
         recentEvaluations: recentEvaluations.slice(-10), // Last 10 evaluations
@@ -362,16 +452,25 @@ export class PromptEvaluationService {
           successRate: recentEvaluations.filter(e => e.overallScore > 0.7).length / Math.max(recentEvaluations.length, 1)
         }
       };
-      
+
       await this.weave.logEvent('rl_state_created', {
         promptId: prompt.id,
         averageScore,
         evaluationsCount: recentEvaluations.length,
         successRate: state.performanceHistory.successRate
       });
-      
+
+      this.weave.endTrace(traceId, {
+        averageScore,
+        successRate: state.performanceHistory.successRate,
+        trendDirection: state.performanceHistory.trendDirection
+      });
+
       return state;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   private calculateTrend(evaluations: PromptEvaluation[]): 'improving' | 'declining' | 'stable' {

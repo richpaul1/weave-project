@@ -34,9 +34,10 @@ describe('PromptEvaluationService', () => {
 
     // Create fresh mock weave for each test
     mockWeave = {
-      createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+      startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+      endTrace: vi.fn(),
       logEvent: vi.fn(),
-      logMetric: vi.fn(),
+      logMetrics: vi.fn(),
       getCurrentTraceUrl: vi.fn().mockReturnValue('https://test-trace-url.com')
     };
 
@@ -117,9 +118,10 @@ describe('PromptEvaluationService', () => {
       expect(result).toHaveLength(2);
       expect(mockLLMService.generateResponse).toHaveBeenCalledTimes(2);
       expect(mockStorageService.saveEvaluation).toHaveBeenCalledTimes(2);
-      expect(mockWeave.createChildTrace).toHaveBeenCalled();
+      expect(mockWeave.startTrace).toHaveBeenCalled();
+      expect(mockWeave.endTrace).toHaveBeenCalled();
       expect(mockWeave.logEvent).toHaveBeenCalled();
-      expect(mockWeave.logMetric).toHaveBeenCalled();
+      expect(mockWeave.logMetrics).toHaveBeenCalled();
       
       // Check evaluation structure
       result.forEach(evaluation => {
@@ -214,7 +216,8 @@ describe('PromptEvaluationService', () => {
         }
       });
       
-      expect(mockWeave.createChildTrace).toHaveBeenCalled();
+      expect(mockWeave.startTrace).toHaveBeenCalled();
+      expect(mockWeave.endTrace).toHaveBeenCalled();
       expect(mockWeave.logEvent).toHaveBeenCalled();
     });
 
@@ -335,10 +338,11 @@ describe('PromptEvaluationService', () => {
       await service.evaluatePrompt(mockPrompt, testQueries, mockCriteria);
 
       // Assert
-      expect(mockWeave.createChildTrace).toHaveBeenCalledWith(
+      expect(mockWeave.startTrace).toHaveBeenCalledWith(
         'prompt_evaluation',
-        expect.any(Function)
+        expect.any(Object)
       );
+      expect(mockWeave.endTrace).toHaveBeenCalled();
     });
 
     it('should log metrics for evaluation scores', async () => {
@@ -353,10 +357,10 @@ describe('PromptEvaluationService', () => {
       await service.evaluatePrompt(mockPrompt, testQueries, mockCriteria);
 
       // Assert
-      expect(mockWeave.logMetric).toHaveBeenCalledWith(
-        'evaluation_score',
-        expect.any(Number),
-        expect.any(Object)
+      expect(mockWeave.logMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          evaluation_score: expect.any(Number)
+        })
       );
     });
 

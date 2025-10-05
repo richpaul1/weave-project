@@ -11,15 +11,17 @@ import type {
 let realWeave: any = null;
 try {
   // Try to import real Weave if available
-  const weaveModule = await import('../../../src/weave/init.js');
-  realWeave = weaveModule.adminWeave;
+  const { WeaveService } = await import('../../../src/weave/weaveService.js');
+  realWeave = new WeaveService();
+  await realWeave.initialize();
 } catch (error) {
   console.log('Real Weave not available, using mock');
 }
 
 // Mock Weave fallback
 const mockWeave = {
-  createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+  startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+  endTrace: vi.fn(),
   logEvent: vi.fn(),
   logMetric: vi.fn(),
   getCurrentTraceUrl: vi.fn().mockReturnValue('https://mock-trace-url.com')
