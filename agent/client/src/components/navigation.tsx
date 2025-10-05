@@ -30,26 +30,8 @@ export default function Navigation() {
         <SessionsList currentSessionId={currentSessionId} />
       </div>
 
-      <div className="p-4 border-t border-border space-y-3">
+      <div className="p-4 border-border space-y-3">
         {/* Navigation Items */}
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location === item.path || (item.path === "/chat" && location.startsWith("/chat"));
-
-          return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant={isActive ? "default" : "ghost"}
-                size="sm"
-                className="w-full justify-start"
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {item.label}
-              </Button>
-            </Link>
-          );
-        })}
-
         <Button
           variant="outline"
           size="sm"
@@ -71,7 +53,7 @@ export default function Navigation() {
 
         <div className="text-xs text-muted-foreground">
           <p className="font-medium mb-1">IzzyDocs</p>
-          <p>Powered by Weights & Biases</p>
+          <p>Monitored by Weights & Biases</p>
         </div>
       </div>
     </nav>

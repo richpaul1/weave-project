@@ -17,7 +17,7 @@ from app.services.llm_service import LLMService
 from app.services.retrieval_service import RetrievalService
 from app.services.rag_service import RAGService
 from app.services.enhanced_rag_service import EnhancedRAGService
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.services.hallucination_service import HallucinationService
 from app.services.tool_calling_service import ToolCallingService
@@ -55,7 +55,7 @@ llm_service: Optional[LLMService] = None
 retrieval_service: Optional[RetrievalService] = None
 rag_service: Optional[RAGService] = None
 enhanced_rag_service: Optional[EnhancedRAGService] = None
-course_service: Optional[CourseService] = None
+course_service: Optional[IndependentCourseService] = None
 hallucination_service: Optional[HallucinationService] = None
 tool_calling_service: Optional[ToolCallingService] = None
 tool_strategy_service: Optional[ToolStrategyService] = None
@@ -82,7 +82,7 @@ def init_services():
             llm_service=llm_service
         )
 
-        course_service = CourseService(config.ADMIN_BASE_URL)
+        course_service = IndependentCourseService()
 
         enhanced_rag_service = EnhancedRAGService(
             retrieval_service=retrieval_service,

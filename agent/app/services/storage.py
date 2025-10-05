@@ -95,13 +95,8 @@ class StorageService:
                     "createdAt": record.get("createdAt")
                 })
 
-            # Log the count of pages returned for Weave tracking
-            import weave
-            weave.log({
-                "operation": "get_all_pages",
-                "total_pages": len(pages),
-                "pages_returned": len(pages)
-            })
+            # Log the count of pages returned for debugging
+            print(f"📊 Retrieved {len(pages)} pages from Neo4j")
 
             return pages
     
@@ -452,67 +447,81 @@ class StorageService:
         Returns:
             List of session dictionaries with metadata
         """
-        with self._get_session() as session:
-            # First get session summaries
-            summary_query = """
-            MATCH (m:ChatMessage)
-            WITH m.sessionId as sessionId,
-                 max(m.timestamp) as lastActivity,
-                 count(m) as messageCount
-            RETURN sessionId, lastActivity, messageCount
-            ORDER BY lastActivity DESC
-            LIMIT $limit
-            """
-
-            summary_result = session.run(summary_query, {"limit": limit})
-            session_summaries = list(summary_result)
-
-            sessions = []
-
-            for summary in session_summaries:
-                session_id = summary["sessionId"]
-                last_activity = summary["lastActivity"]
-                message_count = summary["messageCount"]
-
-                # Get latest message
-                latest_query = """
-                MATCH (m:ChatMessage {sessionId: $sessionId})
-                RETURN m.message as message, m.sender as sender, m.timestamp as timestamp
-                ORDER BY m.timestamp DESC
-                LIMIT 1
+        try:
+            print(f"🔍 Getting recent sessions (limit: {limit})")
+            with self._get_session() as session:
+                # First get session summaries
+                summary_query = """
+                MATCH (m:ChatMessage)
+                WITH m.sessionId as sessionId,
+                     max(m.timestamp) as lastActivity,
+                     count(m) as messageCount
+                RETURN sessionId, lastActivity, messageCount
+                ORDER BY lastActivity DESC
+                LIMIT $limit
                 """
 
-                latest_result = session.run(latest_query, {"sessionId": session_id})
-                latest_record = latest_result.single()
+                summary_result = session.run(summary_query, {"limit": limit})
+                session_summaries = list(summary_result)
 
-                # Get first message
-                first_query = """
-                MATCH (m:ChatMessage {sessionId: $sessionId})
-                RETURN m.message as message, m.timestamp as timestamp
-                ORDER BY m.timestamp ASC
-                LIMIT 1
-                """
+                sessions = []
 
-                first_result = session.run(first_query, {"sessionId": session_id})
-                first_record = first_result.single()
+                for summary in session_summaries:
+                    session_id = summary["sessionId"] if summary and "sessionId" in summary else None
+                    last_activity = summary["lastActivity"] if summary and "lastActivity" in summary else None
+                    message_count = summary["messageCount"] if summary and "messageCount" in summary else 0
 
-                # Create session data
-                first_message = first_record["message"] if first_record else ""
-                preview = first_message[:100] + "..." if len(first_message) > 100 else first_message
-                title = preview if preview else f"Chat {session_id[:8]}"
+                    # Skip if session_id is None
+                    if not session_id:
+                        print(f"⚠️ Skipping session with None sessionId")
+                        continue
 
-                sessions.append({
-                    "sessionId": session_id,
-                    "title": title,
-                    "preview": preview,
-                    "lastActivity": self._convert_neo4j_datetime(last_activity),
-                    "createdAt": self._convert_neo4j_datetime(first_record["timestamp"]) if first_record else None,
-                    "messageCount": message_count,
-                    "lastMessage": latest_record["message"] if latest_record else "",
-                    "lastSender": latest_record["sender"] if latest_record else ""
-                })
+                    # Get latest message
+                    latest_query = """
+                    MATCH (m:ChatMessage {sessionId: $sessionId})
+                    RETURN m.message as message, m.sender as sender, m.timestamp as timestamp
+                    ORDER BY m.timestamp DESC
+                    LIMIT 1
+                    """
 
-            return sessions
+                    latest_result = session.run(latest_query, {"sessionId": session_id})
+                    latest_record = latest_result.single()
+
+                    # Get first message
+                    first_query = """
+                    MATCH (m:ChatMessage {sessionId: $sessionId})
+                    RETURN m.message as message, m.timestamp as timestamp
+                    ORDER BY m.timestamp ASC
+                    LIMIT 1
+                    """
+
+                    first_result = session.run(first_query, {"sessionId": session_id})
+                    first_record = first_result.single()
+
+                    # Create session data with safe access to record fields
+                    first_message = first_record["message"] if first_record and "message" in first_record else ""
+                    preview = first_message[:100] + "..." if len(first_message) > 100 else first_message
+                    title = preview if preview else f"Chat {session_id[:8]}"
+
+                    sessions.append({
+                        "sessionId": session_id,
+                        "title": title,
+                        "preview": preview,
+                        "lastActivity": self._convert_neo4j_datetime(last_activity),
+                        "createdAt": self._convert_neo4j_datetime(first_record["timestamp"]) if first_record and first_record["timestamp"] else None,
+                        "messageCount": message_count,
+                        "lastMessage": latest_record["message"] if latest_record and latest_record["message"] else "",
+                        "lastSender": latest_record["sender"] if latest_record and latest_record["sender"] else ""
+                    })
+
+                print(f"✅ Returning {len(sessions)} sessions")
+                return sessions
+        except Exception as e:
+            print(f"❌ Error in get_recent_sessions: {e}")
+            print(f"   Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
+            raise e
 
     @weave.op()
     def get_relevant_pages(self, embedding: List[float], limit: int = 5, score_threshold: float = 0.9) -> List[Dict[str, Any]]:

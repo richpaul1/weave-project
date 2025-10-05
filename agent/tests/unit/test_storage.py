@@ -15,7 +15,7 @@ class TestStorageService:
         """Test StorageService initialization"""
         storage = StorageService()
         assert storage.driver is None
-        assert storage.database == "weave"
+        assert storage.database == "test_db"  # Updated to match conftest.py environment
     
     @patch('app.services.storage.GraphDatabase')
     def test_connect(self, mock_graph_db):
@@ -166,9 +166,9 @@ class TestStorageService:
         mock_session = Mock()
         mock_result = Mock()
         
-        # Mock record
-        mock_record = Mock()
-        mock_record.__getitem__ = lambda self, key: {
+        # Mock record - create a proper dict-like mock
+        mock_record = MagicMock()
+        mock_record.__getitem__.side_effect = lambda key: {
             "chunk_id": sample_chunk["chunk_id"],
             "text": sample_chunk["text"],
             "chunk_index": sample_chunk["chunk_index"],
@@ -178,10 +178,26 @@ class TestStorageService:
             "domain": sample_chunk["domain"],
             "score": sample_chunk["score"]
         }[key]
-        mock_record.get = lambda key, default=None: sample_chunk.get(key, default)
+        mock_record.get.side_effect = lambda key, default=None: sample_chunk.get(key, default)
         
         mock_result.__iter__ = lambda self: iter([mock_record])
-        mock_session.run.return_value = mock_result
+
+        # Mock count queries
+        mock_count_record = MagicMock()
+        mock_count_record.__getitem__.side_effect = lambda key: {"total_chunks": 100, "chunks_with_embeddings": 50}[key]
+        mock_count_result = Mock()
+        mock_count_result.single.return_value = mock_count_record
+
+        # Configure session.run to return different results based on query
+        def mock_run(query, **kwargs):
+            if "count(c) as total_chunks" in query:
+                return mock_count_result
+            elif "chunks_with_embeddings" in query:
+                return mock_count_result
+            else:
+                return mock_result
+
+        mock_session.run.side_effect = mock_run
         mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
         mock_driver.session.return_value.__exit__ = Mock(return_value=None)
         mock_graph_db.driver.return_value = mock_driver

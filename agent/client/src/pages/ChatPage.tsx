@@ -268,8 +268,7 @@ export default function ChatPage() {
       <header className="bg-surface border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">RAG Chat Interface</h2>
-            <p className="text-sm text-muted-foreground">Ask questions about the crawled content</p>
+            <h2 className="text-xl font-semibold text-foreground">Chat Session:</h2>
           </div>
           <div className="flex items-center space-x-2">
             <Button
@@ -313,8 +312,8 @@ export default function ChatPage() {
           {allMessages.length === 0 && !isLoading && (
             <div className="text-center py-12">
               <Bot className="h-16 w-16 mx-auto mb-4 text-primary" />
-              <p className="text-lg mb-2">Welcome to IzzyDocs</p>
-              <p className="text-muted-foreground">Ask me anything about the crawled content</p>
+              <p>Hello!</p>
+              <p className="text-muted-foreground">Ask me about our online documentation ....</p>
             </div>
           )}
 

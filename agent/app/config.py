@@ -42,9 +42,9 @@ WANDB_ENTITY = env_config.get_optional("WANDB_ENTITY", "richpaul1-stealth")
 WANDB_API_KEY = env_config.get_optional("WANDB_API_KEY", "")  # Optional
 
 # ============================================================================
-# Admin Backend Configuration
+# Course Service Configuration (now uses direct Neo4j access)
 # ============================================================================
-ADMIN_BASE_URL = env_config.get_optional("ADMIN_BASE_URL", "http://localhost:8001")
+# Course service now queries Neo4j directly - no admin backend dependency needed
 
 # ============================================================================
 # RAG Configuration

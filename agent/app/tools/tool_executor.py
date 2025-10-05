@@ -7,7 +7,7 @@ import json
 import time
 from typing import Dict, Any, Optional
 import weave
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.retrieval_service import RetrievalService
 from app.tools.tool_definitions import get_tool_definition
 from app.utils.weave_utils import add_session_metadata
@@ -16,7 +16,7 @@ from app.utils.weave_utils import add_session_metadata
 class ToolExecutor:
     """Executes tools called by the LLM."""
     
-    def __init__(self, course_service: CourseService, retrieval_service: RetrievalService):
+    def __init__(self, course_service: IndependentCourseService, retrieval_service: RetrievalService):
         """Initialize the tool executor."""
         self.course_service = course_service
         self.retrieval_service = retrieval_service
