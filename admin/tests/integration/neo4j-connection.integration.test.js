@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load environment
-const envPath = path.resolve(__dirname, '../.env.local');
+const envPath = path.resolve(__dirname, '../../../.env.local');
 dotenv.config({ path: envPath });
 
 console.log('\n🔍 Testing Neo4j Connection...\n');
@@ -97,4 +97,3 @@ async function testConnection() {
 }
 
 testConnection();
-

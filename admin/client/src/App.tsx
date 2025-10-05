@@ -8,6 +8,7 @@ import Navigation from "@/components/navigation";
 import AdminPage from "@/pages/AdminPage";
 import CoursesPage from "@/pages/CoursesPage";
 import GraphPage from "@/pages/GraphPage";
+import PromptOptimizationPage from "@/pages/PromptOptimizationPage";
 import SettingsPage from "@/pages/SettingsPage";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
           <Route path="/content" component={AdminPage} />
           <Route path="/courses" component={CoursesPage} />
           <Route path="/graph" component={GraphPage} />
+          <Route path="/prompt-optimization" component={PromptOptimizationPage} />
           <Route path="/settings" component={SettingsPage} />
         </Switch>
       </main>

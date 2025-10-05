@@ -7,14 +7,19 @@
 
 // Removed adminWeave import - now passed as constructor parameter
 import { PromptEvaluationService } from './promptEvaluationService.js';
-import { 
-  PromptTemplate, 
-  RLAction, 
-  RLState, 
+import {
+  PromptTemplate,
+  RLAction,
+  RLState,
   PromptEvaluation,
   PromptCriteria,
-  RLEpisode 
+  RLEpisode
 } from '../models/promptOptimization.js';
+import type {
+  MultiCriteriaScores,
+  OptimizationRound,
+  RoundSpecificConfig
+} from '../models/promptOptimizationEnhanced.js';
 
 export class PromptRLEnvironment {
   private currentState: RLState | null = null;
@@ -22,6 +27,9 @@ export class PromptRLEnvironment {
   private currentEpisode: Partial<RLEpisode> | null = null;
   private weave: any;
   private config: { maxSteps?: number };
+  private currentRound: OptimizationRound | null = null;
+  private multiCriteriaMode: boolean = false;
+  private focusCriteria: string[] = [];
 
   constructor(
     private evaluationService: PromptEvaluationService,
@@ -33,6 +41,44 @@ export class PromptRLEnvironment {
   }
 
   /**
+   * Configure environment for multi-round optimization
+   */
+  configureForRound(round: OptimizationRound): void {
+    this.currentRound = round;
+    this.multiCriteriaMode = true;
+
+    // Set focus criteria if specified
+    if (round.focusCriteria && round.focusCriteria.length > 0) {
+      this.focusCriteria = round.focusCriteria as string[];
+    } else {
+      this.focusCriteria = [];
+    }
+
+    console.log(`🎯 Environment configured for Round ${round.roundNumber} (${round.strategy})`);
+    if (this.focusCriteria.length > 0) {
+      console.log(`📊 Focus criteria: ${this.focusCriteria.join(', ')}`);
+    }
+  }
+
+  /**
+   * Enable multi-criteria evaluation mode
+   */
+  enableMultiCriteriaMode(focusCriteria?: string[]): void {
+    this.multiCriteriaMode = true;
+    this.focusCriteria = focusCriteria || [];
+    console.log(`📊 Multi-criteria mode enabled${focusCriteria ? ` with focus on: ${focusCriteria.join(', ')}` : ''}`);
+  }
+
+  /**
+   * Disable multi-criteria evaluation mode
+   */
+  disableMultiCriteriaMode(): void {
+    this.multiCriteriaMode = false;
+    this.focusCriteria = [];
+    console.log(`📊 Multi-criteria mode disabled`);
+  }
+
+  /**
    * Reset environment with a new prompt and target criteria
    */
   async reset(
@@ -40,7 +86,13 @@ export class PromptRLEnvironment {
     targetCriteria: PromptCriteria[],
     contextQuery?: string
   ): Promise<RLState> {
-    return await this.weave.createChildTrace('rl_environment_reset', async () => {
+    const traceId = this.weave.startTrace('rl_environment_reset', {
+      promptId: basePrompt.id,
+      promptName: basePrompt.name,
+      criteriaCount: targetCriteria.length
+    });
+
+    try {
       console.log(`🔄 Resetting RL environment with prompt: ${basePrompt.name}`);
 
       await this.weave.logEvent('rl_environment_reset', {
@@ -79,15 +131,25 @@ export class PromptRLEnvironment {
         }
       };
 
-      await this.weave.logMetric('environment_reset_score', this.currentState.performanceHistory.averageScore, {
+      await this.weave.logMetrics({
+        environment_reset_score: this.currentState.performanceHistory.averageScore,
         promptId: basePrompt.id,
         episodeId: this.currentEpisode.id
       });
 
       console.log(`✅ Environment reset complete. Initial score: ${this.currentState.performanceHistory.averageScore.toFixed(3)}`);
-      
+
+      this.weave.endTrace(traceId, {
+        initialScore: this.currentState.performanceHistory.averageScore,
+        episodeId: this.currentEpisode.id,
+        evaluationsCount: recentEvaluations.length
+      });
+
       return this.currentState;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
@@ -99,7 +161,14 @@ export class PromptRLEnvironment {
     done: boolean;
     info: Record<string, any>;
   }> {
-    return await this.weave.createChildTrace('rl_environment_step', async () => {
+    const traceId = this.weave.startTrace('rl_environment_step', {
+      actionType: action.type,
+      actionDescription: action.description,
+      currentScore: this.currentState?.performanceHistory.averageScore,
+      episodeLength: this.currentEpisode?.actions?.length || 0
+    });
+
+    try {
       if (!this.currentState || !this.currentEpisode) {
         throw new Error('Environment not initialized. Call reset() first.');
       }
@@ -116,7 +185,7 @@ export class PromptRLEnvironment {
 
       // Apply action to create modified prompt
       const modifiedPrompt = await this.applyAction(this.currentState.promptTemplate, action);
-      
+
       // Evaluate modified prompt
       const testQueries = [this.currentState.contextQuery || 'test query'];
       const evaluations = await this.evaluationService.evaluatePrompt(
@@ -172,7 +241,8 @@ export class PromptRLEnvironment {
         ...(done && { terminationReason })
       };
 
-      await this.weave.logMetric('rl_step_reward', reward, {
+      await this.weave.logMetrics({
+        rl_step_reward: reward,
         promptId: modifiedPrompt.id,
         actionType: action.type,
         stepNumber: this.currentEpisode.actions!.length,
@@ -181,17 +251,35 @@ export class PromptRLEnvironment {
 
       console.log(`📊 Step completed. Reward: ${reward.toFixed(3)}, Done: ${done}`);
 
+      this.weave.endTrace(traceId, {
+        reward,
+        newScore: nextState.performanceHistory.averageScore,
+        done,
+        improvement: reward > 0,
+        episodeLength: stepCount,
+        terminationReason: done ? terminationReason : undefined
+      });
+
       return { nextState, reward, done, info };
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
    * Apply an RL action to modify a prompt
    */
   private async applyAction(prompt: PromptTemplate, action: RLAction): Promise<PromptTemplate> {
-    return await this.weave.createChildTrace(`apply_action_${action.type}`, async () => {
+    const traceId = this.weave.startTrace(`apply_action_${action.type}`, {
+      originalPromptId: prompt.id,
+      actionType: action.type,
+      actionParameters: action.parameters
+    });
+
+    try {
       console.log(`🔧 Applying action: ${action.type}`);
-      
+
       const modifiedPrompt: PromptTemplate = {
         ...prompt,
         id: `${prompt.id}_modified_${Date.now()}`,
@@ -244,61 +332,284 @@ export class PromptRLEnvironment {
         actionParameters: action.parameters
       });
 
+      this.weave.endTrace(traceId, {
+        modifiedPromptId: modifiedPrompt.id,
+        actionApplied: action.type,
+        success: true
+      });
+
       return modifiedPrompt;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**
    * Calculate reward based on evaluation results and action taken
+   * Enhanced for multi-criteria evaluation and round-specific strategies
    */
   private async calculateReward(
     previousState: RLState,
     evaluations: PromptEvaluation[],
     action: RLAction
   ): Promise<number> {
-    return await this.weave.createChildTrace('calculate_rl_reward', async () => {
-      const currentScore = evaluations.reduce((sum, e) => sum + e.overallScore, 0) / evaluations.length;
-      const previousScore = previousState.performanceHistory.averageScore;
-      
-      // Base reward: improvement in score
-      let reward = (currentScore - previousScore) * 10; // Scale to make rewards more significant
-      
-      // Bonus for meeting specific criteria
-      const criteriaBonus = this.calculateCriteriaBonus(evaluations, previousState.targetCriteria);
-      reward += criteriaBonus;
-      
-      // Penalty for making responses too long or too short
-      const lengthPenalty = this.calculateLengthPenalty(evaluations);
-      reward -= lengthPenalty;
-      
-      // Bonus for consistency across test queries
-      const consistencyBonus = this.calculateConsistencyBonus(evaluations);
-      reward += consistencyBonus;
-      
-      // Action-specific adjustments
-      const actionAdjustment = this.calculateActionAdjustment(action, currentScore);
-      reward += actionAdjustment;
-      
+    const traceId = this.weave.startTrace('calculate_rl_reward', {
+      actionType: action.type,
+      multiCriteriaMode: this.multiCriteriaMode,
+      currentRound: this.currentRound?.roundNumber,
+      roundStrategy: this.currentRound?.strategy,
+      evaluationsCount: evaluations.length
+    });
+
+    try {
+      let reward = 0;
+
+      if (this.multiCriteriaMode) {
+        reward = await this.calculateMultiCriteriaReward(previousState, evaluations, action);
+      } else {
+        reward = await this.calculateStandardReward(previousState, evaluations, action);
+      }
+
+      // Apply round-specific adjustments
+      if (this.currentRound) {
+        reward = this.applyRoundSpecificAdjustments(reward, action);
+      }
+
       // Normalize reward to [-1, 1] range
       reward = Math.max(-1, Math.min(1, reward));
-      
+
       await this.weave.logEvent('reward_calculated', {
         totalReward: reward,
-        scoreImprovement: currentScore - previousScore,
-        criteriaBonus,
-        lengthPenalty,
-        consistencyBonus,
-        actionAdjustment,
-        currentScore,
-        previousScore
+        multiCriteriaMode: this.multiCriteriaMode,
+        currentRound: this.currentRound?.roundNumber,
+        roundStrategy: this.currentRound?.strategy,
+        focusCriteria: this.focusCriteria
       });
-      
+
+      this.weave.endTrace(traceId, {
+        reward,
+        multiCriteriaMode: this.multiCriteriaMode,
+        roundStrategy: this.currentRound?.strategy,
+        success: true
+      });
+
       return reward;
-    });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate reward using multi-criteria evaluation
+   */
+  private async calculateMultiCriteriaReward(
+    previousState: RLState,
+    evaluations: PromptEvaluation[],
+    action: RLAction
+  ): Promise<number> {
+    // Extract multi-criteria scores from evaluations
+    const currentScores = this.extractMultiCriteriaScores(evaluations);
+    const previousScores = this.extractMultiCriteriaScores(previousState.recentEvaluations);
+
+    let totalReward = 0;
+    let criteriaCount = 0;
+
+    // Calculate improvement for each criterion
+    const criteriaWeights = this.getCriteriaWeights();
+
+    for (const [criterion, weight] of Object.entries(criteriaWeights)) {
+      const currentScore = currentScores[criterion] || 0;
+      const previousScore = previousScores[criterion] || 0;
+      const improvement = currentScore - previousScore;
+
+      // Apply focus bonus if this criterion is in focus
+      const focusMultiplier = this.focusCriteria.includes(criterion) ? 2.0 : 1.0;
+
+      const criterionReward = improvement * weight * focusMultiplier;
+      totalReward += criterionReward;
+      criteriaCount++;
+    }
+
+    // Average the reward across criteria
+    if (criteriaCount > 0) {
+      totalReward /= criteriaCount;
+    }
+
+    // Scale reward
+    totalReward *= 10;
+
+    // Add strategy-specific bonuses
+    totalReward += this.calculateStrategySpecificBonus(currentScores, action);
+
+    return totalReward;
+  }
+
+  /**
+   * Calculate standard single-score reward
+   */
+  private async calculateStandardReward(
+    previousState: RLState,
+    evaluations: PromptEvaluation[],
+    action: RLAction
+  ): Promise<number> {
+    const currentScore = evaluations.reduce((sum, e) => sum + e.overallScore, 0) / evaluations.length;
+    const previousScore = previousState.performanceHistory.averageScore;
+
+    // Base reward: improvement in score
+    let reward = (currentScore - previousScore) * 10;
+
+    // Bonus for meeting specific criteria
+    const criteriaBonus = this.calculateCriteriaBonus(evaluations, previousState.targetCriteria);
+    reward += criteriaBonus;
+
+    // Penalty for making responses too long or too short
+    const lengthPenalty = this.calculateLengthPenalty(evaluations);
+    reward -= lengthPenalty;
+
+    // Bonus for consistency across test queries
+    const consistencyBonus = this.calculateConsistencyBonus(evaluations);
+    reward += consistencyBonus;
+
+    // Action-specific adjustments
+    const actionAdjustment = this.calculateActionAdjustment(action, currentScore);
+    reward += actionAdjustment;
+
+    return reward;
+  }
+
+  /**
+   * Extract multi-criteria scores from evaluations
+   */
+  private extractMultiCriteriaScores(evaluations: PromptEvaluation[]): Record<string, number> {
+    const scores: Record<string, number> = {};
+
+    if (evaluations.length === 0) return scores;
+
+    // Aggregate scores across evaluations
+    for (const evaluation of evaluations) {
+      for (const [criterion, score] of Object.entries(evaluation.criteriaScores)) {
+        if (!scores[criterion]) {
+          scores[criterion] = 0;
+        }
+        scores[criterion] += score;
+      }
+    }
+
+    // Average the scores
+    for (const criterion in scores) {
+      scores[criterion] /= evaluations.length;
+    }
+
+    return scores;
+  }
+
+  /**
+   * Get criteria weights based on current round strategy
+   */
+  private getCriteriaWeights(): Record<string, number> {
+    const defaultWeights = {
+      relevance: 1.0,
+      clarity: 1.0,
+      completeness: 1.0,
+      accuracy: 1.0,
+      helpfulness: 1.0,
+      engagement: 1.0
+    };
+
+    if (!this.currentRound) return defaultWeights;
+
+    // Adjust weights based on round strategy
+    switch (this.currentRound.strategy) {
+      case 'exploration':
+        return {
+          ...defaultWeights,
+          relevance: 1.5,
+          completeness: 1.3,
+          clarity: 0.8
+        };
+      case 'refinement':
+        return {
+          ...defaultWeights,
+          clarity: 1.5,
+          accuracy: 1.4,
+          helpfulness: 1.2
+        };
+      case 'fine_tuning':
+        return {
+          ...defaultWeights,
+          accuracy: 1.6,
+          engagement: 1.3,
+          helpfulness: 1.4
+        };
+      default:
+        return defaultWeights;
+    }
+  }
+
+  /**
+   * Calculate strategy-specific bonus
+   */
+  private calculateStrategySpecificBonus(scores: Record<string, number>, action: RLAction): number {
+    if (!this.currentRound) return 0;
+
+    let bonus = 0;
+
+    switch (this.currentRound.strategy) {
+      case 'exploration':
+        // Bonus for diversity and trying new approaches
+        if (action.type === 'add_instruction' || action.type === 'change_format') {
+          bonus += 0.1;
+        }
+        break;
+      case 'refinement':
+        // Bonus for improving clarity and accuracy
+        if (scores.clarity > 7.0 && scores.accuracy > 7.0) {
+          bonus += 0.15;
+        }
+        break;
+      case 'fine_tuning':
+        // Bonus for high overall performance
+        const avgScore = Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length;
+        if (avgScore > 8.0) {
+          bonus += 0.2;
+        }
+        break;
+    }
+
+    return bonus;
+  }
+
+  /**
+   * Apply round-specific reward adjustments
+   */
+  private applyRoundSpecificAdjustments(reward: number, action: RLAction): number {
+    if (!this.currentRound) return reward;
+
+    const config = this.currentRound.agentConfig;
+
+    // Apply diversity bonus during exploration
+    if (this.currentRound.strategy === 'exploration') {
+      reward += config.diversityBonus * 0.1;
+    }
+
+    // Reduce reward volatility during fine-tuning
+    if (this.currentRound.strategy === 'fine_tuning') {
+      reward *= 0.8; // More conservative rewards
+    }
+
+    return reward;
   }
 
   private calculateCriteriaBonus(evaluations: PromptEvaluation[], criteria: PromptCriteria[]): number {
     let bonus = 0;
+
+    // Defensive programming: ensure criteria is iterable
+    if (!Array.isArray(criteria) || criteria.length === 0) {
+      console.warn('⚠️ PromptRLEnvironment: Invalid criteria array in calculateCriteriaBonus');
+      return 0;
+    }
 
     for (const criterion of criteria) {
       const avgScore = evaluations.reduce((sum, evalRecord) =>
@@ -377,20 +688,26 @@ export class PromptRLEnvironment {
    * Finalize current episode
    */
   private async finalizeEpisode(finalState: RLState): Promise<void> {
-    return await this.weave.createChildTrace('finalize_rl_episode', async () => {
+    const traceId = this.weave.startTrace('finalize_rl_episode', {
+      episodeId: this.currentEpisode?.id,
+      finalScore: finalState.performanceHistory.averageScore,
+      promptId: finalState.promptTemplate.id
+    });
+
+    try {
       if (!this.currentEpisode) return;
-      
+
       const totalReward = this.currentEpisode.rewards!.reduce((sum, r) => sum + r, 0);
-      
+
       const completedEpisode: RLEpisode = {
         ...this.currentEpisode as RLEpisode,
         finalState,
         totalReward,
         episodeLength: this.currentEpisode.actions!.length
       };
-      
+
       this.episodeHistory.push(completedEpisode);
-      
+
       await this.weave.logEvent('rl_episode_completed', {
         episodeId: completedEpisode.id,
         totalReward,
@@ -398,14 +715,25 @@ export class PromptRLEnvironment {
         finalScore: finalState.performanceHistory.averageScore,
         promptId: finalState.promptTemplate.id
       });
-      
-      await this.weave.logMetric('episode_total_reward', totalReward, {
+
+      await this.weave.logMetrics({
+        episode_total_reward: totalReward,
         episodeId: completedEpisode.id,
         episodeLength: completedEpisode.episodeLength
       });
-      
+
       console.log(`🏁 Episode completed. Total reward: ${totalReward.toFixed(3)}, Steps: ${completedEpisode.episodeLength}`);
-    });
+
+      this.weave.endTrace(traceId, {
+        totalReward,
+        episodeLength: completedEpisode.episodeLength,
+        finalScore: finalState.performanceHistory.averageScore,
+        success: true
+      });
+    } catch (error) {
+      this.weave.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 
   /**

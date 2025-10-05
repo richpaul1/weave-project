@@ -1391,4 +1391,406 @@ export class StorageService {
       await session.close();
     }
   }
+
+  // ============================================================================
+  // PROMPT OPTIMIZATION METHODS
+  // ============================================================================
+
+  /**
+   * Create a new prompt optimization job
+   */
+  async createOptimizationJob(job: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        CREATE (job:PromptOptimizationJob {
+          id: $id,
+          name: $name,
+          description: $description,
+          startingQuestion: $startingQuestion,
+          initialPrompt: $initialPrompt,
+          status: $status,
+          createdBy: $createdBy,
+          createdAt: $createdAt,
+          updatedAt: $updatedAt,
+          config: $config,
+          progress: $progress
+        })
+        RETURN job.id as id
+      `, {
+        id: job.id,
+        name: job.name,
+        description: job.description || '',
+        startingQuestion: job.startingQuestion,
+        initialPrompt: job.initialPrompt,
+        status: job.status,
+        createdBy: job.createdBy,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        config: JSON.stringify(job.config),
+        progress: JSON.stringify(job.progress)
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization job by ID
+   */
+  async getOptimizationJobById(jobId: string): Promise<any | null> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        OPTIONAL MATCH (job)-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+        OPTIONAL MATCH (job)-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        RETURN job,
+               collect(DISTINCT example) as trainingExamples,
+               collect(DISTINCT iteration) as iterations
+      `, { jobId });
+
+      if (result.records.length === 0) {
+        return null;
+      }
+
+      const record = result.records[0];
+      const jobNode = record.get('job').properties;
+      const trainingExamples = record.get('trainingExamples').map((node: any) => ({
+        ...node.properties,
+        evaluation: JSON.parse(node.properties.evaluation || '{}')
+      }));
+      const iterations = record.get('iterations').map((node: any) => ({
+        ...node.properties,
+        appliedActions: JSON.parse(node.properties.appliedActions || '[]'),
+        criteriaScores: JSON.parse(node.properties.criteriaScores || '{}')
+      }));
+
+      return {
+        ...jobNode,
+        config: JSON.parse(jobNode.config || '{}'),
+        progress: JSON.parse(jobNode.progress || '{}'),
+        trainingExamples,
+        iterations
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Update optimization job
+   */
+  async updateOptimizationJob(jobId: string, updates: any): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const setClause = Object.keys(updates)
+        .map(key => {
+          if (key === 'config' || key === 'progress') {
+            return `job.${key} = $${key}`;
+          }
+          return `job.${key} = $${key}`;
+        })
+        .join(', ');
+
+      const params: any = { jobId };
+      Object.keys(updates).forEach(key => {
+        if (key === 'config' || key === 'progress') {
+          params[key] = JSON.stringify(updates[key]);
+        } else {
+          params[key] = updates[key];
+        }
+      });
+
+      await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        SET ${setClause}, job.updatedAt = datetime()
+      `, params);
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * List optimization jobs with pagination
+   */
+  async listOptimizationJobs(page: number = 1, pageSize: number = 10): Promise<{
+    jobs: any[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      // Get total count
+      const countResult = await session.run(`
+        MATCH (job:PromptOptimizationJob)
+        RETURN count(job) as total
+      `);
+      const total = countResult.records[0].get('total').toNumber();
+
+      // Get paginated jobs
+      const skip = neo4j.int((page - 1) * pageSize);
+      const limit = neo4j.int(pageSize);
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob)
+        RETURN job
+        ORDER BY job.createdAt DESC
+        SKIP $skip
+        LIMIT $limit
+      `, { skip, limit });
+
+      const jobs = result.records.map(record => {
+        const jobNode = record.get('job').properties;
+        return {
+          ...jobNode,
+          config: JSON.parse(jobNode.config || '{}'),
+          progress: JSON.parse(jobNode.progress || '{}')
+        };
+      });
+
+      return { jobs, total, page, pageSize };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete optimization job and all related data
+   */
+  async deleteOptimizationJob(jobId: string): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        OPTIONAL MATCH (job)-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+        OPTIONAL MATCH (job)-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        DETACH DELETE job, example, iteration
+      `, { jobId });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Add training example to optimization job
+   */
+  async addTrainingExample(jobId: string, example: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        CREATE (example:TrainingExample {
+          id: $exampleId,
+          response: $response,
+          evaluation: $evaluation,
+          tags: $tags,
+          createdAt: $createdAt,
+          updatedAt: $updatedAt
+        })
+        CREATE (job)-[:HAS_TRAINING_EXAMPLE]->(example)
+        RETURN example.id as id
+      `, {
+        jobId,
+        exampleId: example.id,
+        response: example.response,
+        evaluation: JSON.stringify(example.evaluation),
+        tags: example.tags || [],
+        createdAt: example.createdAt,
+        updatedAt: example.updatedAt
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Update training example
+   */
+  async updateTrainingExample(exampleId: string, updates: any): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const setClause = Object.keys(updates)
+        .map(key => {
+          if (key === 'evaluation') {
+            return `example.${key} = $${key}`;
+          }
+          return `example.${key} = $${key}`;
+        })
+        .join(', ');
+
+      const params: any = { exampleId };
+      Object.keys(updates).forEach(key => {
+        if (key === 'evaluation') {
+          params[key] = JSON.stringify(updates[key]);
+        } else {
+          params[key] = updates[key];
+        }
+      });
+
+      await session.run(`
+        MATCH (example:TrainingExample {id: $exampleId})
+        SET ${setClause}, example.updatedAt = datetime()
+      `, params);
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete training example
+   */
+  async deleteTrainingExample(exampleId: string): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      await session.run(`
+        MATCH (example:TrainingExample {id: $exampleId})
+        DETACH DELETE example
+      `, { exampleId });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Add optimization iteration to job
+   */
+  async addOptimizationIteration(jobId: string, iteration: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        CREATE (iteration:OptimizationIteration {
+          id: $iterationId,
+          roundNumber: $roundNumber,
+          iterationNumber: $iterationNumber,
+          agentId: $agentId,
+          inputPrompt: $inputPrompt,
+          appliedActions: $appliedActions,
+          generatedResponse: $generatedResponse,
+          predictedScore: $predictedScore,
+          actualScore: $actualScore,
+          criteriaScores: $criteriaScores,
+          improvements: $improvements,
+          executionTime: $executionTime,
+          timestamp: $timestamp,
+          novelty: $novelty,
+          confidence: $confidence
+        })
+        CREATE (job)-[:HAS_ITERATION]->(iteration)
+        RETURN iteration.id as id
+      `, {
+        jobId,
+        iterationId: iteration.id,
+        roundNumber: iteration.roundNumber,
+        iterationNumber: iteration.iterationNumber,
+        agentId: iteration.agentId || null,
+        inputPrompt: iteration.inputPrompt,
+        appliedActions: JSON.stringify(iteration.appliedActions || []),
+        generatedResponse: iteration.generatedResponse,
+        predictedScore: iteration.predictedScore,
+        actualScore: iteration.actualScore || null,
+        criteriaScores: JSON.stringify(iteration.criteriaScores || {}),
+        improvements: iteration.improvements || [],
+        executionTime: iteration.executionTime,
+        timestamp: iteration.timestamp,
+        novelty: iteration.novelty || 0,
+        confidence: iteration.confidence || 0
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization iterations for a job
+   */
+  async getOptimizationIterations(jobId: string, roundNumber?: number): Promise<any[]> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      let query = `
+        MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+      `;
+
+      const params: any = { jobId };
+
+      if (roundNumber !== undefined) {
+        query += ` WHERE iteration.roundNumber = $roundNumber`;
+        params.roundNumber = roundNumber;
+      }
+
+      query += `
+        RETURN iteration
+        ORDER BY iteration.roundNumber, iteration.iterationNumber
+      `;
+
+      const result = await session.run(query, params);
+
+      return result.records.map(record => {
+        const iterationNode = record.get('iteration').properties;
+        return {
+          ...iterationNode,
+          appliedActions: JSON.parse(iterationNode.appliedActions || '[]'),
+          criteriaScores: JSON.parse(iterationNode.criteriaScores || '{}')
+        };
+      });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization analytics for a job
+   */
+  async getOptimizationAnalytics(jobId: string): Promise<any> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        WITH job, iteration
+        ORDER BY iteration.roundNumber, iteration.iterationNumber
+        RETURN
+          count(iteration) as totalIterations,
+          avg(iteration.executionTime) as avgExecutionTime,
+          max(iteration.predictedScore) as bestScore,
+          avg(iteration.predictedScore) as avgScore,
+          collect({
+            iteration: iteration.iterationNumber,
+            round: iteration.roundNumber,
+            score: iteration.predictedScore,
+            criteriaScores: iteration.criteriaScores
+          }) as scoreProgression
+      `, { jobId });
+
+      if (result.records.length === 0) {
+        return {
+          totalIterations: 0,
+          avgExecutionTime: 0,
+          bestScore: 0,
+          avgScore: 0,
+          scoreProgression: []
+        };
+      }
+
+      const record = result.records[0];
+      return {
+        totalIterations: record.get('totalIterations').toNumber(),
+        avgExecutionTime: record.get('avgExecutionTime'),
+        bestScore: record.get('bestScore'),
+        avgScore: record.get('avgScore'),
+        scoreProgression: record.get('scoreProgression').map((item: any) => ({
+          ...item,
+          criteriaScores: JSON.parse(item.criteriaScores || '{}')
+        }))
+      };
+    } finally {
+      await session.close();
+    }
+  }
 }

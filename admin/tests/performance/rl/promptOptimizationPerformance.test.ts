@@ -95,9 +95,10 @@ class PerformanceStorageService {
 }
 
 const mockWeave = {
-  createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+  startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+  endTrace: vi.fn(),
   logEvent: vi.fn(),
-  logMetric: vi.fn(),
+  logMetrics: vi.fn(),
   getCurrentTraceUrl: vi.fn().mockReturnValue('https://perf-trace-url.com')
 };
 
