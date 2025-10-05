@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, AsyncGenerator
 from app.services.query_classifier import QueryClassifier
 from app.services.tool_calling_service import ToolCallingService
 from app.services.enhanced_rag_service import EnhancedRAGService
-from app.config.tool_config import (
+from app.tool_config_pkg.tool_config import (
     ToolStrategyConfig, ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG,
     classify_query_for_tools, get_tools_for_query_type
 )

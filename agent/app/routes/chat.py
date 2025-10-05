@@ -24,7 +24,7 @@ from app.services.tool_calling_service import ToolCallingService
 from app.services.tool_strategy_service import ToolStrategyService
 from app.tools.tool_executor import ToolExecutor
 from app.utils.weave_utils import create_tool_trace_summary
-from app.config.tool_config import ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG
+from app.tool_config_pkg.tool_config import ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG
 from app import config
 
 
