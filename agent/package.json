@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "concurrently --names \"agent-backend,agent-frontend\" --prefix-colors \"blue,green\" \"python -m app.main\" \"sleep 3 && cd client && npm run dev\"",
     "install:all": "npm install && cd client && npm install",
-    "test:ui": "vitest run tests/ui --reporter=verbose"
+    "test:ui": "vitest run tests/ui --reporter=verbose",
+    "test:unit": "python -m pytest tests/unit/ -v --tb=short",
+    "test:functional": "python -m pytest tests/functional/ -v --tb=short",
+    "test:integration": "python -m pytest tests/integration/ -v --tb=short",
+    "test:all": "python -m pytest tests/ -v --tb=short && npm run test:ui"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

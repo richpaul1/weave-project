@@ -13,7 +13,7 @@ from typing import Dict, Any, AsyncGenerator, Optional
 import weave
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.utils.weave_utils import add_session_metadata
 
@@ -60,7 +60,7 @@ Please provide a comprehensive response that includes course recommendations and
         self,
         retrieval_service: RetrievalService,
         llm_service: LLMService,
-        course_service: Optional[CourseService] = None
+        course_service: Optional[IndependentCourseService] = None
     ):
         """
         Initialize enhanced RAG service.
@@ -72,7 +72,7 @@ Please provide a comprehensive response that includes course recommendations and
         """
         self.retrieval_service = retrieval_service
         self.llm_service = llm_service
-        self.course_service = course_service or CourseService()
+        self.course_service = course_service or IndependentCourseService()
         self.query_classifier = QueryClassifier(llm_service)
     
     @weave.op()
@@ -299,7 +299,10 @@ Please provide a comprehensive response that includes course recommendations and
                     "query_type": "mixed",
                     "classification": classification,
                     "course_search": course_result,
-                    "context_retrieval": context_result["metadata"],
+                    "context_retrieval": {
+                        "num_chunks": context_result["num_chunks"],
+                        "num_sources": context_result["num_sources"]
+                    },
                     "num_courses": len(courses),
                     "num_context_chunks": context_result["num_chunks"],
                     "llm_tokens": completion.get("tokens", 0)
@@ -363,7 +366,10 @@ Please provide a helpful and accurate answer based on the context provided."""
             "metadata": {
                 "query_type": "general",
                 "classification": classification,
-                "context_retrieval": context_result["metadata"],
+                "context_retrieval": {
+                    "num_chunks": context_result["num_chunks"],
+                    "num_sources": context_result["num_sources"]
+                },
                 "num_chunks": context_result["num_chunks"],
                 "llm_tokens": completion.get("tokens", 0)
             }

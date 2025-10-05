@@ -13,41 +13,38 @@ import aiohttp
 # Add the agent directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.services.enhanced_rag_service import EnhancedRAGService
-from app.config import Config
+import app.config as config
 
 
 class TestCourseSearchIntegration:
-    """Integration tests for course search with real admin backend."""
+    """Integration tests for course search with independent course service."""
 
     @pytest.fixture(scope="class")
-    def config(self):
-        """Real configuration."""
-        return Config()
-
-    @pytest.fixture(scope="class")
-    def course_service(self, config):
-        """Real CourseService with real config."""
-        return CourseService(config)
+    def course_service(self):
+        """Real IndependentCourseService with direct Neo4j access."""
+        return IndependentCourseService()
 
     @pytest.fixture
-    async def admin_backend_available(self, config):
-        """Check if admin backend is available for testing."""
+    async def neo4j_available(self):
+        """Check if Neo4j database is available for testing."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{config.ADMIN_BASE_URL}/health", timeout=5) as response:
-                    return response.status == 200
+            from app.services.storage import StorageService
+            storage = StorageService()
+            storage.connect()
+            storage.close()
+            return True
         except:
             return False
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_real_course_search(self, course_service, admin_backend_available):
-        """Test course search with real admin backend."""
-        if not admin_backend_available:
-            pytest.skip("Admin backend not available")
+    async def test_real_course_search(self, course_service, neo4j_available):
+        """Test course search with independent course service."""
+        if not neo4j_available:
+            pytest.skip("Neo4j database not available")
 
         # Test vector search
         result = await course_service.search_courses(
@@ -56,16 +53,16 @@ class TestCourseSearchIntegration:
             use_vector=True
         )
 
-        # Verify real search results
-        assert result["success"] is True
-        assert "data" in result
-        assert "searchMethod" in result["data"]
-        assert "total" in result["data"]
-        assert "results" in result["data"]
-        
+        # Verify search results (new format without success/data wrapper)
+        assert "results" in result
+        assert "total" in result
+        assert "searchMethod" in result
+        assert isinstance(result["results"], list)
+        assert isinstance(result["total"], int)
+
         # If courses exist, verify structure
-        if result["data"]["total"] > 0:
-            course = result["data"]["results"][0]
+        if result["total"] > 0:
+            course = result["results"][0]
             required_fields = ["id", "title", "url"]
             for field in required_fields:
                 assert field in course, f"Missing field: {field}"

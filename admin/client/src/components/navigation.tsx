@@ -57,7 +57,7 @@ export default function Navigation() {
 
         <div className="text-xs text-muted-foreground">
           <p className="font-medium mb-1">IzzyDocs</p>
-          <p>Powered by Weights & Biases</p>
+          <p>Monitored by Weights & Biases</p>
         </div>
       </div>
     </nav>

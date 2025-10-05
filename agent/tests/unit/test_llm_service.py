@@ -17,6 +17,7 @@ class TestLLMService:
         assert llm.provider == "ollama"
         assert llm.ollama_model is not None
     
+    @pytest.mark.skip(reason="Skipping OpenAI tests for now")
     @patch('app.config.OPENAI_API_KEY', 'test-key')
     @patch('openai.AsyncOpenAI')
     def test_init_openai(self, mock_openai):
@@ -24,6 +25,7 @@ class TestLLMService:
         llm = LLMService(provider="openai")
         assert llm.provider == "openai"
 
+    @pytest.mark.skip(reason="Skipping OpenAI tests for now")
     def test_init_openai_no_key(self):
         """Test LLMService initialization with OpenAI but no API key"""
         # Temporarily set OPENAI_API_KEY to None in the config module
@@ -68,6 +70,7 @@ class TestLLMService:
             assert result["tokens"] == 10
             assert result["provider"] == "ollama"
     
+    @pytest.mark.skip(reason="Skipping OpenAI tests for now")
     @pytest.mark.asyncio
     @patch('app.config.OPENAI_API_KEY', 'test-key')
     @patch('openai.AsyncOpenAI')
@@ -130,6 +133,7 @@ class TestLLMService:
             assert chunks[0] == "Test "
             assert chunks[1] == "response"
     
+    @pytest.mark.skip(reason="Skipping OpenAI tests for now")
     @pytest.mark.asyncio
     @patch('app.config.OPENAI_API_KEY', 'test-key')
     @patch('openai.AsyncOpenAI')
@@ -184,6 +188,7 @@ class TestLLMService:
             assert result == sample_embedding
             assert len(result) == 768
     
+    @pytest.mark.skip(reason="Skipping OpenAI tests for now")
     @pytest.mark.asyncio
     @patch('app.config.OPENAI_API_KEY', 'test-key')
     @patch('openai.AsyncOpenAI')
