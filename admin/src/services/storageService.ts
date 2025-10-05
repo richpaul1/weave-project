@@ -1168,6 +1168,70 @@ export class StorageService {
   }
 
   /**
+   * Delete all courses and their related data
+   */
+  async deleteAllCourses(): Promise<{ deletedCourses: number; deletedChunks: number; deletedFiles: number }> {
+    const session = this.getSession();
+
+    try {
+      // First, get count of courses and chunks to be deleted for logging
+      const countResult = await session.run(`
+        MATCH (c:Course)
+        OPTIONAL MATCH (c)-[:HAS_CHUNK]->(cc:CourseChunk)
+        RETURN
+          count(DISTINCT c) as courseCount,
+          count(cc) as chunkCount
+      `);
+
+      const courseCount = countResult.records[0]?.get('courseCount')?.toNumber() || 0;
+      const chunkCount = countResult.records[0]?.get('chunkCount')?.toNumber() || 0;
+
+      if (courseCount === 0) {
+        return { deletedCourses: 0, deletedChunks: 0, deletedFiles: 0 };
+      }
+
+      // Delete all courses and their chunks from Neo4j
+      await session.run(`
+        MATCH (c:Course)
+        OPTIONAL MATCH (c)-[:HAS_CHUNK]->(cc:CourseChunk)
+        DETACH DELETE c, cc
+      `);
+
+      // Delete all course files from filesystem
+      let deletedFiles = 0;
+      try {
+        const coursesDir = path.join(config.contentStoragePath, 'courses');
+        const files = await fs.readdir(coursesDir);
+
+        for (const file of files) {
+          if (file.endsWith('.md') || file.endsWith('.json')) {
+            await fs.unlink(path.join(coursesDir, file));
+            deletedFiles++;
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to delete some course files:', error);
+      }
+
+      console.log(`✅ Deleted all courses: ${courseCount} courses, ${chunkCount} chunks, ${deletedFiles} files`);
+
+      WeaveService.getInstance()?.logEvent('all_courses_deleted', {
+        deletedCourses: courseCount,
+        deletedChunks: chunkCount,
+        deletedFiles
+      });
+
+      return {
+        deletedCourses: courseCount,
+        deletedChunks: chunkCount,
+        deletedFiles
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
    * Get all graph nodes
    */
   

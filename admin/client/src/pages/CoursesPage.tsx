@@ -110,6 +110,16 @@ const crawlCourses = async (): Promise<{ message: string; coursesFound: number }
   return response.json();
 };
 
+const deleteAllCourses = async (): Promise<{ message: string; deletedCourses: number; deletedChunks: number; deletedFiles: number }> => {
+  const response = await fetch('/api/courses', {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete all courses');
+  }
+  return response.json();
+};
+
 export default function CoursesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -164,6 +174,18 @@ export default function CoursesPage() {
     },
   });
 
+  const deleteAllMutation = useMutation({
+    mutationFn: deleteAllCourses,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['course-stats'] });
+      toast.success(`All courses deleted successfully! Removed ${data.deletedCourses} courses, ${data.deletedChunks} chunks, and ${data.deletedFiles} files.`);
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete all courses: ${error.message}`);
+    },
+  });
+
   // Courses are already filtered by the search API
   const filteredCourses = courses;
 
@@ -192,6 +214,12 @@ export default function CoursesPage() {
   const handleDeleteCourse = (courseId: string) => {
     if (confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       deleteMutation.mutate(courseId);
+    }
+  };
+
+  const handleDeleteAllCourses = () => {
+    if (confirm('Are you sure you want to delete ALL courses? This will remove all courses, their chunks, and markdown files. This action cannot be undone.')) {
+      deleteAllMutation.mutate();
     }
   };
 
@@ -229,14 +257,25 @@ export default function CoursesPage() {
             Manage and explore learning courses from W&B
           </p>
         </div>
-        <Button 
-          onClick={() => crawlMutation.mutate()}
-          disabled={crawlMutation.isPending}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${crawlMutation.isPending ? 'animate-spin' : ''}`} />
-          {crawlMutation.isPending ? 'Crawling...' : 'Crawl Courses'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => crawlMutation.mutate()}
+            disabled={crawlMutation.isPending}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${crawlMutation.isPending ? 'animate-spin' : ''}`} />
+            {crawlMutation.isPending ? 'Crawling...' : 'Crawl Courses'}
+          </Button>
+          <Button
+            onClick={handleDeleteAllCourses}
+            disabled={deleteAllMutation.isPending || courses.length === 0}
+            variant="destructive"
+            className="flex items-center gap-2"
+          >
+            <Trash2 className={`h-4 w-4 ${deleteAllMutation.isPending ? 'animate-spin' : ''}`} />
+            {deleteAllMutation.isPending ? 'Deleting...' : 'Delete All'}
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -247,7 +286,7 @@ export default function CoursesPage() {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold" data-testid="total-courses">
               {statsLoading ? <Skeleton className="h-8 w-16" /> : stats?.totalCourses || 0}
             </div>
           </CardContent>
@@ -335,11 +374,11 @@ export default function CoursesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCourses.map((course) => (
-            <Card key={course.id} className="hover:shadow-lg transition-shadow">
+            <Card key={course.id} className="hover:shadow-lg transition-shadow" data-testid="course-card">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg line-clamp-2">{course.title}</CardTitle>
+                    <CardTitle className="text-lg line-clamp-2" data-testid="course-title">{course.title}</CardTitle>
                     {course.description && (
                       <CardDescription className="mt-2 line-clamp-3">
                         {course.description}
@@ -353,7 +392,7 @@ export default function CoursesPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleViewCourse(course)}>
+                      <DropdownMenuItem onClick={() => handleViewCourse(course)} data-testid="view-details">
                         <Eye className="mr-2 h-4 w-4" />
                         View Details
                       </DropdownMenuItem>

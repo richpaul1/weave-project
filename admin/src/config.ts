@@ -60,6 +60,9 @@ export const config = {
   ollamaModel: getOptionalEnv('OLLAMA_MODEL', 'llama3.2'),
   ollamaEmbeddingModel: getOptionalEnv('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text'),
 
+  // Course Extraction - Feature flags
+  useLLMForCourseExtraction: getOptionalEnv('USE_LLM_COURSE_EXTRACTION', 'true') === 'true',
+
   // OpenAI - Optional (alternative to Ollama)
   openaiApiKey: getOptionalEnv('OPENAI_API_KEY', ''),
   openaiModel: getOptionalEnv('OPENAI_MODEL', 'gpt-4'),

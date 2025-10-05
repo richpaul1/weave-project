@@ -135,7 +135,7 @@ class IndependentCourseService:
              sqrt(reduce(norm2 = 0.0, i IN range(0, size($queryEmbedding)-1) |
                norm2 + $queryEmbedding[i] * $queryEmbedding[i])) AS norm2
         WITH c, dotProduct / (norm1 * norm2) AS score
-        WHERE score > 0.7
+        WHERE score IS NOT NULL AND score > 0.1
         RETURN c, score
         ORDER BY score DESC
         LIMIT $limit

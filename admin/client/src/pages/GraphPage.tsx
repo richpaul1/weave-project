@@ -6,9 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Network, Database, Users, FileText, Search, X, BarChart3, Play, Hash, MessageSquare, Building2, Lightbulb, Trash2, Loader2, Activity, Eye } from "lucide-react";
+import { Network, Database, Users, FileText, Search, X, BarChart3, Play, Hash, MessageSquare, Building2, Lightbulb, Trash2, Loader2, Activity, Eye, BookOpen, Settings } from "lucide-react";
 import CytoscapeGraph from "@/components/cytoscape-graph";
-import GraphSearchResults from "@/components/graph-search-results";
 import { useDebounce } from "@/hooks/use-debounce";
 
 // Type definitions
@@ -33,18 +32,18 @@ interface GraphEdge {
 function normalizeToContentNodeType(type: string): string {
   const lowerType = type.toLowerCase();
   if (lowerType === 'page') return 'page';
-  if (lowerType === 'video') return 'video';
-  if (lowerType === 'transcript' || lowerType === 'transcript_chunk') return 'transcript';
   if (lowerType === 'chunk' || lowerType === 'text_chunk') return 'chunk';
-  if (lowerType === 'entity') return 'entity';
-  if (lowerType === 'topic') return 'topic';
-  return 'entity';
+  if (lowerType === 'coursechunk' || lowerType === 'course_chunk') return 'coursechunk';
+  if (lowerType === 'course') return 'course';
+  if (lowerType === 'setting') return 'setting';
+  if (lowerType === 'chatmessage' || lowerType === 'chat_message') return 'chatmessage';
+  return 'chunk';
 }
 
 export default function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "search">("overview");
+  const [activeTab, setActiveTab] = useState<"overview">("overview");
   const [currentView, setCurrentView] = useState<"graph" | "report">("graph");
   const centerNodeFunctionRef = useRef<((nodeId: string) => void) | null>(null);
   const [centerNodeFunction, setCenterNodeFunction] = useState<((nodeId: string) => void) | null>(null);
@@ -77,6 +76,9 @@ export default function GraphPage() {
   // Duplicate detail modal state
   const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<any>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+
+  // Properties popup state
+  const [isPropertiesModalOpen, setIsPropertiesModalOpen] = useState(false);
 
   // Auto-centering state
   const [showAutoCenterMessage, setShowAutoCenterMessage] = useState(false);
@@ -213,13 +215,15 @@ export default function GraphPage() {
     : null;
 
   const getNodeTypeColor = (type: string) => {
-    switch (type) {
-      case 'concept': return 'bg-primary/10 text-primary';
-      case 'document': return 'bg-yellow-500/10 text-yellow-600';
-      case 'person': return 'bg-red-500/10 text-red-600';
-      case 'entity': return 'bg-accent/10 text-accent';
+    const normalizedType = normalizeToContentNodeType(type);
+    switch (normalizedType) {
       case 'page': return 'bg-blue-500/10 text-blue-600';
-      default: return 'bg-purple-500/10 text-purple-600';
+      case 'chunk': return 'bg-gray-500/10 text-gray-600';
+      case 'coursechunk': return 'bg-orange-500/10 text-orange-600';
+      case 'course': return 'bg-cyan-500/10 text-cyan-600';
+      case 'setting': return 'bg-green-500/10 text-green-600';
+      case 'chatmessage': return 'bg-purple-500/10 text-purple-600';
+      default: return 'bg-gray-500/10 text-gray-600';
     }
   };
 
@@ -228,18 +232,18 @@ export default function GraphPage() {
     switch (contentType) {
       case 'page':
         return <FileText className="h-4 w-4 text-blue-500" />;
-      case 'video':
-        return <Play className="h-4 w-4 text-red-500" />;
-      case 'transcript':
-        return <MessageSquare className="h-4 w-4 text-orange-500" />;
       case 'chunk':
         return <Hash className="h-4 w-4 text-gray-500" />;
-      case 'entity':
-        return <Building2 className="h-4 w-4 text-green-500" />;
-      case 'topic':
-        return <Lightbulb className="h-4 w-4 text-purple-500" />;
+      case 'coursechunk':
+        return <Hash className="h-4 w-4 text-orange-500" />;
+      case 'course':
+        return <BookOpen className="h-4 w-4 text-cyan-500" />;
+      case 'setting':
+        return <Settings className="h-4 w-4 text-green-500" />;
+      case 'chatmessage':
+        return <MessageSquare className="h-4 w-4 text-purple-500" />;
       default:
-        return <FileText className="h-4 w-4 text-gray-500" />;
+        return <Hash className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -291,16 +295,7 @@ export default function GraphPage() {
     }
   }, [selectedNode, showAutoCenterMessage]);
 
-  const handleSearchNodeSelect = useCallback((node: GraphNode) => {
-    setSelectedNode(node);
-    setActiveTab("overview");
-    // Clear search to return to normal view
-    setSearchQuery("");
-    // Center the node in the visualization
-    if (centerNodeFunction) {
-      centerNodeFunction(node.id);
-    }
-  }, [centerNodeFunction]);
+
 
   const clearSearch = () => {
     setSearchQuery("");
@@ -414,8 +409,8 @@ export default function GraphPage() {
             </div>
 
             {/* Graph Details Panel */}
-            <div className="w-80 bg-surface border-l border-border overflow-y-auto">
-          <div className="p-4 border-b border-border">
+            <div className="w-64 min-w-64 max-w-72 bg-surface border-l border-border overflow-y-auto overflow-x-hidden">
+          <div className="p-2 border-b border-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-foreground">Graph Explorer</h3>
             </div>
@@ -423,15 +418,12 @@ export default function GraphPage() {
 
           </div>
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "search")} className="flex-1">
-            <TabsList className="grid w-full grid-cols-2 mx-4 mt-4">
+          <Tabs value="overview">
+            <TabsList className="grid grid-cols-1 mx-2 mt-4">
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="search" disabled={!searchQuery.trim()}>
-                Search {searchResults?.total ? `(${searchResults.total})` : ''}
-              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="p-4 space-y-6 mt-0">
+            <TabsContent value="overview" className="p-2 space-y-6 mt-0">
 
             
 
@@ -458,7 +450,12 @@ export default function GraphPage() {
                       <div>Position: ({selectedSimulationNode?.x?.toFixed(0) || 'N/A'}, {selectedSimulationNode?.y?.toFixed(0) || 'N/A'})</div>
                       {selectedNode.properties && (
                         <div>
-                          Properties: {Object.keys(selectedNode.properties).length}
+                          Properties: <button
+                            onClick={() => setIsPropertiesModalOpen(true)}
+                            className="text-blue-500 hover:text-blue-700 underline cursor-pointer"
+                          >
+                            {Object.keys(selectedNode.properties).length}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -579,19 +576,7 @@ export default function GraphPage() {
 
             </TabsContent>
 
-            <TabsContent value="search" className="p-4 mt-0">
-              {isSearching ? (
-                <div className="text-center py-8">
-                  <div className="text-sm text-muted-foreground">Searching...</div>
-                </div>
-              ) : (
-                <GraphSearchResults
-                  results={searchResults?.results || []}
-                  query={debouncedSearchQuery}
-                  onNodeSelect={handleSearchNodeSelect}
-                />
-              )}
-            </TabsContent>
+
           </Tabs>
             </div>
           </>
@@ -669,11 +654,13 @@ export default function GraphPage() {
                         {Object.entries(nodeTypeStats)
                           .sort(([, a], [, b]) => b - a) // Sort by count descending
                           .map(([type, count]) => {
-                            const isPageType = type === 'page';
-                            const isVideoType = type === 'video';
-                            const isImageType = type === 'image';
-                            const isTranscriptType = type === 'transcript_chunk';
-                            const isPeopleType = type.toLowerCase().includes('people') || type.toLowerCase().includes('person');
+                            const normalizedType = normalizeToContentNodeType(type);
+                            const isPageType = normalizedType === 'page';
+                            const isChunkType = normalizedType === 'chunk';
+                            const isCourseChunkType = normalizedType === 'coursechunk';
+                            const isCourseType = normalizedType === 'course';
+                            const isSettingType = normalizedType === 'setting';
+                            const isChatMessageType = normalizedType === 'chatmessage';
 
                             return (
                               <div key={type} className="flex items-center justify-between p-3 rounded-lg border bg-card">
@@ -681,10 +668,11 @@ export default function GraphPage() {
                                   <div
                                     className={`w-4 h-4 rounded-full ${
                                       isPageType ? 'bg-blue-500' :
-                                      isVideoType ? 'bg-green-500' :
-                                      isImageType ? 'bg-purple-500' :
-                                      isTranscriptType ? 'bg-orange-500' :
-                                      isPeopleType ? 'bg-red-500' :
+                                      isChunkType ? 'bg-gray-500' :
+                                      isCourseChunkType ? 'bg-orange-500' :
+                                      isCourseType ? 'bg-cyan-500' :
+                                      isSettingType ? 'bg-green-500' :
+                                      isChatMessageType ? 'bg-purple-500' :
                                       'bg-gray-400'
                                     }`}
                                   />
@@ -694,24 +682,29 @@ export default function GraphPage() {
                                       Pages ✓
                                     </Badge>
                                   )}
-                                  {isVideoType && (
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                      Videos ✓
+                                  {isChunkType && (
+                                    <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                      Chunks ✓
                                     </Badge>
                                   )}
-                                  {isImageType && (
-                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                                      Images ✓
-                                    </Badge>
-                                  )}
-                                  {isTranscriptType && (
+                                  {isCourseChunkType && (
                                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                                      Transcripts ✓
+                                      Course Chunks ✓
                                     </Badge>
                                   )}
-                                  {isPeopleType && (
-                                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                      People ⚠️
+                                  {isCourseType && (
+                                    <Badge variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-200">
+                                      Courses ✓
+                                    </Badge>
+                                  )}
+                                  {isSettingType && (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                      Settings ✓
+                                    </Badge>
+                                  )}
+                                  {isChatMessageType && (
+                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                      Chat Messages ✓
                                     </Badge>
                                   )}
                                 </div>
@@ -723,10 +716,11 @@ export default function GraphPage() {
                                     <div
                                       className={`h-3 rounded-full ${
                                         isPageType ? 'bg-blue-500' :
-                                        isVideoType ? 'bg-green-500' :
-                                        isImageType ? 'bg-purple-500' :
-                                        isTranscriptType ? 'bg-orange-500' :
-                                        isPeopleType ? 'bg-red-500' :
+                                        isChunkType ? 'bg-gray-500' :
+                                        isCourseChunkType ? 'bg-orange-500' :
+                                        isCourseType ? 'bg-cyan-500' :
+                                        isSettingType ? 'bg-green-500' :
+                                        isChatMessageType ? 'bg-purple-500' :
                                         'bg-gray-400'
                                       }`}
                                       style={{
@@ -1182,6 +1176,48 @@ export default function GraphPage() {
                     </>
                   )}
                 </ul>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Properties Modal */}
+      <Dialog open={isPropertiesModalOpen} onOpenChange={setIsPropertiesModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Node Properties
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedNode && selectedNode.properties && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Properties for node: <span className="font-medium">{selectedNode.label}</span>
+              </div>
+
+              <div className="space-y-3">
+                {Object.entries(selectedNode.properties).map(([key, value]) => (
+                  <div key={key} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">{key}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {typeof value}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground break-words">
+                      {typeof value === 'object' ? (
+                        <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
+                          {JSON.stringify(value, null, 2)}
+                        </pre>
+                      ) : (
+                        <span>{String(value)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

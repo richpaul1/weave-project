@@ -165,11 +165,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * GET /api/courses/:id/markdown
- * Get course markdown content
+ * Get course markdown content (returns plain text)
  */
 router.get('/:id/markdown', async (req: Request, res: Response) => {
   const storage = StorageService.getInstance();
-  
+
   try {
     const { id } = req.params;
     const course = await storage.getCourseById(id);
@@ -187,10 +187,9 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
 
     const markdown = await fs.readFile(markdownPath, 'utf-8');
 
-    res.json({
-      course,
-      markdown,
-    });
+    // Return just the markdown content as plain text
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(markdown);
   } catch (error: any) {
     console.error('Error getting course markdown:', error);
     res.status(500).json({ error: error.message });
@@ -204,7 +203,7 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   const storage = StorageService.getInstance();
-  
+
   try {
     const { id } = req.params;
     await storage.deleteCourse(id);
@@ -212,6 +211,29 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'Course deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting course:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+  }
+});
+
+/**
+ * DELETE /api/courses
+ * Delete all courses
+ */
+router.delete('/', async (req: Request, res: Response) => {
+  const storage = StorageService.getInstance();
+
+  try {
+    const result = await storage.deleteAllCourses();
+
+    res.json({
+      message: 'All courses deleted successfully',
+      deletedCourses: result.deletedCourses,
+      deletedChunks: result.deletedChunks,
+      deletedFiles: result.deletedFiles
+    });
+  } catch (error: any) {
+    console.error('Error deleting all courses:', error);
     res.status(500).json({ error: error.message });
   } finally {
   }
