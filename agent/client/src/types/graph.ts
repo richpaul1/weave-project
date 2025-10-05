@@ -24,13 +24,12 @@ export interface GraphEdge {
  * Content node types for graph visualization
  */
 export const CONTENT_NODE_TYPES: Record<string, { color: string }> = {
-  page: { color: '#3B82F6' },      // Blue
-  video: { color: '#EF4444' },     // Red
-  transcript: { color: '#F97316' }, // Orange
-  chunk: { color: '#6B7280' },     // Gray
-  entity: { color: '#10B981' },    // Green
-  topic: { color: '#A855F7' },     // Purple
-  course: { color: '#06B6D4' },    // Cyan
+  page: { color: '#3B82F6' },        // Blue
+  chunk: { color: '#6B7280' },       // Gray
+  coursechunk: { color: '#F97316' },  // Orange
+  course: { color: '#06B6D4' },      // Cyan
+  setting: { color: '#10B981' },     // Green
+  chatmessage: { color: '#A855F7' }, // Purple
 };
 
 export type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;

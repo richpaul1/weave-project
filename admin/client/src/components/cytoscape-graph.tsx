@@ -27,11 +27,11 @@ interface GraphEdge {
 
 const CONTENT_NODE_TYPES: Record<string, { color: string; label: string }> = {
   page: { color: '#3B82F6', label: 'Page' },
-  video: { color: '#EF4444', label: 'Video' },
-  transcript: { color: '#F97316', label: 'Transcript' },
   chunk: { color: '#6B7280', label: 'Chunk' },
-  entity: { color: '#10B981', label: 'Entity' },
-  topic: { color: '#A855F7', label: 'Topic' },
+  coursechunk: { color: '#F97316', label: 'Course Chunk' },
+  course: { color: '#06B6D4', label: 'Course' },
+  setting: { color: '#10B981', label: 'Setting' },
+  chatmessage: { color: '#A855F7', label: 'Chat Message' },
 };
 
 type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;
@@ -39,12 +39,12 @@ type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;
 function normalizeToContentNodeType(type: string): ContentNodeType {
   const lowerType = type.toLowerCase();
   if (lowerType === 'page') return 'page';
-  if (lowerType === 'video') return 'video';
-  if (lowerType === 'transcript' || lowerType === 'transcript_chunk') return 'transcript';
   if (lowerType === 'chunk' || lowerType === 'text_chunk') return 'chunk';
-  if (lowerType === 'entity') return 'entity';
-  if (lowerType === 'topic') return 'topic';
-  return 'entity';
+  if (lowerType === 'coursechunk' || lowerType === 'course_chunk') return 'coursechunk';
+  if (lowerType === 'course') return 'course';
+  if (lowerType === 'setting') return 'setting';
+  if (lowerType === 'chatmessage' || lowerType === 'chat_message') return 'chatmessage';
+  return 'chunk';
 }
 
 // Register layout algorithms
