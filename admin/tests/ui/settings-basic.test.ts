@@ -199,8 +199,8 @@ describe('Settings Page Basic UI Tests', () => {
 
     it('should navigate between pages correctly', async () => {
       try {
-        // Start from admin page
-        await page.goto(`${BASE_URL}/admin`, { timeout: 10000 });
+        // Start from content page
+        await page.goto(`${BASE_URL}/content`, { timeout: 10000 });
         await page.waitForSelector('nav', { timeout: 5000 });
         
         // Navigate to settings
@@ -210,11 +210,11 @@ describe('Settings Page Basic UI Tests', () => {
         // Verify we're on settings page
         await expect(page.locator('h1')).toContainText('Settings');
         
-        // Navigate back to admin (if link exists)
-        const adminLink = page.locator('nav a[href="/admin"]');
-        if (await adminLink.isVisible()) {
-          await adminLink.click();
-          await page.waitForURL('**/admin', { timeout: 5000 });
+        // Navigate back to content (if link exists)
+        const contentLink = page.locator('nav a[href="/content"]');
+        if (await contentLink.isVisible()) {
+          await contentLink.click();
+          await page.waitForURL('**/content', { timeout: 5000 });
         }
         
       } catch (error) {

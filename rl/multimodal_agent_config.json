@@ -1,0 +1,138 @@
+{
+  "model_config": {
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "model_name": "weave-multimodal-agent",
+    "description": "Custom multimodal agent trained to return text + images",
+    "version": "1.0.0"
+  },
+
+  "training_config": {
+    "groups_per_step": 2,
+    "num_epochs": 3,
+    "rollouts_per_group": 4,
+    "learning_rate": 3e-5,
+    "max_steps": 10,
+    "temperature": 0.7,
+    "max_tokens": 2000,
+    "batch_size": 8,
+    "lora_rank": 16,
+    "lora_alpha": 32
+  },
+  
+  "data_config": {
+    "training_data_path": "training_data.json",
+    "min_confidence_threshold": 0.4,
+    "max_training_examples": 1000,
+    "validation_split": 0.2,
+    "storage_paths": {
+      "content": "../admin/storage/content",
+      "docs": "../docs",
+      "images": "../docs/images"
+    }
+  },
+  
+  "evaluation_config": {
+    "judge_model": "openai/gpt-4o-mini",
+    "evaluation_criteria": {
+      "text_quality": {
+        "weight": 0.4,
+        "description": "Quality and relevance of text response"
+      },
+      "image_relevance": {
+        "weight": 0.3,
+        "description": "How relevant included images are to the content"
+      },
+      "image_completeness": {
+        "weight": 0.3,
+        "description": "Whether all important images were included"
+      }
+    },
+    "acceptance_threshold": 0.7,
+    "retry_attempts": 3
+  },
+  
+  "system_prompts": {
+    "multimodal_agent": "You are a helpful assistant that provides comprehensive responses including both text and relevant images when appropriate.\n\nWhen responding to queries:\n1. Provide clear, informative text\n2. If there are relevant images that would help illustrate your response, include them\n3. Always explain why the images are relevant\n4. Format your response as JSON with 'text', 'images', and 'reasoning' fields\n\nExample response format:\n{\n    \"text\": \"Your detailed text response here...\",\n    \"images\": [\"path/to/relevant/image1.png\", \"path/to/relevant/image2.jpg\"],\n    \"reasoning\": \"These images help illustrate the concepts discussed...\"\n}",
+    
+    "evaluation_judge": "You are an expert evaluator of multimodal AI responses. Evaluate responses based on:\n1. Text Quality: How well does the text response match expectations?\n2. Image Relevance: How relevant are the included images?\n3. Image Completeness: Were all important images included?\n\nProvide scores on a scale of 0-10 and explain your reasoning."
+  },
+  
+  "image_search_config": {
+    "max_results_per_query": 5,
+    "relevance_threshold": 0.1,
+    "supported_image_types": [
+      "screenshot",
+      "diagram", 
+      "chart",
+      "illustration",
+      "photo",
+      "icon"
+    ],
+    "image_extensions": [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"],
+    "context_window": 7
+  },
+  
+  "weave_config": {
+    "project_name": "multimodal-agent-training",
+    "entity": "weave-setup",
+    "track_gradients": true,
+    "track_parameters": true,
+    "track_artifacts": true,
+    "log_frequency": 10
+  },
+  
+  "backend_config": {
+    "type": "SkyPilotBackend",
+    "instance_type": "g4dn.xlarge",
+    "region": "us-west-2",
+    "disk_size": "100GB",
+    "auto_stop": true,
+    "max_runtime_hours": 24
+  },
+  
+  "optimization_config": {
+    "algorithm": "GRPO",
+    "reward_function": "RULER",
+    "exploration_strategy": "epsilon_greedy",
+    "epsilon": 0.1,
+    "epsilon_decay": 0.995,
+    "gradient_clipping": 1.0,
+    "weight_decay": 0.01
+  },
+  
+  "output_config": {
+    "save_checkpoints": true,
+    "checkpoint_frequency": 5,
+    "save_best_model": true,
+    "export_format": "huggingface",
+    "model_output_path": "./models/multimodal-agent",
+    "logs_output_path": "./logs/training"
+  },
+  
+  "experimental_features": {
+    "enable_image_generation": false,
+    "enable_image_editing": false,
+    "enable_multimodal_reasoning": true,
+    "enable_context_aware_selection": true,
+    "enable_user_feedback_loop": false
+  },
+  
+  "quality_thresholds": {
+    "minimum_text_length": 50,
+    "maximum_text_length": 2000,
+    "minimum_image_relevance": 0.3,
+    "maximum_images_per_response": 5,
+    "context_similarity_threshold": 0.5
+  },
+  
+  "training_schedule": {
+    "warmup_steps": 100,
+    "learning_rate_schedule": "cosine",
+    "early_stopping": {
+      "enabled": true,
+      "patience": 5,
+      "min_delta": 0.01
+    },
+    "validation_frequency": 2
+  }
+}

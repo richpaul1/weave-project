@@ -10,33 +10,14 @@ import weave
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
 from app.utils.weave_utils import add_session_metadata
+from app.prompts import PromptConfig
 
 
 class RAGService:
     """
     RAG service that orchestrates retrieval and generation.
+    Uses versioned prompts from the centralized configuration.
     """
-    
-    # System prompt for RAG
-    SYSTEM_PROMPT = """You are a helpful AI assistant that answers questions based on the provided context.
-
-Instructions:
-1. Answer the question using ONLY the information from the provided context
-2. If the context doesn't contain enough information to answer the question, say so
-3. Cite your sources by referencing [Source N] numbers from the context
-4. Be concise and accurate
-5. Do not make up information that is not in the context"""
-
-    # Context template
-    CONTEXT_TEMPLATE = """Context:
-
-{context}
-
----
-
-Question: {query}
-
-Answer:"""
     
     def __init__(
         self,
@@ -107,7 +88,7 @@ Answer:"""
         print(f"🤖 RAG Service: Generating LLM response...")
         completion = await self.llm_service.generate_completion(
             prompt=prompt,
-            system_prompt=self.SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_legacy_system_prompt()
         )
 
         print(f"✅ RAG Service: LLM response generated:")
@@ -120,6 +101,7 @@ Answer:"""
 
         result = {
             "response": response_text,
+            "context": context_result["context_text"],  # Add context for hallucination detection
             "sources": context_result["sources"],
             "metadata": {
                 "session_id": session_id,
@@ -127,7 +109,8 @@ Answer:"""
                 "num_sources": context_result["num_sources"],
                 "model": completion["model"],
                 "tokens": completion["tokens"],
-                "provider": completion["provider"]
+                "provider": completion["provider"],
+                "context": context_result["context_text"]  # Also add to metadata for backward compatibility
             }
         }
 
@@ -210,7 +193,7 @@ Answer:"""
 
         async for chunk in self.llm_service.generate_streaming(
             prompt=prompt,
-            system_prompt=self.SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_legacy_system_prompt()
         ):
             full_response += chunk
 
@@ -310,30 +293,40 @@ Answer:"""
             operation_type="prompt_building",
             query_length=len(query),
             context_length=len(context),
-            context_chunks=context.count("---") + 1 if context else 0
+            context_chunks=context.count("---") + 1 if context else 0,
+            # Track legacy prompt usage
+            legacy_rag_service=True,
+            legacy_prompt_version="1.0.0",  # Legacy service uses v1.0.0 prompts
+            prompt_template_type="legacy_context_template"
         )
 
-        return self.CONTEXT_TEMPLATE.format(
+        return PromptConfig.get_legacy_context_template().format(
             context=context,
             query=query
         )
     
     def _post_process_response(self, response: str) -> str:
         """
-        Post-process the LLM response.
-        
+        Post-process the LLM response to remove thinking tags and clean up.
+
         Args:
             response: Raw LLM response
-            
+
         Returns:
-            Cleaned response
+            Cleaned response without thinking tags
         """
+        # Remove thinking tags if they exist
+        if "<think>" in response and "</think>" in response:
+            think_start = response.find("<think>")
+            think_end = response.find("</think>") + 8
+            response = response[:think_start] + response[think_end:]
+
         # Remove leading/trailing whitespace
         response = response.strip()
-        
+
         # Remove any "Answer:" prefix if present
         if response.lower().startswith("answer:"):
             response = response[7:].strip()
-        
+
         return response
 

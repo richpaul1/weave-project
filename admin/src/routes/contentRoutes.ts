@@ -3,6 +3,7 @@ import { StorageService } from '../services/storageService.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { config } from '../config.js';
+import { WeaveService } from '../weave/weaveService.js';
 
 const router = Router();
 
@@ -11,15 +12,19 @@ const router = Router();
  * Get all pages
  */
 router.get('/pages', async (req: Request, res: Response) => {
-  const storage = StorageService.getInstance();
-  
+  const weaveService = WeaveService.getInstance();
+  const traceId = weaveService?.startTrace('ContentRoutes.getAllPages', {});
+
   try {
+    const storage = StorageService.getInstance();
     const pages = await storage.getAllPages();
+
+    weaveService?.endTrace(traceId, { pages: pages.length });
     res.json({ pages });
   } catch (error: any) {
     console.error('Error getting pages:', error);
+    weaveService?.endTrace(traceId, { error: error.message });
     res.status(500).json({ error: error.message });
-  } finally {
   }
 });
 
@@ -105,9 +110,11 @@ router.delete('/pages/:id', async (req: Request, res: Response) => {
  * Get content statistics
  */
 router.get('/stats', async (req: Request, res: Response) => {
-  const storage = StorageService.getInstance();
-  
+  const weaveService = WeaveService.getInstance();
+  const traceId = weaveService?.startTrace('ContentRoutes.getContentStats', {});
+
   try {
+    const storage = StorageService.getInstance();
     const pages = await storage.getAllPages();
 
     // Calculate stats
@@ -125,11 +132,12 @@ router.get('/stats', async (req: Request, res: Response) => {
       }, {} as Record<string, number>),
     };
 
+    weaveService?.endTrace(traceId, stats);
     res.json({ stats });
   } catch (error: any) {
     console.error('Error getting stats:', error);
+    weaveService?.endTrace(traceId, { error: error.message });
     res.status(500).json({ error: error.message });
-  } finally {
   }
 });
 

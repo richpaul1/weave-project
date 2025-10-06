@@ -372,3 +372,20 @@ iframe {
   contain: layout style paint;
   transform: translateZ(0);
 }
+
+/* Iframe isolation - prevent parent styles from affecting iframe content */
+.iframe-isolated {
+  /* Reset all inherited styles */
+  all: initial;
+  /* Restore essential iframe properties */
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* Ensure iframe doesn't inherit color scheme */
+  color-scheme: light;
+  /* Prevent any CSS custom properties from leaking */
+  background: white;
+  /* Ensure proper positioning */
+  position: static;
+}

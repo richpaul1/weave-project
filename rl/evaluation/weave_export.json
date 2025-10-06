@@ -1,0 +1,74 @@
+[
+  {
+    "query_id": "q1",
+    "query": "How do I trace my LLM calls with Weave?",
+    "category": "tracing",
+    "simple_score": 20.0,
+    "complex_score": 100.0,
+    "simple_has_image": false,
+    "complex_has_image": true,
+    "simple_word_count": 299,
+    "complex_word_count": 268,
+    "improvement": 80.0
+  },
+  {
+    "query_id": "q2",
+    "query": "What is a Weave Dataset?",
+    "category": "datasets",
+    "simple_score": 20.0,
+    "complex_score": 100.0,
+    "simple_has_image": false,
+    "complex_has_image": true,
+    "simple_word_count": 150,
+    "complex_word_count": 261,
+    "improvement": 80.0
+  },
+  {
+    "query_id": "q3",
+    "query": "Show me how to use the evaluation playground",
+    "category": "evaluation",
+    "simple_score": 15.0,
+    "complex_score": 100.0,
+    "simple_has_image": false,
+    "complex_has_image": true,
+    "simple_word_count": 528,
+    "complex_word_count": 260,
+    "improvement": 85.0
+  },
+  {
+    "query_id": "q4",
+    "query": "How do I use weave.Model to track my models?",
+    "category": "models",
+    "simple_score": 20.0,
+    "complex_score": 100.0,
+    "simple_has_image": false,
+    "complex_has_image": true,
+    "simple_word_count": 263,
+    "complex_word_count": 265,
+    "improvement": 80.0
+  },
+  {
+    "query_id": "q5",
+    "query": "Explain Weave tracing and show me an example",
+    "category": "tracing",
+    "simple_score": 20.0,
+    "complex_score": 20.0,
+    "simple_has_image": false,
+    "complex_has_image": false,
+    "simple_word_count": 459,
+    "complex_word_count": 439,
+    "improvement": 0.0
+  },
+  {
+    "query_id": "q6",
+    "query": "How do I create a dataset in Weave?",
+    "category": "datasets",
+    "simple_score": 20.0,
+    "complex_score": 100.0,
+    "simple_has_image": false,
+    "complex_has_image": true,
+    "simple_word_count": 430,
+    "complex_word_count": 387,
+    "improvement": 80.0
+  }
+]

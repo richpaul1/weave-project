@@ -75,7 +75,7 @@ class TestRAGService:
         assert any(e["type"] == "done" for e in events)
 
         # Verify retrieval service was called
-        mock_retrieval_service.retrieve_page_context.assert_called_once()
+        mock_retrieval_service.retrieve_context.assert_called_once()
     
     def test_build_prompt(
         self,

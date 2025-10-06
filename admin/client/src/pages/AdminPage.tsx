@@ -12,6 +12,7 @@ import { Eye, Trash2 } from 'lucide-react';
 import type { PageMetadata, CrawlJobStatus, ContentStats } from '@/types/schema';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'sonner';
+import { IsolatedIframe } from '@/components/isolated-iframe';
 
 export default function AdminPage() {
   const [url, setUrl] = useState('');
@@ -179,7 +180,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle>Web Crawler</CardTitle>
           <CardDescription>
-            Enter a URL to crawl and extract content
+            Enter a URL to crawl and crawl debth. Crawl Debth = 0 will only crawl this one page. Crawl Debth = 1 will crawl the page and 1 level of linked pages.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -364,11 +365,10 @@ export default function AdminPage() {
             <TabsContent value="preview" className="flex-1 min-h-0">
               <div className="h-[60vh] w-full rounded-md border overflow-hidden">
                 {selectedPage?.url ? (
-                  <iframe
+                  <IsolatedIframe
                     src={selectedPage.url}
-                    className="w-full h-full border-0"
                     title={`Preview of ${selectedPage.title}`}
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                    className="w-full h-full"
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">

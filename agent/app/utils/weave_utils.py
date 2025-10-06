@@ -2,7 +2,7 @@
 Weave Utilities
 
 Helper functions for Weave tracing and metadata management.
-Enhanced with tool execution tracing capabilities.
+Enhanced with tool execution tracing capabilities and prompt version tracking.
 """
 from typing import Optional, Dict, Any
 import weave
@@ -77,29 +77,61 @@ def format_retrieval_metadata(call) -> str:
     return f"{operation_type}__k{top_k}__q{query_length}"
 
 
+def get_prompt_version_metadata() -> Dict[str, Any]:
+    """
+    Get prompt version metadata for Weave tracking.
+
+    Returns:
+        Dictionary with prompt version information
+    """
+    try:
+        from app.prompts import PromptConfig
+        return {
+            "prompt_version": PromptConfig.get_current_version(),
+            "prompt_version_date": PromptConfig.get_version_info().get("version_date"),
+            "supported_prompt_versions": PromptConfig.get_supported_versions()
+        }
+    except ImportError:
+        # Fallback if prompts config is not available
+        return {
+            "prompt_version": "unknown",
+            "prompt_version_date": "unknown",
+            "supported_prompt_versions": []
+        }
+
+
 def add_session_metadata(
     session_id: Optional[str] = None,
     operation_type: str = "unknown",
+    include_prompt_version: bool = True,
     **kwargs
 ) -> None:
     """
     Helper function to add session metadata to current Weave call.
-    
+    Automatically includes prompt version information for tracking.
+
     Args:
         session_id: Session identifier
         operation_type: Type of operation being performed
+        include_prompt_version: Whether to include prompt version metadata (default: True)
         **kwargs: Additional metadata key-value pairs
     """
     try:
         import weave
-        
+
         if hasattr(weave, 'get_current_call') and weave.get_current_call():
             current_call = weave.get_current_call()
             if current_call and hasattr(current_call, 'attributes'):
                 # Add core metadata
                 current_call.attributes["session_id"] = session_id or "default_session"
                 current_call.attributes["operation_type"] = operation_type
-                
+
+                # Add prompt version metadata
+                if include_prompt_version:
+                    prompt_metadata = get_prompt_version_metadata()
+                    for key, value in prompt_metadata.items():
+                        current_call.attributes[key] = value
+
                 # Add additional metadata
                 for key, value in kwargs.items():
                     current_call.attributes[key] = value
@@ -107,6 +139,39 @@ def add_session_metadata(
     except Exception as e:
         # Silently fail if Weave is not available or configured
         pass
+
+
+def track_prompt_usage(
+    prompt_type: str,
+    prompt_content: str,
+    version: Optional[str] = None,
+    **additional_metadata
+) -> None:
+    """
+    Track specific prompt usage for detailed analysis in Weave.
+
+    Args:
+        prompt_type: Type of prompt (e.g., "general_system", "learning_system", "tool_calling")
+        prompt_content: The actual prompt content being used
+        version: Specific version if different from current
+        **additional_metadata: Additional tracking metadata
+    """
+    try:
+        prompt_metadata = get_prompt_version_metadata()
+
+        add_session_metadata(
+            operation_type="prompt_usage_tracking",
+            include_prompt_version=False,  # We'll add it manually with more detail
+            prompt_type=prompt_type,
+            prompt_length=len(prompt_content),
+            prompt_hash=hash(prompt_content) % 1000000,  # Simple hash for content tracking
+            prompt_version_used=version or prompt_metadata.get("prompt_version"),
+            prompt_content_preview=prompt_content[:100] + "..." if len(prompt_content) > 100 else prompt_content,
+            **prompt_metadata,
+            **additional_metadata
+        )
+    except Exception as e:
+        print(f"Warning: Could not track prompt usage: {e}")
 
 
 def get_session_from_call(call) -> Optional[str]:

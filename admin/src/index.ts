@@ -2,8 +2,9 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
+import * as weave from 'weave';
 import { config } from './config.js';
-import { initializeWeave } from './weave/init.js';
 import { WeaveService } from './weave/weaveService.js';
 import { StorageService } from './services/storageService.js';
 import crawlerRoutes from './routes/crawlerRoutes.js';
@@ -11,10 +12,22 @@ import contentRoutes from './routes/contentRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import graphRoutes from './routes/graphRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
+import promptOptimizationRoutes, { setupWebSocketHandlers } from './routes/promptOptimizationRoutes.js';
 import { setupVite, serveStatic } from './vite.js';
 
 const app = express();
 const server = createServer(app);
+
+// Initialize Socket.IO
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: [
+      `http://localhost:${config.port}`,
+      'http://localhost:3003', // Admin client frontend
+    ],
+    credentials: true,
+  },
+});
 
 // Middleware
 app.use(cors({
@@ -92,6 +105,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/graph', graphRoutes);
 app.use('/api/duplicates', graphRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/prompt-optimization', promptOptimizationRoutes);
 
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: any) => {
@@ -115,14 +129,24 @@ async function startServer() {
       console.log(`✅ Content storage directory exists: ${contentStoragePath}`);
     }
 
-    // Initialize Weave
-    console.log('Initializing Weave...');
-    await initializeWeave();
+    // Initialize official Weave SDK first
+    console.log('Initializing official Weave SDK...');
+    try {
+        await weave.init(config.weaveProjectName);
+        console.log('✅ Official Weave SDK initialized');
+    } catch (error) {
+        console.warn('⚠️ Official Weave SDK initialization failed:', error instanceof Error ? error.message : String(error));
+    }
 
     // Initialize WeaveService singleton
     console.log('Initializing WeaveService...');
-    new WeaveService();
-    console.log('WeaveService initialized');
+    const weaveService = new WeaveService();
+    try {
+        await weaveService.initialize();
+        console.log('WeaveService initialized');
+    } catch (error) {
+        console.warn('⚠️ Weave initialization failed, continuing with local logging:', error instanceof Error ? error.message : String(error));
+    }
 
     // Initialize database schema
     console.log('Initializing database schema...');
@@ -137,6 +161,11 @@ async function startServer() {
       throw error;
     }
     // Note: Don't close the storage connection as it's a singleton used by all routes
+
+    // Setup WebSocket handlers for real-time updates
+    console.log('Setting up WebSocket handlers...');
+    setupWebSocketHandlers(io);
+    console.log('✅ WebSocket handlers ready');
 
     // Setup Vite in development or serve static files in production
     const isDevelopment = process.env.NODE_ENV !== 'production';

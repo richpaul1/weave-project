@@ -76,10 +76,10 @@ export default function SimpleMarkdownRenderer({
             <tr>{children}</tr>
           ),
           th: ({ children }) => (
-            <th className="border border-gray-700 px-4 py-2 text-left font-bold text-white">{children}</th>
+            <th className="border border-gray-700 px-4 py-2 text-left font-bold">{children}</th>
           ),
           td: ({ children }) => (
-            <td className="border border-gray-700 px-4 py-2 text-gray-300">{children}</td>
+            <td className="border border-gray-700 px-4 py-2">{children}</td>
           ),
           // Links
           a: ({ href, children }) => {
@@ -115,17 +115,17 @@ export default function SimpleMarkdownRenderer({
           ),
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc list-inside mb-4 text-gray-300">{children}</ul>
+            <ul className="list-disc list-inside mb-4">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-inside mb-4 text-gray-300">{children}</ol>
+            <ol className="list-decimal list-inside mb-4">{children}</ol>
           ),
           li: ({ children }) => (
             <li className="mb-1">{children}</li>
           ),
           // Paragraphs
           p: ({ children }) => (
-            <p className="mb-4 text-gray-300 leading-relaxed">{children}</p>
+            <p className="mb-4 leading-relaxed">{children}</p>
           ),
           // Blockquotes
           blockquote: ({ children }) => (

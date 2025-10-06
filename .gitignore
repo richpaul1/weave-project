@@ -26,7 +26,5 @@ build/
 .DS_Store
 Thumbs.db
 
-# Markdown files
-*.md
 
 

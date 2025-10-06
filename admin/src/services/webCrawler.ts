@@ -2,8 +2,10 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 import TurndownService from 'turndown';
-import { weave } from '../weave/init.js';
-import { weaveOp } from '../weave/weaveService.js';
+import * as weave from 'weave';
+import { WeaveService } from '../weave/weaveService.js';
+import { llmService } from './llmService.js';
+import { config } from '../config.js';
 
 /**
  * Normalizes a URL for consistent crawling
@@ -74,12 +76,48 @@ export class WebCrawler {
   private progressCallback?: (progress: CrawlProgress) => void;
   private currentBaseUrl?: string;
 
+  // Weave-wrapped methods (will be set up in constructor)
+  public fetchPage!: (url: string) => Promise<{ html: string; $: cheerio.CheerioAPI }>;
+  public processPage!: (url: string, depth: number) => Promise<CrawlResult>;
+  public crawl!: (startUrl: string, maxDepth?: number) => Promise<CrawlResult[]>;
+  public extractMainContent!: ($: cheerio.CheerioAPI, url?: string) => Promise<string>;
+  public extractCourseContentWithLLM!: ($: cheerio.CheerioAPI, url: string) => Promise<string>;
+  public htmlToMarkdown!: (html: string, baseUrl?: string) => string;
+
   constructor() {
     this.turndownService = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
     });
     this.setupTurndownRules();
+
+    // Set up weave operations with proper binding
+    const self = this;
+
+    // ✅ CORRECT: Named wrapper functions following the tutorial pattern
+    this.fetchPage = weave.op(async function fetchPage(url: string) {
+      return await self._fetchPageImpl(url);
+    }, { name: 'WebCrawler.fetchPage' });
+
+    this.processPage = weave.op(async function processPage(url: string, depth: number) {
+      return await self._processPageImpl(url, depth);
+    }, { name: 'WebCrawler.processPage' });
+
+    this.crawl = weave.op(async function crawl(startUrl: string, maxDepth: number = 2) {
+      return await self._crawlImpl(startUrl, maxDepth);
+    }, { name: 'WebCrawler.crawl' });
+
+    this.extractMainContent = weave.op(async function extractMainContent($: cheerio.CheerioAPI, url?: string) {
+      return await self._extractMainContentImpl($, url);
+    }, { name: 'WebCrawler.extractMainContent' });
+
+    this.extractCourseContentWithLLM = weave.op(async function extractCourseContentWithLLM($: cheerio.CheerioAPI, url: string) {
+      return await self._extractCourseContentWithLLMImpl($, url);
+    }, { name: 'WebCrawler.extractCourseContentWithLLM' });
+
+    this.htmlToMarkdown = weave.op(function htmlToMarkdown(html: string, baseUrl?: string) {
+      return self._htmlToMarkdownImpl(html, baseUrl);
+    }, { name: 'WebCrawler.htmlToMarkdown' });
   }
 
   /**
@@ -128,11 +166,10 @@ export class WebCrawler {
   }
 
   /**
-   * Fetch and parse a single page
+   * Implementation of fetchPage - Fetch and parse a single page
    */
-  @weaveOp()
-  async fetchPage(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
-    weave.logEvent('fetch_page_start', { url });
+  async _fetchPageImpl(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
+    WeaveService.getInstance()?.logEvent('fetch_page_start', { url });
     const startTime = Date.now();
 
     try {
@@ -144,21 +181,30 @@ export class WebCrawler {
       const $ = cheerio.load(response.data);
       const duration = Date.now() - startTime;
 
-      weave.logMetric('fetch_page_duration_ms', duration, { url });
-      weave.logEvent('fetch_page_success', { url, duration });
+      WeaveService.getInstance()?.logMetrics({ fetch_page_duration_ms: duration, url });
+      WeaveService.getInstance()?.logEvent('fetch_page_success', { url, duration });
 
       return { html: response.data, $ };
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      weave.logEvent('fetch_page_error', { url, error: error.message, duration });
+      WeaveService.getInstance()?.logEvent('fetch_page_error', { url, error: error.message, duration });
       throw error;
     }
   }
 
   /**
-   * Extract main content from page
+   * Implementation of extractMainContent - Extract main content from page
    */
-  extractMainContent($: cheerio.CheerioAPI): string {
+  async _extractMainContentImpl($: cheerio.CheerioAPI, url?: string): Promise<string> {
+    // Special handling for W&B course pages
+    if (url && url.includes('wandb.ai/site/courses/') && !url.endsWith('/courses/')) {
+      if (config.useLLMForCourseExtraction) {
+        return await this.extractCourseContentWithLLM($, url);
+      } else {
+        return this.extractCourseContent($);
+      }
+    }
+
     // Try to find main content
     let mainHtml = $('main').html();
 
@@ -187,6 +233,153 @@ export class WebCrawler {
     }
 
     return mainHtml;
+  }
+
+  /**
+   * Extract course-specific content from W&B course pages (original method)
+   */
+  private extractCourseContent($: cheerio.CheerioAPI): string {
+    return this.extractRawCourseContent($);
+  }
+
+  /**
+   * Implementation of extractCourseContentWithLLM - Extract course-specific content from W&B course pages using LLM for clean descriptions
+   */
+  private async _extractCourseContentWithLLMImpl($: cheerio.CheerioAPI, url?: string): Promise<string> {
+    const rawMarkdown = this.extractRawCourseContent($);
+
+    if (url) {
+      try {
+        const cleanMarkdown = await llmService.generateCourseMarkdown(rawMarkdown, url);
+        return cleanMarkdown;
+      } catch (error) {
+        console.warn('Failed to generate clean course markdown, falling back to raw content:', error);
+      }
+    }
+
+    return rawMarkdown;
+  }
+
+  /**
+   * Extract raw course content from W&B course pages (original method)
+   */
+  private extractRawCourseContent($: cheerio.CheerioAPI): string {
+    // First, try to extract structured course data from JSON-LD
+    const jsonLdContent = this.extractJsonLdCourseData($);
+
+    // Create a container for course content
+    const courseContainer = $('<div></div>');
+
+    // Add JSON-LD course data if available
+    if (jsonLdContent) {
+      courseContainer.append(jsonLdContent);
+    }
+
+    // Look for course-specific content in the page
+    const courseHeadings = $('h1, h2, h3').filter((_, el) => {
+      const text = $(el).text().toLowerCase();
+      return text.includes('ai engineering') ||
+             text.includes('agent') ||
+             text.includes('course');
+    });
+
+    // Add course headings and their following content
+    courseHeadings.each((_, heading) => {
+      const $heading = $(heading);
+      courseContainer.append($heading.clone());
+
+      // Add following content until next heading or section
+      let next = $heading.next();
+      while (next.length > 0 && !next.is('h1, h2, h3, section, .elementor-section')) {
+        if (next.is('p, ul, ol, div') && next.text().trim().length > 0) {
+          courseContainer.append(next.clone());
+        }
+        next = next.next();
+      }
+    });
+
+    // Look for course details like duration, price, instructors
+    const courseDetails = $('*').filter((_, el) => {
+      const text = $(el).text().toLowerCase();
+      const isRelevant = text.includes('hour') ||
+                        text.includes('free') ||
+                        text.includes('instructor') ||
+                        text.includes('duration') ||
+                        text.includes('price');
+      const isShort = text.trim().length > 0 && text.trim().length < 100;
+      return isRelevant && isShort;
+    });
+
+    courseDetails.each((_, el) => {
+      const $el = $(el);
+      courseContainer.append($el.clone());
+    });
+
+    // Clean up the container by removing script and style elements
+    courseContainer.find('script, style, nav, .nav, header, footer').remove();
+
+    // Convert to markdown
+    const html = courseContainer.html() || '';
+    const markdown = this.turndownService.turndown(html);
+
+    // If we got very little content, return a basic course structure
+    if (markdown.length < 200) {
+      return this.createBasicCourseMarkdown($);
+    }
+
+    return markdown;
+  }
+
+  private extractJsonLdCourseData($: cheerio.CheerioAPI): string {
+    const jsonLdScripts = $('script[type="application/ld+json"]');
+    let courseData = '';
+
+    jsonLdScripts.each((_, script) => {
+      try {
+        const data = JSON.parse($(script).html() || '');
+
+        // Handle both single objects and arrays
+        const items = Array.isArray(data) ? data : [data];
+
+        for (const item of items) {
+          if (item['@type'] === 'Course') {
+            courseData += `<h1>${item.name || 'Course'}</h1>\n\n`;
+            if (item.description) {
+              courseData += `<h2>Description</h2>\n<p>${item.description}</p>\n\n`;
+            }
+
+            if (item.hasCourseInstance) {
+              const instance = item.hasCourseInstance;
+              if (instance.description) {
+                courseData += `<h2>Course Details</h2>\n<p>${instance.description}</p>\n\n`;
+              }
+
+              if (instance.instructor && Array.isArray(instance.instructor)) {
+                courseData += `<h2>Instructors</h2>\n<ul>\n`;
+                instance.instructor.forEach((instructor: any) => {
+                  if (instructor.name) {
+                    courseData += `<li>${instructor.name}</li>\n`;
+                  }
+                });
+                courseData += '</ul>\n\n';
+              }
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        // Ignore JSON parsing errors
+      }
+    });
+
+    return courseData;
+  }
+
+  private createBasicCourseMarkdown($: cheerio.CheerioAPI): string {
+    const title = $('title').text() || 'Course';
+    const description = $('meta[name="description"]').attr('content') || 'Course description not available.';
+
+    return `# ${title}\n\n## Description\n${description}\n\n## Course Information\nThis course provides comprehensive training in the subject matter.\n\n## Getting Started\nTo begin this course, follow the enrollment instructions provided.\n`;
   }
 
   /**
@@ -254,9 +447,9 @@ export class WebCrawler {
   }
 
   /**
-   * Convert HTML to Markdown
+   * Implementation of htmlToMarkdown - Convert HTML to Markdown
    */
-  htmlToMarkdown(html: string, baseUrl?: string): string {
+  _htmlToMarkdownImpl(html: string, baseUrl?: string): string {
     // Set the base URL for use in TurndownService rules
     this.currentBaseUrl = baseUrl;
 
@@ -271,27 +464,48 @@ export class WebCrawler {
   }
 
   /**
-   * Process a single page
+   * Implementation of processPage - Process a single page
    */
-  @weaveOp()
-  async processPage(url: string, depth: number): Promise<CrawlResult> {
-    weave.logEvent('process_page_start', { url, depth });
+  async _processPageImpl(url: string, depth: number): Promise<CrawlResult> {
+    WeaveService.getInstance()?.logEvent('process_page_start', { url, depth });
 
     const { html, $ } = await this.fetchPage(url);
 
     // Extract title
     const title = $('title').text().trim() || $('h1').first().text().trim() || url;
 
-    // Extract main content
-    const mainHtml = this.extractMainContent($);
+    // Extract main content (pass URL for course-specific handling)
+    const mainContent = await this.extractMainContent($, url);
 
-    // Convert to markdown with base URL for relative URL resolution
-    const markdown = this.htmlToMarkdown(mainHtml, url);
+    // Ensure mainContent is always a string
+    const mainContentStr = typeof mainContent === 'string' ? mainContent : String(mainContent || '');
+
+    // For course pages, the content is already markdown from LLM
+    // For other pages, convert HTML to markdown
+    let markdown: string;
+    if (url && url.includes('wandb.ai/site/courses/') && !url.endsWith('/courses/')) {
+      markdown = mainContentStr; // Already markdown from LLM
+    } else {
+      const markdownResult = this.htmlToMarkdown(mainContentStr, url); // Convert HTML to markdown
+      // Handle case where weave.op might return a Promise
+      if (markdownResult && typeof (markdownResult as any).then === 'function') {
+        // If it's a Promise, await it
+        markdown = await (markdownResult as any);
+      } else {
+        markdown = markdownResult as string;
+      }
+    }
+
+    // Ensure markdown is always a string
+    if (typeof markdown !== 'string') {
+      console.warn(`[WebCrawler] markdown is not a string for ${url}, got:`, typeof markdown, markdown);
+      markdown = markdown ? String(markdown) : '';
+    }
 
     // Extract links
     const links = this.extractLinks($, url);
 
-    weave.logEvent('process_page_complete', {
+    WeaveService.getInstance()?.logEvent('process_page_complete', {
       url,
       depth,
       title,
@@ -309,11 +523,10 @@ export class WebCrawler {
   }
 
   /**
-   * Crawl website with breadth-first search
+   * Implementation of crawl - Crawl website with breadth-first search
    */
-  @weaveOp()
-  async crawl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
-    weave.logEvent('crawl_start', { startUrl, maxDepth });
+  async _crawlImpl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
+    WeaveService.getInstance()?.logEvent('crawl_start', { startUrl, maxDepth });
     const startTime = Date.now();
 
     const normalizedStartUrl = normalizeUrl(startUrl);
@@ -340,7 +553,7 @@ export class WebCrawler {
           if (!isValidSubLink(startUrlParsed, currentUrlParsed)) {
             skippedExternal++;
             console.log(`[Crawl] Skipping external domain: ${url}`);
-            weave.logEvent('crawl_skip_external', { url, startDomain: startUrlParsed.hostname, foundDomain: currentUrlParsed.hostname });
+            WeaveService.getInstance()?.logEvent('crawl_skip_external', { url, startDomain: startUrlParsed.hostname, foundDomain: currentUrlParsed.hostname });
             continue;
           }
         } catch (error) {
@@ -374,7 +587,8 @@ export class WebCrawler {
           }
         }
 
-        weave.logMetric('crawl_progress', completed, { 
+        WeaveService.getInstance()?.logMetrics({
+          crawl_progress: completed,
           total: visited.size,
           failed,
           queueSize: queue.length,
@@ -382,12 +596,12 @@ export class WebCrawler {
       } catch (error: any) {
         failed++;
         console.error(`Failed to process ${url}:`, error.message);
-        weave.logEvent('crawl_page_error', { url, depth, error: error.message });
+        WeaveService.getInstance()?.logEvent('crawl_page_error', { url, depth, error: error.message });
       }
     }
 
     const duration = Date.now() - startTime;
-    weave.logEvent('crawl_complete', {
+    WeaveService.getInstance()?.logEvent('crawl_complete', {
       startUrl,
       maxDepth,
       pagesProcessed: completed,
@@ -395,7 +609,7 @@ export class WebCrawler {
       pagesSkippedExternal: skippedExternal,
       duration,
     });
-    weave.logMetric('crawl_duration_ms', duration, { startUrl, maxDepth });
+    WeaveService.getInstance()?.logMetrics({ crawl_duration_ms: duration, startUrl, maxDepth });
 
     console.log(`[Crawl] Completed: ${completed} pages processed, ${failed} failed, ${skippedExternal} external domains skipped`);
 

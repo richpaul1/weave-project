@@ -4,8 +4,111 @@ import { WebCrawler } from '../services/webCrawler.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { config } from '../config.js';
+import * as weave from 'weave';
 
 const router = Router();
+
+/**
+ * Weave-instrumented course crawling execution
+ */
+const executeCoursesCrawl = weave.op(async function executeCoursesCrawl() {
+  return await _executeCoursesCrawlImpl();
+}, { name: 'CourseRoutes.executeCoursesCrawl' });
+
+/**
+ * Implementation of course crawling execution
+ */
+async function _executeCoursesCrawlImpl() {
+  const storage = StorageService.getInstance();
+  const crawler = new WebCrawler();
+
+  console.log('🔍 Starting course discovery crawl...');
+
+  // First, crawl the main courses page to discover course URLs
+  const coursesPageUrl = 'https://wandb.ai/site/courses/';
+  const coursesPageResults = await crawler.crawl(coursesPageUrl, 0);
+
+  if (coursesPageResults.length === 0) {
+    throw new Error('Failed to crawl courses page');
+  }
+
+  const coursesPageContent = coursesPageResults[0].markdown;
+
+  // Extract course URLs from the content
+  // Look for links that match the pattern /site/courses/[course-name]
+  const courseUrlPattern = /https?:\/\/wandb\.ai\/site\/courses\/[^\/\s"']+\/?/g;
+  const foundUrls = coursesPageContent.match(courseUrlPattern) || [];
+
+  // Remove duplicates and filter out the main courses page
+  const uniqueCourseUrls = [...new Set(foundUrls)]
+    .filter(url => url !== coursesPageUrl && !url.endsWith('/courses/'));
+
+  console.log(`📚 Found ${uniqueCourseUrls.length} course URLs to crawl`);
+
+  let successCount = 0;
+  let errorCount = 0;
+  let emptyTextCount = 0;
+  const emptyTextUrls: string[] = [];
+
+  // Crawl each individual course
+  for (const courseUrl of uniqueCourseUrls) {
+    try {
+      console.log(`🔍 Crawling course: ${courseUrl}`);
+
+      const courseResults = await crawler.crawl(courseUrl, 0);
+
+      if (courseResults.length > 0) {
+        const courseData = courseResults[0];
+
+        // Check if the course has empty or minimal text content
+        const markdownText = courseData.markdown?.trim() || '';
+        if (markdownText.length === 0 || markdownText.length < 50) {
+          console.warn(`⚠️ Course has empty or minimal text content: ${courseUrl} (${markdownText.length} chars)`);
+          emptyTextCount++;
+          emptyTextUrls.push(courseUrl);
+          errorCount++; // Count as error since it's not useful content
+          continue;
+        }
+
+        // Extract course metadata from the content
+        const metadata = extractCourseMetadata(courseData);
+
+        // Save the course
+        await storage.saveCourse(
+          courseData.url,
+          courseData.title,
+          courseData.markdown,
+          metadata
+        );
+
+        successCount++;
+        console.log(`✅ Successfully saved course: ${courseData.title}`);
+      } else {
+        console.warn(`⚠️ No content found for course: ${courseUrl}`);
+        errorCount++;
+      }
+    } catch (error) {
+      console.error(`❌ Error crawling course ${courseUrl}:`, error);
+      errorCount++;
+    }
+  }
+
+  console.log(`🎉 Course crawling completed: ${successCount} successful, ${errorCount} errors`);
+  if (emptyTextCount > 0) {
+    console.log(`📝 Empty text courses: ${emptyTextCount}`);
+    console.log(`📋 Empty text URLs: ${emptyTextUrls.join(', ')}`);
+  }
+
+  return {
+    message: 'Course crawling completed',
+    coursesFound: uniqueCourseUrls.length,
+    successful: successCount,
+    errors: errorCount,
+    emptyTextCount,
+    emptyTextUrls,
+    urls: uniqueCourseUrls
+  };
+}
 
 /**
  * GET /api/courses
@@ -165,11 +268,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * GET /api/courses/:id/markdown
- * Get course markdown content
+ * Get course markdown content (returns plain text)
  */
 router.get('/:id/markdown', async (req: Request, res: Response) => {
   const storage = StorageService.getInstance();
-  
+
   try {
     const { id } = req.params;
     const course = await storage.getCourseById(id);
@@ -187,10 +290,9 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
 
     const markdown = await fs.readFile(markdownPath, 'utf-8');
 
-    res.json({
-      course,
-      markdown,
-    });
+    // Return just the markdown content as plain text
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(markdown);
   } catch (error: any) {
     console.error('Error getting course markdown:', error);
     res.status(500).json({ error: error.message });
@@ -204,7 +306,7 @@ router.get('/:id/markdown', async (req: Request, res: Response) => {
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   const storage = StorageService.getInstance();
-  
+
   try {
     const { id } = req.params;
     await storage.deleteCourse(id);
@@ -218,86 +320,39 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * DELETE /api/courses
+ * Delete all courses
+ */
+router.delete('/', async (req: Request, res: Response) => {
+  const storage = StorageService.getInstance();
+
+  try {
+    const result = await storage.deleteAllCourses();
+
+    res.json({
+      message: 'All courses deleted successfully',
+      deletedCourses: result.deletedCourses,
+      deletedChunks: result.deletedChunks,
+      deletedFiles: result.deletedFiles
+    });
+  } catch (error: any) {
+    console.error('Error deleting all courses:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+  }
+});
+
+/**
  * POST /api/courses/crawl
  * Start crawling courses from W&B courses page
  */
 router.post('/crawl', async (req: Request, res: Response) => {
-  const storage = StorageService.getInstance();
-  const crawler = new WebCrawler();
-  
   try {
-    console.log('🔍 Starting course discovery crawl...');
-    
-    // First, crawl the main courses page to discover course URLs
-    const coursesPageUrl = 'https://wandb.ai/site/courses/';
-    const coursesPageResults = await crawler.crawl(coursesPageUrl, 0);
-    
-    if (coursesPageResults.length === 0) {
-      return res.status(500).json({ error: 'Failed to crawl courses page' });
-    }
-
-    const coursesPageContent = coursesPageResults[0].markdown;
-    
-    // Extract course URLs from the content
-    // Look for links that match the pattern /site/courses/[course-name]
-    const courseUrlPattern = /https?:\/\/wandb\.ai\/site\/courses\/[^\/\s"']+\/?/g;
-    const foundUrls = coursesPageContent.match(courseUrlPattern) || [];
-    
-    // Remove duplicates and filter out the main courses page
-    const uniqueCourseUrls = [...new Set(foundUrls)]
-      .filter(url => url !== coursesPageUrl && !url.endsWith('/courses/'));
-
-    console.log(`📚 Found ${uniqueCourseUrls.length} course URLs to crawl`);
-
-    let successCount = 0;
-    let errorCount = 0;
-
-    // Crawl each individual course
-    for (const courseUrl of uniqueCourseUrls) {
-      try {
-        console.log(`🔍 Crawling course: ${courseUrl}`);
-        
-        const courseResults = await crawler.crawl(courseUrl, 0);
-        
-        if (courseResults.length > 0) {
-          const courseData = courseResults[0];
-          
-          // Extract course metadata from the content
-          const metadata = extractCourseMetadata(courseData);
-
-          // Save the course
-          await storage.saveCourse(
-            courseData.url,
-            courseData.title,
-            courseData.markdown,
-            metadata
-          );
-          
-          successCount++;
-          console.log(`✅ Successfully saved course: ${courseData.title}`);
-        } else {
-          console.warn(`⚠️ No content found for course: ${courseUrl}`);
-          errorCount++;
-        }
-      } catch (error) {
-        console.error(`❌ Error crawling course ${courseUrl}:`, error);
-        errorCount++;
-      }
-    }
-
-    console.log(`🎉 Course crawling completed: ${successCount} successful, ${errorCount} errors`);
-
-    res.json({
-      message: 'Course crawling completed',
-      coursesFound: uniqueCourseUrls.length,
-      successful: successCount,
-      errors: errorCount,
-      urls: uniqueCourseUrls
-    });
+    const result = await executeCoursesCrawl();
+    res.json(result);
   } catch (error: any) {
     console.error('Error during course crawling:', error);
     res.status(500).json({ error: error.message });
-  } finally {
   }
 });
 

@@ -2,9 +2,9 @@ import neo4j, { Driver, Session } from 'neo4j-driver';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import * as weave from 'weave';
 import { config } from '../config.js';
-import { weave } from '../weave/init.js';
-import { weaveOp } from '../weave/weaveService.js';
+import { WeaveService } from '../weave/weaveService.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 import { llmService } from './llmService.js';
 
@@ -60,6 +60,11 @@ export class StorageService {
   private static driver: Driver | null = null;
   private driver: Driver;
 
+  // Weave-wrapped methods (will be set up in constructor)
+  public initializeSchema!: () => Promise<void>;
+  public saveCompletePage!: (url: string, title: string, markdown: string, crawlDepth: number) => Promise<PageMetadata>;
+  public getAllPages!: () => Promise<PageMetadata[]>;
+
   private constructor() {
     if (StorageService.driver) {
       this.driver = StorageService.driver;
@@ -83,6 +88,21 @@ export class StorageService {
       console.error('❌ Failed to initialize Neo4j driver:', error);
       throw error;
     }
+
+    // Set up weave operations with proper binding
+    const self = this;
+
+    this.initializeSchema = weave.op(async function initializeSchema() {
+      return await self._initializeSchemaImpl();
+    }, { name: 'StorageService.initializeSchema' });
+
+    this.saveCompletePage = weave.op(async function saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number) {
+      return await self._saveCompletePageImpl(url, title, markdown, crawlDepth);
+    }, { name: 'StorageService.saveCompletePage' });
+
+    this.getAllPages = weave.op(async function getAllPages() {
+      return await self._getAllPagesImpl();
+    }, { name: 'StorageService.getAllPages' });
   }
 
   /**
@@ -123,10 +143,9 @@ export class StorageService {
   }
 
   /**
-   * Initialize database schema
+   * Implementation of initializeSchema - Initialize database schema
    */
-  @weaveOp('StorageService.initializeSchema')
-  async initializeSchema(): Promise<void> {
+  async _initializeSchemaImpl(): Promise<void> {
     if (!this.driver) {
       throw new Error('Neo4j driver not initialized');
     }
@@ -186,7 +205,7 @@ export class StorageService {
         FOR (c:Course) ON (c.isActive)
       `);
 
-      weave.logEvent('schema_initialized');
+      WeaveService.getInstance()?.logEvent('schema_initialized');
     } finally {
       await session.close();
     }
@@ -237,7 +256,7 @@ export class StorageService {
       // Write markdown file
       await fs.writeFile(filePath, markdown, 'utf-8');
 
-      weave.logEvent('course_markdown_saved', { slug, filePath });
+      WeaveService.getInstance()?.logEvent('course_markdown_saved', { slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save course markdown file: ${error.message}`);
@@ -260,7 +279,7 @@ export class StorageService {
       // Write metadata file
       await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
 
-      weave.logEvent('course_metadata_saved', { slug, filePath });
+      WeaveService.getInstance()?.logEvent('course_metadata_saved', { slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save course metadata file: ${error.message}`);
@@ -280,14 +299,14 @@ export class StorageService {
       // Delete files if they exist
       try {
         await fs.unlink(markdownPath);
-        weave.logEvent('course_markdown_deleted', { slug, path: markdownPath });
+        WeaveService.getInstance()?.logEvent('course_markdown_deleted', { slug, path: markdownPath });
       } catch (e) {
         // File might not exist, that's ok
       }
 
       try {
         await fs.unlink(metadataPath);
-        weave.logEvent('course_metadata_deleted', { slug, path: metadataPath });
+        WeaveService.getInstance()?.logEvent('course_metadata_deleted', { slug, path: metadataPath });
       } catch (e) {
         // File might not exist, that's ok
       }
@@ -342,7 +361,7 @@ export class StorageService {
       // Write markdown file
       await fs.writeFile(filePath, markdown, 'utf-8');
 
-      weave.logEvent('markdown_saved', { domain, slug, filePath });
+      WeaveService.getInstance()?.logEvent('markdown_saved', { domain, slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save markdown file: ${error.message}`);
@@ -368,7 +387,7 @@ export class StorageService {
       // Write metadata file
       await fs.writeFile(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
 
-      weave.logEvent('metadata_saved', { domain, slug, filePath });
+      WeaveService.getInstance()?.logEvent('metadata_saved', { domain, slug, filePath });
       return filePath;
     } catch (error: any) {
       console.error(`Failed to save metadata file: ${error.message}`);
@@ -417,7 +436,7 @@ export class StorageService {
         metadata
       );
 
-      weave.logEvent('page_saved_neo4j', { id, url, domain, slug });
+      WeaveService.getInstance()?.logEvent('page_saved_neo4j', { id, url, domain, slug });
       return metadata;
     } finally {
       await session.close();
@@ -425,10 +444,10 @@ export class StorageService {
   }
 
   /**
-   * Save complete page (Neo4j + file system) with chunks
+   * Implementation of saveCompletePage - Save complete page (Neo4j + file system) with chunks
    */
-  
-  async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
+
+  async _saveCompletePageImpl(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
 
     try {
@@ -511,7 +530,7 @@ export class StorageService {
       // Save metadata to file system
       await this.saveMetadataFile(metadata.domain, metadata.slug, metadata);
 
-      weave.logEvent('complete_page_saved', {
+      WeaveService.getInstance()?.logEvent('complete_page_saved', {
         id: metadata.id,
         url,
         domain: metadata.domain,
@@ -536,7 +555,7 @@ export class StorageService {
       await this.createChunk(pageId, chunk);
     }
 
-    weave.logEvent('page_chunks_created', {
+    WeaveService.getInstance()?.logEvent('page_chunks_created', {
       pageId,
       chunkCount: chunks.length,
     });
@@ -591,12 +610,11 @@ export class StorageService {
   }
 
   /**
-   * Get all pages
+   * Implementation of getAllPages - Get all pages
    */
-  @weaveOp('StorageService.getAllPages')
-  async getAllPages(): Promise<PageMetadata[]> {
+  async _getAllPagesImpl(): Promise<PageMetadata[]> {
     const session = this.getSession();
-    
+
     try {
       const result = await session.run(`
         MATCH (p:Page)
@@ -604,10 +622,18 @@ export class StorageService {
         ORDER BY p.createdAt DESC
       `);
 
-      return result.records.map(record => {
+      const pages = result.records.map(record => {
         const node = record.get('p');
         return node.properties as PageMetadata;
       });
+
+      // Log the count of pages returned for Weave tracking
+      WeaveService.getInstance()?.logEvent('pages_retrieved', {
+        totalPages: pages.length,
+        operation: 'getAllPages'
+      });
+
+      return pages;
     } finally {
       await session.close();
     }
@@ -715,7 +741,7 @@ export class StorageService {
         });
       }
 
-      weave.logEvent('pages_searched_by_vector', {
+      WeaveService.getInstance()?.logEvent('pages_searched_by_vector', {
         resultsCount: pages.length,
         scoreThreshold,
         limit
@@ -766,7 +792,7 @@ export class StorageService {
         });
       }
 
-      weave.logEvent('chunks_searched_by_vector', {
+      WeaveService.getInstance()?.logEvent('chunks_searched_by_vector', {
         resultsCount: chunks.length,
         scoreThreshold,
         limit
@@ -831,7 +857,7 @@ export class StorageService {
 
       console.log(`✅ Successfully deleted page "${page.title}" and ${chunkCount} related chunks with vector embeddings`);
 
-      weave.logEvent('page_deleted', {
+      WeaveService.getInstance()?.logEvent('page_deleted', {
         id,
         url: page.url,
         title: page.title,
@@ -905,7 +931,7 @@ export class StorageService {
       console.log(`✅ Reset complete: Deleted ${totalNodes} content nodes (${pageCount} pages with vectors, ${chunkCount} chunks with vectors)`);
       console.log(`💾 Preserved: Chat history and settings`);
 
-      weave.logEvent('all_content_reset', {
+      WeaveService.getInstance()?.logEvent('all_content_reset', {
         pageCount,
         chunkCount,
         totalContentNodesDeleted: totalNodes,
@@ -1020,7 +1046,7 @@ export class StorageService {
       // Save metadata to file system
       await this.saveCourseMetadataFile(slug, courseMetadata);
 
-      weave.logEvent('course_saved', {
+      WeaveService.getInstance()?.logEvent('course_saved', {
         id: courseMetadata.id,
         url,
         slug: courseMetadata.slug,
@@ -1154,7 +1180,71 @@ export class StorageService {
       // Delete course files
       await this.deleteCourseFiles(slug);
 
-      weave.logEvent('course_deleted', { id, slug });
+      WeaveService.getInstance()?.logEvent('course_deleted', { id, slug });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete all courses and their related data
+   */
+  async deleteAllCourses(): Promise<{ deletedCourses: number; deletedChunks: number; deletedFiles: number }> {
+    const session = this.getSession();
+
+    try {
+      // First, get count of courses and chunks to be deleted for logging
+      const countResult = await session.run(`
+        MATCH (c:Course)
+        OPTIONAL MATCH (c)-[:HAS_CHUNK]->(cc:CourseChunk)
+        RETURN
+          count(DISTINCT c) as courseCount,
+          count(cc) as chunkCount
+      `);
+
+      const courseCount = countResult.records[0]?.get('courseCount')?.toNumber() || 0;
+      const chunkCount = countResult.records[0]?.get('chunkCount')?.toNumber() || 0;
+
+      if (courseCount === 0) {
+        return { deletedCourses: 0, deletedChunks: 0, deletedFiles: 0 };
+      }
+
+      // Delete all courses and their chunks from Neo4j
+      await session.run(`
+        MATCH (c:Course)
+        OPTIONAL MATCH (c)-[:HAS_CHUNK]->(cc:CourseChunk)
+        DETACH DELETE c, cc
+      `);
+
+      // Delete all course files from filesystem
+      let deletedFiles = 0;
+      try {
+        const coursesDir = path.join(config.contentStoragePath, 'courses');
+        const files = await fs.readdir(coursesDir);
+
+        for (const file of files) {
+          if (file.endsWith('.md') || file.endsWith('.json')) {
+            await fs.unlink(path.join(coursesDir, file));
+            deletedFiles++;
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to delete some course files:', error);
+      }
+
+      console.log(`✅ Deleted all courses: ${courseCount} courses, ${chunkCount} chunks, ${deletedFiles} files`);
+
+      WeaveService.getInstance()?.logEvent('all_courses_deleted', {
+        deletedCourses: courseCount,
+        deletedChunks: chunkCount,
+        deletedFiles
+      });
+
+      return {
+        deletedCourses: courseCount,
+        deletedChunks: chunkCount,
+        deletedFiles
+      };
     } finally {
       await session.close();
     }
@@ -1316,6 +1406,447 @@ export class StorageService {
           deletedEdges: record ? record.get('edgeCount').toNumber() : 0,
         };
       }
+    } finally {
+      await session.close();
+    }
+  }
+
+  // ============================================================================
+  // PROMPT OPTIMIZATION METHODS
+  // ============================================================================
+
+  /**
+   * Create a new prompt optimization job
+   */
+  async createOptimizationJob(job: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        CREATE (job:PromptOptimizationJob {
+          id: $id,
+          name: $name,
+          description: $description,
+          startingQuestion: $startingQuestion,
+          initialPrompt: $initialPrompt,
+          status: $status,
+          createdBy: $createdBy,
+          createdAt: $createdAt,
+          updatedAt: $updatedAt,
+          config: $config,
+          progress: $progress
+        })
+        RETURN job.id as id
+      `, {
+        id: job.id,
+        name: job.name,
+        description: job.description || '',
+        startingQuestion: job.startingQuestion,
+        initialPrompt: job.initialPrompt,
+        status: job.status,
+        createdBy: job.createdBy,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        config: JSON.stringify(job.config),
+        progress: JSON.stringify(job.progress)
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization job by ID
+   */
+  async getOptimizationJobById(jobId: string): Promise<any | null> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        OPTIONAL MATCH (job)-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+        OPTIONAL MATCH (job)-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        RETURN job,
+               collect(DISTINCT example) as trainingExamples,
+               collect(DISTINCT iteration) as iterations
+      `, { jobId });
+
+      if (result.records.length === 0) {
+        return null;
+      }
+
+      const record = result.records[0];
+      const jobNode = record.get('job').properties;
+      const trainingExamples = record.get('trainingExamples').map((node: any) => ({
+        ...node.properties,
+        evaluation: JSON.parse(node.properties.evaluation || '{}')
+      }));
+      const iterations = record.get('iterations').map((node: any) => ({
+        ...node.properties,
+        appliedActions: JSON.parse(node.properties.appliedActions || '[]'),
+        criteriaScores: JSON.parse(node.properties.criteriaScores || '{}')
+      }));
+
+      return {
+        ...jobNode,
+        config: JSON.parse(jobNode.config || '{}'),
+        progress: JSON.parse(jobNode.progress || '{}'),
+        trainingExamples,
+        iterations
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Update optimization job
+   */
+  async updateOptimizationJob(jobId: string, updates: any): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      // Separate training examples from other updates
+      const { trainingExamples, ...jobUpdates } = updates;
+
+      // Update job properties (excluding trainingExamples)
+      if (Object.keys(jobUpdates).length > 0) {
+        const setClause = Object.keys(jobUpdates)
+          .map(key => {
+            if (key === 'config' || key === 'progress') {
+              return `job.${key} = $${key}`;
+            }
+            return `job.${key} = $${key}`;
+          })
+          .join(', ');
+
+        const params: any = { jobId };
+        Object.keys(jobUpdates).forEach(key => {
+          if (key === 'config' || key === 'progress') {
+            params[key] = JSON.stringify(jobUpdates[key]);
+          } else {
+            params[key] = jobUpdates[key];
+          }
+        });
+
+        await session.run(`
+          MATCH (job:PromptOptimizationJob {id: $jobId})
+          SET ${setClause}, job.updatedAt = datetime()
+        `, params);
+      }
+
+      // Handle training examples separately if provided
+      if (trainingExamples && Array.isArray(trainingExamples)) {
+        // First, delete existing training examples
+        await session.run(`
+          MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+          DETACH DELETE example
+        `, { jobId });
+
+        // Then, create new training examples
+        for (const example of trainingExamples) {
+          await session.run(`
+            MATCH (job:PromptOptimizationJob {id: $jobId})
+            CREATE (example:TrainingExample {
+              id: $exampleId,
+              response: $response,
+              evaluation: $evaluation,
+              tags: $tags,
+              createdAt: $createdAt,
+              updatedAt: $updatedAt
+            })
+            CREATE (job)-[:HAS_TRAINING_EXAMPLE]->(example)
+          `, {
+            jobId,
+            exampleId: example.id,
+            response: example.response || '',
+            evaluation: JSON.stringify(example.evaluation || {}),
+            tags: JSON.stringify(example.tags || []),
+            createdAt: example.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * List optimization jobs with pagination
+   */
+  async listOptimizationJobs(page: number = 1, pageSize: number = 10): Promise<{
+    jobs: any[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      // Get total count
+      const countResult = await session.run(`
+        MATCH (job:PromptOptimizationJob)
+        RETURN count(job) as total
+      `);
+      const total = countResult.records[0].get('total').toNumber();
+
+      // Get paginated jobs
+      const skip = neo4j.int((page - 1) * pageSize);
+      const limit = neo4j.int(pageSize);
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob)
+        RETURN job
+        ORDER BY job.createdAt DESC
+        SKIP $skip
+        LIMIT $limit
+      `, { skip, limit });
+
+      const jobs = result.records.map(record => {
+        const jobNode = record.get('job').properties;
+        return {
+          ...jobNode,
+          config: JSON.parse(jobNode.config || '{}'),
+          progress: JSON.parse(jobNode.progress || '{}')
+        };
+      });
+
+      return { jobs, total, page, pageSize };
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete optimization job and all related data
+   */
+  async deleteOptimizationJob(jobId: string): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        OPTIONAL MATCH (job)-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+        OPTIONAL MATCH (job)-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        DETACH DELETE job, example, iteration
+      `, { jobId });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Add training example to optimization job
+   */
+  async addTrainingExample(jobId: string, example: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        CREATE (example:TrainingExample {
+          id: $exampleId,
+          response: $response,
+          evaluation: $evaluation,
+          tags: $tags,
+          createdAt: $createdAt,
+          updatedAt: $updatedAt
+        })
+        CREATE (job)-[:HAS_TRAINING_EXAMPLE]->(example)
+        RETURN example.id as id
+      `, {
+        jobId,
+        exampleId: example.id,
+        response: example.response,
+        evaluation: JSON.stringify(example.evaluation),
+        tags: example.tags || [],
+        createdAt: example.createdAt,
+        updatedAt: example.updatedAt
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Update training example
+   */
+  async updateTrainingExample(exampleId: string, updates: any): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const setClause = Object.keys(updates)
+        .map(key => {
+          if (key === 'evaluation') {
+            return `example.${key} = $${key}`;
+          }
+          return `example.${key} = $${key}`;
+        })
+        .join(', ');
+
+      const params: any = { exampleId };
+      Object.keys(updates).forEach(key => {
+        if (key === 'evaluation') {
+          params[key] = JSON.stringify(updates[key]);
+        } else {
+          params[key] = updates[key];
+        }
+      });
+
+      await session.run(`
+        MATCH (example:TrainingExample {id: $exampleId})
+        SET ${setClause}, example.updatedAt = datetime()
+      `, params);
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Delete training example
+   */
+  async deleteTrainingExample(exampleId: string): Promise<void> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      await session.run(`
+        MATCH (example:TrainingExample {id: $exampleId})
+        DETACH DELETE example
+      `, { exampleId });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Add optimization iteration to job
+   */
+  async addOptimizationIteration(jobId: string, iteration: any): Promise<string> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})
+        CREATE (iteration:OptimizationIteration {
+          id: $iterationId,
+          roundNumber: $roundNumber,
+          iterationNumber: $iterationNumber,
+          agentId: $agentId,
+          inputPrompt: $inputPrompt,
+          appliedActions: $appliedActions,
+          generatedResponse: $generatedResponse,
+          predictedScore: $predictedScore,
+          actualScore: $actualScore,
+          criteriaScores: $criteriaScores,
+          improvements: $improvements,
+          executionTime: $executionTime,
+          timestamp: $timestamp,
+          novelty: $novelty,
+          confidence: $confidence
+        })
+        CREATE (job)-[:HAS_ITERATION]->(iteration)
+        RETURN iteration.id as id
+      `, {
+        jobId,
+        iterationId: iteration.id,
+        roundNumber: iteration.roundNumber,
+        iterationNumber: iteration.iterationNumber,
+        agentId: iteration.agentId || null,
+        inputPrompt: iteration.inputPrompt,
+        appliedActions: JSON.stringify(iteration.appliedActions || []),
+        generatedResponse: iteration.generatedResponse,
+        predictedScore: iteration.predictedScore,
+        actualScore: iteration.actualScore || null,
+        criteriaScores: JSON.stringify(iteration.criteriaScores || {}),
+        improvements: iteration.improvements || [],
+        executionTime: iteration.executionTime,
+        timestamp: iteration.timestamp,
+        novelty: iteration.novelty || 0,
+        confidence: iteration.confidence || 0
+      });
+
+      return result.records[0].get('id');
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization iterations for a job
+   */
+  async getOptimizationIterations(jobId: string, roundNumber?: number): Promise<any[]> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      let query = `
+        MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+      `;
+
+      const params: any = { jobId };
+
+      if (roundNumber !== undefined) {
+        query += ` WHERE iteration.roundNumber = $roundNumber`;
+        params.roundNumber = roundNumber;
+      }
+
+      query += `
+        RETURN iteration
+        ORDER BY iteration.roundNumber, iteration.iterationNumber
+      `;
+
+      const result = await session.run(query, params);
+
+      return result.records.map(record => {
+        const iterationNode = record.get('iteration').properties;
+        return {
+          ...iterationNode,
+          appliedActions: JSON.parse(iterationNode.appliedActions || '[]'),
+          criteriaScores: JSON.parse(iterationNode.criteriaScores || '{}')
+        };
+      });
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Get optimization analytics for a job
+   */
+  async getOptimizationAnalytics(jobId: string): Promise<any> {
+    const session = this.driver.session({ database: config.neo4jDatabase });
+    try {
+      const result = await session.run(`
+        MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_ITERATION]->(iteration:OptimizationIteration)
+        WITH job, iteration
+        ORDER BY iteration.roundNumber, iteration.iterationNumber
+        RETURN
+          count(iteration) as totalIterations,
+          avg(iteration.executionTime) as avgExecutionTime,
+          max(iteration.predictedScore) as bestScore,
+          avg(iteration.predictedScore) as avgScore,
+          collect({
+            iteration: iteration.iterationNumber,
+            round: iteration.roundNumber,
+            score: iteration.predictedScore,
+            criteriaScores: iteration.criteriaScores
+          }) as scoreProgression
+      `, { jobId });
+
+      if (result.records.length === 0) {
+        return {
+          totalIterations: 0,
+          avgExecutionTime: 0,
+          bestScore: 0,
+          avgScore: 0,
+          scoreProgression: []
+        };
+      }
+
+      const record = result.records[0];
+      return {
+        totalIterations: record.get('totalIterations').toNumber(),
+        avgExecutionTime: record.get('avgExecutionTime'),
+        bestScore: record.get('bestScore'),
+        avgScore: record.get('avgScore'),
+        scoreProgression: record.get('scoreProgression').map((item: any) => ({
+          ...item,
+          criteriaScores: JSON.parse(item.criteriaScores || '{}')
+        }))
+      };
     } finally {
       await session.close();
     }

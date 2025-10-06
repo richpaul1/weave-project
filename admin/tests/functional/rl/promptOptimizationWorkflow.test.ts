@@ -88,9 +88,10 @@ describe('Prompt Optimization Workflow - Functional Tests', () => {
 
     // Create fresh mock objects for each test
     mockWeave = {
-      createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+      startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+      endTrace: vi.fn(),
       logEvent: vi.fn(),
-      logMetric: vi.fn(),
+      logMetrics: vi.fn(),
       getCurrentTraceUrl: vi.fn().mockReturnValue('https://test-trace-url.com')
     };
 
@@ -249,9 +250,10 @@ describe('Prompt Optimization Workflow - Functional Tests', () => {
       expect(storedEvaluations.length).toBeGreaterThan(baselineEvaluations.length);
 
       // Assert - Verify Weave instrumentation
-      expect(mockWeave.createChildTrace).toHaveBeenCalled();
+      expect(mockWeave.startTrace).toHaveBeenCalled();
+      expect(mockWeave.endTrace).toHaveBeenCalled();
       expect(mockWeave.logEvent).toHaveBeenCalled();
-      expect(mockWeave.logMetric).toHaveBeenCalled();
+      expect(mockWeave.logMetrics).toHaveBeenCalled();
     }, 30000); // Increase timeout for complex workflow
 
     it('should improve prompt performance through optimization', async () => {
@@ -478,13 +480,15 @@ describe('Prompt Optimization Workflow - Functional Tests', () => {
       await evaluationService.evaluatePrompt(basePrompt, testQueries, criteria);
 
       // Assert - Verify metrics were logged
-      const metricCalls = mockWeave.logMetric.mock.calls;
+      const metricCalls = mockWeave.logMetrics.mock.calls;
       expect(metricCalls.length).toBeGreaterThan(0);
 
-      // Check for expected metric types
-      const metricNames = metricCalls.map(call => call[0]);
-      expect(metricNames).toContain('evaluation_score');
-      expect(metricNames).toContain('llm_response_time');
+      // Check for expected metric types in the metrics objects
+      const metricsObjects = metricCalls.map(call => call[0]);
+      const hasEvaluationScore = metricsObjects.some(metrics => 'evaluation_score' in metrics);
+      const hasResponseTime = metricsObjects.some(metrics => 'llm_response_time' in metrics);
+      expect(hasEvaluationScore).toBe(true);
+      expect(hasResponseTime).toBe(true);
     });
 
     it('should maintain evaluation consistency', async () => {

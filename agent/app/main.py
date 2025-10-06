@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Weave Agent Backend",
+    title="IzzyDocs Backend",
     description="RAG Chat Agent with Weave Instrumentation",
     version="0.1.0",
     lifespan=lifespan
@@ -92,7 +92,7 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "message": "Weave Agent Backend API",
+        "message": "IzzyDocs Backend API",
         "docs": "/docs",
         "health": "/health"
     }

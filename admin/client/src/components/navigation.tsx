@@ -1,13 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { FolderOpen, Network, Settings, Sun, Moon, BookOpen } from "lucide-react";
+import { Network, Settings, Sun, Moon, BookOpen, Book, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 
 const navigationItems = [
-  { path: "/admin", label: "Admin", icon: FolderOpen },
+  { path: "/content", label: "Content", icon: Book },
   { path: "/courses", label: "Courses", icon: BookOpen },
   { path: "/graph", label: "Graph", icon: Network },
+  { path: "/prompt-optimization", label: "Prompt Optimization", icon: Brain },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -20,7 +21,7 @@ export default function Navigation() {
       <div className="p-6 border-b border-border">
         <h1 className="text-xl font-semibold text-foreground">
           <Network className="inline mr-2 h-5 w-5 text-primary" />
-          Weave RAG Demo
+          IzzyDocs
         </h1>
       </div>
 
@@ -56,8 +57,8 @@ export default function Navigation() {
         </Button>
 
         <div className="text-xs text-muted-foreground">
-          <p className="font-medium mb-1">Weave RAG Demo</p>
-          <p>Powered by Weights & Biases</p>
+          <p className="font-medium mb-1">IzzyDocs</p>
+          <p>Monitored by Weights & Biases</p>
         </div>
       </div>
     </nav>

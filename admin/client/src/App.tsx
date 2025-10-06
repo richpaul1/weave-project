@@ -8,6 +8,7 @@ import Navigation from "@/components/navigation";
 import AdminPage from "@/pages/AdminPage";
 import CoursesPage from "@/pages/CoursesPage";
 import GraphPage from "@/pages/GraphPage";
+import PromptOptimizationPage from "@/pages/PromptOptimizationPage";
 import SettingsPage from "@/pages/SettingsPage";
 
 function Router() {
@@ -16,17 +17,18 @@ function Router() {
   return (
     <div className="flex h-screen overflow-hidden">
       <Navigation />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-background">
         <Switch>
           <Route path="/">
             {() => {
-              navigate("/admin", { replace: true });
+              navigate("/content", { replace: true });
               return null;
             }}
           </Route>
-          <Route path="/admin" component={AdminPage} />
+          <Route path="/content" component={AdminPage} />
           <Route path="/courses" component={CoursesPage} />
           <Route path="/graph" component={GraphPage} />
+          <Route path="/prompt-optimization" component={PromptOptimizationPage} />
           <Route path="/settings" component={SettingsPage} />
         </Switch>
       </main>

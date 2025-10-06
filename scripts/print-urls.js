@@ -64,7 +64,7 @@ const { reset, bright, green, blue, cyan, yellow } = colors;
 
 console.log('\n');
 console.log(`${bright}${blue}${'═'.repeat(60)}${reset}`);
-console.log(`${bright}${blue}  🚀 Weave RAG Demo - Access URLs${reset}`);
+console.log(`${bright}${blue}  🚀 IzzyDocs - Access URLs${reset}`);
 console.log(`${bright}${blue}${'═'.repeat(60)}${reset}`);
 console.log('');
 

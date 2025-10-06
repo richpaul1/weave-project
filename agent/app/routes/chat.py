@@ -17,12 +17,14 @@ from app.services.llm_service import LLMService
 from app.services.retrieval_service import RetrievalService
 from app.services.rag_service import RAGService
 from app.services.enhanced_rag_service import EnhancedRAGService
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.services.hallucination_service import HallucinationService
 from app.services.tool_calling_service import ToolCallingService
+from app.services.tool_strategy_service import ToolStrategyService
 from app.tools.tool_executor import ToolExecutor
-from app.utils.weave_utils import create_tool_trace_summary
+from app.utils.weave_utils import create_tool_trace_summary, add_session_metadata
+from app.tool_config_pkg.tool_config import ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG
 from app import config
 
 
@@ -53,14 +55,15 @@ llm_service: Optional[LLMService] = None
 retrieval_service: Optional[RetrievalService] = None
 rag_service: Optional[RAGService] = None
 enhanced_rag_service: Optional[EnhancedRAGService] = None
-course_service: Optional[CourseService] = None
+course_service: Optional[IndependentCourseService] = None
 hallucination_service: Optional[HallucinationService] = None
 tool_calling_service: Optional[ToolCallingService] = None
+tool_strategy_service: Optional[ToolStrategyService] = None
 
 
 def init_services():
     """Initialize all services"""
-    global storage_service, llm_service, retrieval_service, rag_service, enhanced_rag_service, course_service, hallucination_service, tool_calling_service
+    global storage_service, llm_service, retrieval_service, rag_service, enhanced_rag_service, course_service, hallucination_service, tool_calling_service, tool_strategy_service
 
     if storage_service is None:
         storage_service = StorageService()
@@ -79,7 +82,7 @@ def init_services():
             llm_service=llm_service
         )
 
-        course_service = CourseService(config.ADMIN_BASE_URL)
+        course_service = IndependentCourseService()
 
         enhanced_rag_service = EnhancedRAGService(
             retrieval_service=retrieval_service,
@@ -99,7 +102,16 @@ def init_services():
 
         tool_calling_service = ToolCallingService(
             llm_service=llm_service,
-            tool_executor=tool_executor
+            tool_executor=tool_executor,
+            storage_service=storage_service
+        )
+
+        # Initialize tool strategy service
+        tool_strategy_service = ToolStrategyService(
+            query_classifier=enhanced_rag_service.query_classifier,
+            tool_calling_service=tool_calling_service,
+            enhanced_rag_service=enhanced_rag_service,
+            config=DEFAULT_TOOL_STRATEGY_CONFIG
         )
 
 
@@ -203,74 +215,40 @@ async def chat_stream(request: ChatRequest):
             with weave.thread(thread_id) as thread_ctx:
                 print(f"🧵 Processing message in thread: {thread_ctx.thread_id}")
 
-                # Step 1: Save user message to database first
-                print(f"💾 Saving user message to database...")
-                from datetime import datetime
-                user_message_data = {
-                    "sessionId": request.session_id,
-                    "sender": "user",
-                    "message": request.query,
-                    "thinking": "",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                # Process query through Enhanced RAG pipeline with integrated storage
+                print(f"🧠 Starting Enhanced AI processing with integrated storage...")
+                completion_data = None
 
-                user_message = storage_service.create_chat_message(user_message_data, request.session_id)
-                user_message_id = user_message.get("id")
-                print(f"✅ User message saved with ID: {user_message_id}")
-
-                # Send user message confirmation
-                yield f"data: {json.dumps({'type': 'user_saved', 'message_id': user_message_id})}\n\n"
-
-                # Step 2: Process AI response through Enhanced RAG pipeline
-                print(f"🧠 Starting Enhanced AI processing...")
                 async for event in enhanced_rag_service.process_query_streaming(
                     query=request.query,
                     session_id=request.session_id,
-                    top_k=request.top_k
+                    top_k=request.top_k,
+                    storage_service=storage_service
                 ):
-                    # Accumulate response content for database storage
-                    if event.get("type") == "thinking":
-                        # Thinking events have structure: {"type": "thinking", "data": {"text": "..."}}
-                        thinking_data = event.get("data", {})
-                        accumulated_thinking += thinking_data.get("text", "")
-                    elif event.get("type") == "response":
-                        # Response events have structure: {"type": "response", "data": {"text": "..."}}
-                        response_data = event.get("data", {})
-                        accumulated_response += response_data.get("text", "")
-
                     # Stream event to client
                     yield f"data: {json.dumps(event)}\n\n"
 
-                # Step 3: Save AI response to database after processing complete
-                print(f"💾 Saving AI response to database...")
-                ai_message_data = {
-                    "sessionId": request.session_id,
-                    "sender": "ai",
-                    "message": accumulated_response,
-                    "thinking": accumulated_thinking,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                    # Capture completion data for final event
+                    if event.get("type") == "done":
+                        completion_data = event.get("data", {})
 
-                ai_message = storage_service.create_chat_message(ai_message_data, request.session_id)
-                ai_message_id = ai_message.get("id")
-                print(f"✅ AI response saved with ID: {ai_message_id}")
-
-                # Send completion confirmation with message IDs
-                completion_event = {
-                    "type": "complete",
-                    "user_message_id": user_message_id,
-                    "ai_message_id": ai_message_id,
-                    "session_id": request.session_id
-                }
-                yield f"data: {json.dumps(completion_event)}\n\n"
+                # Send completion confirmation with message IDs from the enhanced RAG service
+                if completion_data:
+                    completion_event = {
+                        "type": "complete",
+                        "user_message_id": completion_data.get("metadata", {}).get("user_message_id"),
+                        "ai_message_id": completion_data.get("metadata", {}).get("ai_message_id"),
+                        "session_id": request.session_id
+                    }
+                    yield f"data: {json.dumps(completion_event)}\n\n"
+                    print(f"✅ Chat stream completed with message IDs: user={completion_event['user_message_id']}, ai={completion_event['ai_message_id']}")
 
         except Exception as e:
             print(f"❌ Error in chat stream: {str(e)}")
             error_event = {
                 "type": "error",
                 "data": {"error": str(e)},
-                "user_message_id": user_message_id,
-                "ai_message_id": ai_message_id
+                "session_id": request.session_id
             }
             yield f"data: {json.dumps(error_event)}\n\n"
 
@@ -455,6 +433,66 @@ async def get_recent_sessions(limit: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/cleanup/orphaned-messages")
+async def delete_orphaned_messages():
+    """
+    Delete all orphaned chat messages (messages with null sessionId).
+
+    This is useful for cleaning up messages that were created before the session ID fix.
+
+    Returns:
+        Success status with deletion details
+    """
+    init_services()
+
+    try:
+        deleted_count = storage_service.delete_orphaned_messages()
+
+        print(f"🧹 Cleaned up {deleted_count} orphaned messages")
+
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} orphaned messages",
+            "details": {
+                "deleted_count": deleted_count,
+                "operation": "cleanup_orphaned_messages"
+            }
+        }
+    except Exception as e:
+        print(f"❌ Error deleting orphaned messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/cleanup/all-sessions")
+async def delete_all_sessions():
+    """
+    Delete ALL chat messages and sessions.
+
+    This completely clears the chat history database.
+
+    Returns:
+        Success status with deletion details
+    """
+    init_services()
+
+    try:
+        deleted_count = storage_service.delete_all_chat_messages()
+
+        print(f"🧹 Cleared all chat history: {deleted_count} messages deleted")
+
+        return {
+            "success": True,
+            "message": f"Deleted all chat history ({deleted_count} messages)",
+            "details": {
+                "deleted_count": deleted_count,
+                "operation": "clear_all_sessions"
+            }
+        }
+    except Exception as e:
+        print(f"❌ Error deleting all chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/message-with-tools", response_model=ChatResponse)
 async def chat_message_with_tools(request: ChatRequest):
     """
@@ -484,18 +522,30 @@ async def chat_message_with_tools(request: ChatRequest):
             result = await tool_calling_service.process_query_with_tools(
                 query=request.query,
                 session_id=request.session_id,
-                max_tool_calls=3
+                max_tool_calls=1
             )
 
             # Create comprehensive tool trace summary for Weave
             tool_trace_summary = create_tool_trace_summary(result["tool_calls_made"])
 
-            # Store the interaction with enhanced tool metadata
+            # Store the user message
             storage_service.create_chat_message(
                 message_data={
-                    "query": request.query,
-                    "response": result["response"],
-                    "sources": [],  # Tools provide their own context
+                    "sessionId": request.session_id,
+                    "sender": "user",
+                    "message": request.query,
+                    "thinking": "",
+                },
+                session_id=request.session_id or "default"
+            )
+
+            # Store the AI response with enhanced tool metadata
+            storage_service.create_chat_message(
+                message_data={
+                    "sessionId": request.session_id,
+                    "sender": "ai",
+                    "message": result["response"],
+                    "thinking": "",
                     "metadata": {
                         "tool_calls": result["tool_calls_made"],
                         "tools_used": result["metadata"]["tools_used"],
@@ -531,6 +581,10 @@ async def chat_message_with_tools(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Tool calling failed: {str(e)}")
 
 
+
+
+
+
 @router.post("/stream-with-tools")
 async def stream_chat_with_tools(request: ChatRequest):
     """
@@ -558,42 +612,62 @@ async def stream_chat_with_tools(request: ChatRequest):
             with weave.thread(thread_id) as thread_ctx:
                 print(f"🧵 Processing streaming tool calling in thread: {thread_ctx.thread_id}")
 
-                full_response = ""
-                tool_calls_made = 0
-                tools_used = []
+                # Collect final data from the "done" event
+                final_data = None
 
                 # Stream tool calling process
                 async for event in tool_calling_service.process_query_with_tools_streaming(
                     query=request.query,
                     session_id=request.session_id,
-                    max_tool_calls=3
+                    max_tool_calls=1,
+                    top_k=request.top_k
                 ):
                     # Send event to client
                     yield f"data: {json.dumps(event)}\n\n"
 
-                    # Track response and tool usage
-                    if event["type"] == "response":
-                        full_response += event["data"]["text"]
-                    elif event["type"] == "tool_execution_result":
-                        tool_calls_made += 1
-                        tool_name = event["data"]["tool_name"]
-                        if tool_name not in tools_used:
-                            tools_used.append(tool_name)
+                    # Capture the final "done" event data for saving to database
+                    if event.get("type") == "done":
+                        final_data = event.get("data", {})
 
-                # Store the interaction
-                storage_service.create_chat_message(
-                    message_data={
-                        "query": request.query,
-                        "response": full_response,
-                        "sources": [],  # Tools provide their own context
-                        "metadata": {
-                            "tool_calls_made": tool_calls_made,
-                            "tools_used": tools_used,
-                            "streaming": True
-                        }
-                    },
-                    session_id=request.session_id or "default"
-                )
+                # Save messages to database if we have final data
+                if final_data:
+                    # Store the user message and capture the result
+                    user_message_result = storage_service.create_chat_message(
+                        message_data={
+                            "sessionId": request.session_id,
+                            "sender": "user",
+                            "message": request.query,
+                            "thinking": "",
+                        },
+                        session_id=request.session_id or "default"
+                    )
+
+                    # Store the AI response using special AIResponse method for Weave trace capture
+                    # This includes the user message as input and user message result for traceability
+                    ai_response_text = storage_service.AIResponse(
+                        user_message=request.query,
+                        ai_message_data={
+                            "sessionId": request.session_id,
+                            "sender": "ai",
+                            "message": final_data.get("final_response", ""),
+                            "thinking": final_data.get("thinking_content", ""),
+                            "metadata": {
+                                "tool_calls_made": final_data.get("tool_calls_made", 0),
+                                "tools_used": final_data.get("tools_used", []),
+                                "response_length": final_data.get("response_length", 0),
+                                "thinking_blocks": final_data.get("thinking_blocks", 0),
+                                "tool_execution_summary": final_data.get("tool_execution_summary", {}),
+                                "output_metrics": final_data.get("output_metrics", {}),
+                                "streaming": True,
+                                "tool_calling_session": True,
+                            }
+                        },
+                        session_id=request.session_id or "default",
+                        user_message_result=user_message_result
+                    )
+
+                    print(f"✅ AI Response captured for Weave trace: {len(ai_response_text)} chars")
+                    print(f"✅ User message saved with ID: {user_message_result.get('id') if user_message_result else 'None'}")
 
                 # Send final completion event
                 yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"
@@ -615,4 +689,248 @@ async def stream_chat_with_tools(request: ChatRequest):
             "Content-Type": "text/event-stream"
         }
     )
+
+    async def generate_tool_calling_stream():
+        """Generate streaming response with tool calling."""
+        try:
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Streaming in thread: {thread_ctx.thread_id}")
+
+                # Stream tool calling process
+                async for event in tool_calling_service.process_query_with_tools_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    max_tool_calls=1,
+                    top_k=request.top_k
+                ):
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                # Send final completion event
+                yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"
+
+        except Exception as e:
+            print(f"❌ Chat API: Streaming failed: {str(e)}")
+            error_event = {
+                "type": "error",
+                "data": {"error": f"Streaming failed: {str(e)}"}
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    # Return the streaming response
+    # The Weave instrumentation runs in the background task
+    return StreamingResponse(
+        generate_tool_calling_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+
+@router.post("/message-with-strategy", response_model=ChatResponse)
+async def chat_message_with_strategy(request: ChatRequest):
+    """
+    Process a chat message using the intelligent tool strategy.
+    The system decides the best approach based on query analysis and configuration.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Chat response with answer, sources, and metadata including strategy used
+    """
+    print(f"🧠 Chat API: Received tool strategy request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    try:
+        # Use session_id as thread_id to track conversation context
+        thread_id = request.session_id or "default_session"
+
+        with weave.thread(thread_id) as thread_ctx:
+            print(f"🧵 Processing tool strategy in thread: {thread_ctx.thread_id}")
+
+            # Process query with tool strategy
+            result = await tool_strategy_service.process_query(
+                query=request.query,
+                session_id=request.session_id,
+                top_k=request.top_k
+            )
+
+            # Store the user message
+            storage_service.create_chat_message(
+                message_data={
+                    "sessionId": request.session_id,
+                    "sender": "user",
+                    "message": request.query,
+                    "thinking": "",
+                },
+                session_id=request.session_id or "default"
+            )
+
+            # Store the AI response with strategy metadata
+            storage_service.create_chat_message(
+                message_data={
+                    "sessionId": request.session_id,
+                    "sender": "ai",
+                    "message": result["response"],
+                    "thinking": "",
+                    "metadata": {
+                        **result["metadata"],
+                        "tool_strategy_session": True,
+                        "strategy_info": tool_strategy_service.get_strategy_info(),
+                        "sources": result.get("sources", [])
+                    }
+                },
+                session_id=request.session_id or "default"
+            )
+
+            return ChatResponse(
+                response=result["response"],
+                sources=result.get("sources", []),
+                metadata={
+                    "session_id": request.session_id,
+                    "thread_id": thread_ctx.thread_id,
+                    "tool_strategy": True,
+                    **result["metadata"]
+                }
+            )
+
+    except Exception as e:
+        print(f"❌ Chat API: Tool strategy failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Tool strategy failed: {str(e)}")
+
+
+@router.post("/stream-with-strategy")
+async def stream_chat_with_strategy(request: ChatRequest):
+    """
+    Stream a chat response using the intelligent tool strategy.
+    The system decides the best approach and streams the process.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Streaming response with strategy decisions and execution
+    """
+    print(f"🧠 Chat API: Received streaming tool strategy request")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    async def generate_tool_strategy_stream():
+        """Generate streaming response with tool strategy."""
+        try:
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Processing streaming tool strategy in thread: {thread_ctx.thread_id}")
+
+                full_response = ""
+                strategy_metadata = {}
+
+                # Stream tool strategy process
+                async for event in tool_strategy_service.process_query_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    top_k=request.top_k
+                ):
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                    # Track response and strategy usage
+                    if event["type"] == "response":
+                        full_response += event["data"]["text"]
+                    elif event["type"] in ["classification", "strategy_decision", "metadata"]:
+                        strategy_metadata.update(event["data"])
+
+                # Store the user message
+                storage_service.create_chat_message(
+                    message_data={
+                        "sessionId": request.session_id,
+                        "sender": "user",
+                        "message": request.query,
+                        "thinking": "",
+                    },
+                    session_id=request.session_id or "default"
+                )
+
+                # Store the AI response
+                storage_service.create_chat_message(
+                    message_data={
+                        "sessionId": request.session_id,
+                        "sender": "ai",
+                        "message": full_response,
+                        "thinking": "",
+                        "metadata": {
+                            **strategy_metadata,
+                            "streaming": True,
+                            "tool_strategy_session": True,
+                            "strategy_info": tool_strategy_service.get_strategy_info()
+                        }
+                    },
+                    session_id=request.session_id or "default"
+                )
+
+                # Send final completion event
+                yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id, 'strategy_info': tool_strategy_service.get_strategy_info()}})}\n\n"
+
+        except Exception as e:
+            print(f"❌ Chat API: Streaming tool strategy failed: {str(e)}")
+            error_event = {
+                "type": "error",
+                "data": {"error": f"Streaming failed: {str(e)}"}
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        generate_tool_strategy_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+
+@router.get("/tool-strategy-info")
+async def get_tool_strategy_info():
+    """
+    Get information about the current tool strategy configuration.
+
+    Returns:
+        Tool strategy configuration and status
+    """
+    init_services()
+
+    try:
+        strategy_info = tool_strategy_service.get_strategy_info()
+
+        return {
+            "status": "active",
+            "configuration": strategy_info,
+            "available_strategies": [strategy.value for strategy in ToolStrategy],
+            "endpoints": {
+                "strategy_chat": "/message-with-strategy",
+                "strategy_stream": "/stream-with-strategy",
+                "tool_chat": "/message-with-tools",
+                "tool_stream": "/stream-with-tools",
+                "enhanced_rag": "/message",
+                "enhanced_rag_stream": "/stream"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get strategy info: {str(e)}")
 

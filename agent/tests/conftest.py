@@ -11,20 +11,40 @@ from fastapi.testclient import TestClient
 # Add the agent directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-# Mock environment variables before importing any modules
-@pytest.fixture(scope="session", autouse=True)
-def mock_environment():
-    """Mock environment variables for testing."""
-    with patch.dict(os.environ, {
-        'NEO4J_URI': 'neo4j://localhost:7687',
-        'NEO4J_USERNAME': 'test_user',
-        'NEO4J_PASSWORD': 'test_password',
-        'OLLAMA_BASE_URL': 'http://localhost:11434',
-        'ADMIN_BASE_URL': 'http://localhost:8001',
-        'WEAVE_PROJECT': 'test-project',
-        'WANDB_API_KEY': 'test-key'
-    }):
-        yield
+# Set environment variables before any imports to prevent import-time errors
+os.environ.update({
+    # Neo4j Configuration
+    'NEO4J_URI': 'neo4j://localhost:7687',
+    'NEO4J_USER': 'test_user',
+    'NEO4J_PASSWORD': 'test_password',
+    'NEO4J_DB_NAME': 'test_db',
+
+    # LLM Configuration
+    'OLLAMA_BASE_URL': 'http://localhost:11434',
+    'OLLAMA_MODEL': 'test-model',
+    'OLLAMA_EMBEDDING_MODEL': 'test-embedding-model',
+    'OPENAI_API_KEY': 'test-openai-key',  # Set a test key to prevent validation errors
+    'OPENAI_MODEL': 'gpt-4',
+    'OPENAI_EMBEDDING_MODEL': 'text-embedding-3-small',
+
+    # Weave Configuration
+    'WANDB_PROJECT': 'test-project',
+    'WANDB_ENTITY': 'test-entity',
+    'WANDB_API_KEY': '',
+
+    # RAG Configuration
+    'RAG_TOP_K': '5',
+    'RAG_MAX_CONTEXT_LENGTH': '4000',
+    'RAG_MIN_RELEVANCE_SCORE': '0.7',
+    'LLM_MAX_TOKENS': '2000',
+    'LLM_TEMPERATURE': '0.7',
+
+    # Server Configuration
+    'AGENT_BACKEND_PORT': '8051',
+    'AGENT_CLIENT_PORT': '8050'
+})
+
+
 
 
 # ============================================================================
@@ -143,6 +163,90 @@ def mock_storage_service(sample_page, sample_chunks):
     # Add load_markdown_from_file for functional tests
     storage.load_markdown_from_file = AsyncMock(return_value="Test markdown content for Weave testing.")
 
+    # Add context manager support for _get_session
+    class MockSession:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+        def run(self, query, params=None, **kwargs):
+            # Mock result with records - return some sample courses for tests
+            mock_result = Mock()
+
+            # Create mock course records
+            mock_records = []
+            if "machine learning" in query.lower() or "python" in query.lower():
+                course_data = [
+                    {
+                        "title": "Machine Learning Fundamentals",
+                        "description": "Learn the basics of machine learning",
+                        "difficulty": "Beginner",
+                        "instructor": "Dr. Smith",
+                        "url": "https://example.com/ml-course",
+                        "isActive": True,
+                        "topics": ["machine learning", "AI", "algorithms"]
+                    },
+                    {
+                        "title": "Advanced Python Programming",
+                        "description": "Master advanced Python concepts",
+                        "difficulty": "Advanced",
+                        "instructor": "Prof. Johnson",
+                        "url": "https://example.com/python-course",
+                        "isActive": True,
+                        "topics": ["python", "programming", "advanced"]
+                    },
+                    {
+                        "title": "Data Science with Python",
+                        "description": "Learn data science using Python",
+                        "difficulty": "Intermediate",
+                        "instructor": "Dr. Brown",
+                        "url": "https://example.com/ds-course",
+                        "isActive": True,
+                        "topics": ["data science", "python", "analytics"]
+                    }
+                ]
+
+                for course_dict in course_data:
+                    # Create a mock course node that behaves like a Neo4j node
+                    class MockCourseNode:
+                        def __init__(self, data):
+                            self._data = data
+
+                        def __iter__(self):
+                            return iter(self._data.keys())
+
+                        def __getitem__(self, key):
+                            return self._data[key]
+
+                        def keys(self):
+                            return self._data.keys()
+
+                        def values(self):
+                            return self._data.values()
+
+                        def items(self):
+                            return self._data.items()
+
+                    mock_course_node = MockCourseNode(course_dict)
+
+                    # Create a mock record
+                    mock_record = Mock()
+                    mock_record.__getitem__ = Mock(side_effect=lambda key, node=mock_course_node: node if key == "c" else None)
+                    mock_records.append(mock_record)
+
+            mock_result.__iter__ = Mock(return_value=iter(mock_records))
+            return mock_result
+        def execute_read(self, query, params=None, **kwargs):
+            mock_result = Mock()
+            mock_result.__iter__ = Mock(return_value=iter([]))
+            return mock_result
+        def execute_write(self, query, params=None, **kwargs):
+            mock_result = Mock()
+            mock_result.__iter__ = Mock(return_value=iter([]))
+            return mock_result
+
+    storage._get_session = Mock(return_value=MockSession())
+
     return storage
 
 
@@ -159,14 +263,24 @@ def mock_llm_service(sample_embedding):
         "provider": "test"
     })
     
+    # Mock async methods with AsyncMock for proper assertion support
     llm.generate_embedding = AsyncMock(return_value=sample_embedding)
-    
-    async def mock_streaming():
+
+    # Mock tool calling method
+    llm.generate_completion_with_tools = AsyncMock(return_value={
+        "tool_calls": []  # No tool calls by default
+    })
+
+    async def mock_generate(*args, **kwargs):
+        """Mock text generation"""
+        return "This is a mock response."
+
+    async def mock_streaming(*args, **kwargs):
         """Mock streaming generator"""
         for chunk in ["This ", "is ", "a ", "test ", "response."]:
             yield chunk
-    
-    llm.generate_streaming = Mock(return_value=mock_streaming())
+    llm.generate = mock_generate
+    llm.generate_streaming = mock_streaming
     
     return llm
 
@@ -309,4 +423,27 @@ def real_llm_service():
     """Real LLMService for integration tests"""
     from app.services.llm_service import LLMService
     return LLMService(provider="ollama")
+
+
+@pytest.fixture
+def admin_backend_available():
+    """Check if admin backend is available for testing"""
+    import requests
+    try:
+        response = requests.get("http://localhost:8080/health", timeout=2)
+        return response.status_code == 200
+    except:
+        return False
+
+
+@pytest.fixture
+def config():
+    """Mock configuration for integration tests"""
+    from unittest.mock import Mock
+    config = Mock()
+    config.ADMIN_BACKEND_URL = "http://localhost:8080"
+    config.NEO4J_URI = "bolt://localhost:7687"
+    config.NEO4J_USER = "neo4j"
+    config.NEO4J_PASSWORD = "test-password"
+    return config
 

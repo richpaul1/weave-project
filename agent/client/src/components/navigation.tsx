@@ -21,7 +21,7 @@ export default function Navigation() {
       <div className="p-6 border-b border-border">
         <h1 className="text-xl font-semibold text-foreground">
           <Network className="inline mr-2 h-5 w-5 text-primary" />
-          Weave RAG Demo
+          IzzyDocs
         </h1>
       </div>
 
@@ -30,26 +30,8 @@ export default function Navigation() {
         <SessionsList currentSessionId={currentSessionId} />
       </div>
 
-      <div className="p-4 border-t border-border space-y-3">
+      <div className="p-4 border-border space-y-3">
         {/* Navigation Items */}
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location === item.path || (item.path === "/chat" && location.startsWith("/chat"));
-
-          return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant={isActive ? "default" : "ghost"}
-                size="sm"
-                className="w-full justify-start"
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {item.label}
-              </Button>
-            </Link>
-          );
-        })}
-
         <Button
           variant="outline"
           size="sm"
@@ -70,8 +52,8 @@ export default function Navigation() {
         </Button>
 
         <div className="text-xs text-muted-foreground">
-          <p className="font-medium mb-1">Weave RAG Demo</p>
-          <p>Powered by Weights & Biases</p>
+          <p className="font-medium mb-1">IzzyDocs</p>
+          <p>Monitored by Weights & Biases</p>
         </div>
       </div>
     </nav>

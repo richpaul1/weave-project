@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { adminWeave, initializeWeave } from '../../src/weave/init.js';
+import { WeaveService } from '../../src/weave/weaveService.js';
 
 // Test service class to demonstrate instrumentation
 class TestCourseService {
@@ -25,7 +25,8 @@ class TestCourseService {
     const results = await this.processResults(query, limit);
     
     // Log metrics
-    await adminWeave.logMetric('courses_found', results.length, {
+    const weaveService = WeaveService.getInstance();
+    await weaveService?.logMetrics('courses_found', results.length, {
       query,
       limit,
       timestamp: new Date().toISOString()
@@ -46,28 +47,38 @@ class TestCourseService {
     await new Promise(resolve => setTimeout(resolve, 100));
     
     // Create child trace for specific operations
-    await adminWeave.createChildTrace('neo4j_vector_search', async () => {
+    const weaveService = WeaveService.getInstance();
+    const traceId1 = weaveService?.startTrace('neo4j_vector_search', {});
+    try {
       console.log('🔍 Performing vector similarity search...');
       await new Promise(resolve => setTimeout(resolve, 50));
-      return { similarity_scores: [0.95, 0.87, 0.82] };
-    });
-    
-    await adminWeave.createChildTrace('neo4j_metadata_fetch', async () => {
+      weaveService?.endTrace(traceId1, { similarity_scores: [0.95, 0.87, 0.82] });
+    } catch (error) {
+      weaveService?.endTrace(traceId1, { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+
+    const traceId2 = weaveService?.startTrace('neo4j_metadata_fetch', {});
+    try {
       console.log('📋 Fetching course metadata...');
       await new Promise(resolve => setTimeout(resolve, 30));
-      return { metadata_count: 3 };
-    });
+      weaveService?.endTrace(traceId2, { metadata_count: 3 });
+    } catch (error) {
+      weaveService?.endTrace(traceId2, { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
   }
 
   processResults = async (query: string, limit: number): Promise<any[]> => {
     console.log(`⚙️ Processing results for query: "${query}"`);
     
     // Simulate result processing with child operations
-    const rawResults = await adminWeave.createChildTrace('format_courses', async () => {
+    const weaveService = WeaveService.getInstance();
+    const traceId = weaveService?.startTrace('format_courses', {});
+    let rawResults;
+    try {
       console.log('📝 Formatting course data...');
       await new Promise(resolve => setTimeout(resolve, 25));
-      
-      return [
+
+      rawResults = [
         {
           id: '1',
           title: 'Machine Learning Fundamentals',
@@ -75,7 +86,7 @@ class TestCourseService {
           topics: ['ml', 'python', 'data-science']
         },
         {
-          id: '2', 
+          id: '2',
           title: 'Advanced Deep Learning',
           difficulty: 'advanced',
           topics: ['deep-learning', 'neural-networks', 'ai']
@@ -83,11 +94,15 @@ class TestCourseService {
         {
           id: '3',
           title: 'Data Science with Python',
-          difficulty: 'intermediate', 
+          difficulty: 'intermediate',
           topics: ['python', 'data-science', 'pandas']
         }
       ];
-    });
+      weaveService?.endTrace(traceId, { courses_formatted: rawResults.length });
+    } catch (error) {
+      weaveService?.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
 
     // Apply limit
     return rawResults.slice(0, limit);
@@ -124,7 +139,8 @@ class TestCrawlerService {
     const content = await this.extractContent(pages);
     const processed = await this.processContent(content);
     
-    await adminWeave.logEvent('crawl_completed', {
+    const weaveService = WeaveService.getInstance();
+    weaveService?.logEvent('crawl_completed', {
       url,
       pages_found: pages.length,
       content_extracted: content.length,
@@ -142,15 +158,24 @@ class TestCrawlerService {
   discoverPages = async (url: string): Promise<string[]> => {
     console.log(`🔍 Discovering pages from: ${url}`);
     
-    await adminWeave.createChildTrace('fetch_sitemap', async () => {
+    const weaveService = WeaveService.getInstance();
+    const traceId1 = weaveService?.startTrace('fetch_sitemap', {});
+    try {
       console.log('📄 Fetching sitemap...');
       await new Promise(resolve => setTimeout(resolve, 40));
-    });
-    
-    await adminWeave.createChildTrace('parse_links', async () => {
+      weaveService?.endTrace(traceId1, { sitemap_fetched: true });
+    } catch (error) {
+      weaveService?.endTrace(traceId1, { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+
+    const traceId2 = weaveService?.startTrace('parse_links', {});
+    try {
       console.log('🔗 Parsing page links...');
       await new Promise(resolve => setTimeout(resolve, 60));
-    });
+      weaveService?.endTrace(traceId2, { links_parsed: true });
+    } catch (error) {
+      weaveService?.endTrace(traceId2, { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
     
     return [
       `${url}/page1`,
@@ -166,16 +191,23 @@ class TestCrawlerService {
     for (const page of pages) {
       // Sanitize page URL for trace name by replacing invalid characters
       const sanitizedPageName = page.replace(/[:/]/g, '_');
-      const pageContent = await adminWeave.createChildTrace(`extract_page_${sanitizedPageName}`, async () => {
+      const weaveService = WeaveService.getInstance();
+      const traceId = weaveService?.startTrace(`extract_page_${sanitizedPageName}`, {});
+      let pageContent;
+      try {
         console.log(`📄 Extracting content from: ${page}`);
         await new Promise(resolve => setTimeout(resolve, 30));
-        return {
+        pageContent = {
           url: page,
           title: `Title for ${page}`,
           content: `Content from ${page}`,
           wordCount: Math.floor(Math.random() * 1000) + 500
         };
-      });
+        weaveService?.endTrace(traceId, { page_extracted: page, word_count: pageContent.wordCount });
+      } catch (error) {
+        weaveService?.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+        throw error;
+      }
       content.push(pageContent);
     }
 
@@ -189,26 +221,41 @@ class TestCrawlerService {
     for (const item of content) {
       // Sanitize URL for trace name by replacing invalid characters
       const sanitizedUrl = item.url.replace(/[:/]/g, '_');
-      const processedItem = await adminWeave.createChildTrace(`process_${sanitizedUrl}`, async () => {
+      const weaveService = WeaveService.getInstance();
+      const traceId = weaveService?.startTrace(`process_${sanitizedUrl}`, {});
+      let processedItem;
+      try {
         console.log(`🔄 Processing: ${item.url}`);
-        
+
         // Simulate chunking
-        await adminWeave.createChildTrace('chunk_content', async () => {
+        const chunkTraceId = weaveService?.startTrace('chunk_content', {});
+        try {
           await new Promise(resolve => setTimeout(resolve, 20));
-        });
-        
+          weaveService?.endTrace(chunkTraceId, { chunking_complete: true });
+        } catch (error) {
+          weaveService?.endTrace(chunkTraceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+        }
+
         // Simulate embedding generation
-        await adminWeave.createChildTrace('generate_embeddings', async () => {
+        const embedTraceId = weaveService?.startTrace('generate_embeddings', {});
+        try {
           await new Promise(resolve => setTimeout(resolve, 35));
-        });
-        
-        return {
+          weaveService?.endTrace(embedTraceId, { embeddings_generated: true });
+        } catch (error) {
+          weaveService?.endTrace(embedTraceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+        }
+
+        processedItem = {
           ...item,
           chunks: Math.ceil(item.wordCount / 200),
           embeddings_generated: true,
           processed_at: new Date().toISOString()
         };
-      });
+        weaveService?.endTrace(traceId, { processed_url: item.url, chunks: processedItem.chunks });
+      } catch (error) {
+        weaveService?.endTrace(traceId, { error: error instanceof Error ? error.message : 'Unknown error' });
+        throw error;
+      }
       processed.push(processedItem);
     }
     
@@ -222,11 +269,12 @@ describe('Weave Integration Test', () => {
   
   beforeAll(async () => {
     console.log('\n🚀 Initializing Weave for integration testing...');
-    await initializeWeave();
-    
+    const weaveService = new WeaveService();
+    await weaveService.initialize();
+
     courseService = new TestCourseService();
     crawlerService = new TestCrawlerService();
-    
+
     console.log('✅ Weave integration test setup complete\n');
   });
 
@@ -291,8 +339,9 @@ describe('Weave Integration Test', () => {
     console.log('\n🧪 Test 5: Trace URL Capture');
     
     await courseService.searchCourses('data science', 1);
-    
-    const traceUrl = adminWeave.getCurrentTraceUrl();
+
+    const weaveService = WeaveService.getInstance();
+    const traceUrl = weaveService?.getCurrentTraceUrl();
     if (traceUrl) {
       console.log(`🔗 Trace URL: ${traceUrl}`);
       console.log('📊 Use this URL to analyze the trace in Weave UI');

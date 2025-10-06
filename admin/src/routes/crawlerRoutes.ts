@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { WebCrawler } from '../services/webCrawler.js';
 import { StorageService } from '../services/storageService.js';
+import * as weave from 'weave';
 
 const router = Router();
 
@@ -143,9 +144,16 @@ router.delete('/reset', async (req: Request, res: Response) => {
 });
 
 /**
- * Background function to run the crawl
+ * Weave-instrumented crawl job execution
  */
-async function startCrawl(jobId: string, url: string, maxDepth: number) {
+const executeCrawlJob = weave.op(async function executeCrawlJob(jobId: string, url: string, maxDepth: number) {
+  return await _executeCrawlJobImpl(jobId, url, maxDepth);
+}, { name: 'CrawlerRoutes.executeCrawlJob' });
+
+/**
+ * Implementation of crawl job execution
+ */
+async function _executeCrawlJobImpl(jobId: string, url: string, maxDepth: number) {
   const job = crawlJobs.get(jobId);
   if (!job) return;
 
@@ -164,12 +172,12 @@ async function startCrawl(jobId: string, url: string, maxDepth: number) {
 
     console.log(`[Crawl ${jobId}] Starting crawl of ${url} with maxDepth ${maxDepth}`);
 
-    // Run crawl
+    // Run crawl (this will create WebCrawler.crawl trace)
     const results = await crawler.crawl(url, maxDepth);
 
     console.log(`[Crawl ${jobId}] Crawl completed, processing ${results.length} pages`);
 
-    // Save results to storage
+    // Save results to storage (this will create StorageService.saveCompletePage traces)
     for (const result of results) {
       try {
         await storage.saveCompletePage(
@@ -194,8 +202,14 @@ async function startCrawl(jobId: string, url: string, maxDepth: number) {
     job.status = 'failed';
     job.error = error.message;
     job.completedAt = new Date().toISOString();
-  } finally {
   }
+}
+
+/**
+ * Background function to run the crawl (legacy wrapper)
+ */
+async function startCrawl(jobId: string, url: string, maxDepth: number) {
+  return await executeCrawlJob(jobId, url, maxDepth);
 }
 
 export default router;

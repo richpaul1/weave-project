@@ -24,12 +24,12 @@ export interface GraphEdge {
  * Content node types for graph visualization
  */
 export const CONTENT_NODE_TYPES: Record<string, { color: string }> = {
-  page: { color: '#3B82F6' },      // Blue
-  video: { color: '#EF4444' },     // Red
-  transcript: { color: '#F97316' }, // Orange
-  chunk: { color: '#6B7280' },     // Gray
-  entity: { color: '#10B981' },    // Green
-  topic: { color: '#A855F7' },     // Purple
+  page: { color: '#3B82F6' },        // Blue
+  chunk: { color: '#6B7280' },       // Gray
+  coursechunk: { color: '#F97316' },  // Orange
+  course: { color: '#06B6D4' },      // Cyan
+  setting: { color: '#10B981' },     // Green
+  chatmessage: { color: '#A855F7' }, // Purple
 };
 
 export type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;
@@ -39,7 +39,7 @@ export type ContentNodeType = keyof typeof CONTENT_NODE_TYPES;
  */
 export function normalizeToContentNodeType(type: string): ContentNodeType {
   const lowerType = type.toLowerCase();
-  
+
   // Direct matches
   if (lowerType === 'page') return 'page';
   if (lowerType === 'video') return 'video';
@@ -47,7 +47,8 @@ export function normalizeToContentNodeType(type: string): ContentNodeType {
   if (lowerType === 'chunk' || lowerType === 'text_chunk') return 'chunk';
   if (lowerType === 'entity') return 'entity';
   if (lowerType === 'topic') return 'topic';
-  
+  if (lowerType === 'course') return 'course';
+
   // Default to entity for unknown types
   return 'entity';
 }

@@ -113,9 +113,10 @@ global.testUtils = {
   ],
 
   createMockWeave: () => ({
-    createChildTrace: vi.fn().mockImplementation((name, operation) => operation()),
+    startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+    endTrace: vi.fn(),
     logEvent: vi.fn(),
-    logMetric: vi.fn(),
+    logMetrics: vi.fn(),
     getCurrentTraceUrl: vi.fn().mockReturnValue('https://test-trace-url.com')
   }),
 

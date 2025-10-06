@@ -4,15 +4,45 @@ Neo4j Storage Service for RAG Pipeline
 Handles reading content from Neo4j database populated by admin backend.
 All methods are decorated with @weave.op() for observability.
 """
+from __future__ import annotations
 from typing import List, Dict, Any, Optional
+from concurrent.futures import Future
 from neo4j import GraphDatabase, Driver, Session
 from neo4j.time import DateTime
 from datetime import datetime
 import uuid
 import weave
+import sys
+import importlib
+
+# Make Future available globally to resolve forward reference issues
+globals()['Future'] = Future
+import typing
+typing.Future = Future
+if hasattr(typing, '__dict__'):
+    typing.__dict__['Future'] = Future
+weave.Future = Future
+if hasattr(weave, '__dict__'):
+    weave.__dict__['Future'] = Future
+if 'typing' in sys.modules:
+    sys.modules['typing'].Future = Future
+
+from weave.scorers import WeaveContextRelevanceScorerV1
+
+# Patch the module where WeaveContextRelevanceScorerV1 is defined
+try:
+    scorer_module_name = WeaveContextRelevanceScorerV1.__module__
+    scorer_mod = sys.modules.get(scorer_module_name) or importlib.import_module(scorer_module_name)
+    setattr(scorer_mod, 'Future', Future)
+    if hasattr(scorer_mod, '__dict__'):
+        scorer_mod.__dict__['Future'] = Future
+except Exception as e:
+    print(f"⚠️ Could not patch WeaveContextRelevanceScorerV1 module: {e}")
+
 import os
 import aiofiles
 from pathlib import Path
+from app.utils.weave_utils import add_session_metadata
 from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DB_NAME
 
 
@@ -27,6 +57,13 @@ class StorageService:
         """Initialize Neo4j connection"""
         self.driver: Optional[Driver] = None
         self.database = NEO4J_DB_NAME
+        # Initialize context relevance scorer for evaluating AI responses
+        # Rebuild the model to resolve forward references
+        try:
+            WeaveContextRelevanceScorerV1.model_rebuild()
+        except Exception as e:
+            print(f"⚠️ WeaveContextRelevanceScorerV1 rebuild warning: {e}")
+        self.context_relevance_scorer = WeaveContextRelevanceScorerV1()
 
     def _convert_neo4j_datetime(self, dt) -> str:
         """Convert Neo4j datetime object to ISO string"""
@@ -72,18 +109,18 @@ class StorageService:
     def get_all_pages(self) -> List[Dict[str, Any]]:
         """
         Retrieve all page metadata from Neo4j.
-        
+
         Returns:
             List of page dictionaries with metadata
         """
         with self._get_session() as session:
             result = session.run("""
                 MATCH (p:Page)
-                RETURN p.id as id, p.url as url, p.domain as domain, 
+                RETURN p.id as id, p.url as url, p.domain as domain,
                        p.slug as slug, p.title as title, p.createdAt as createdAt
                 ORDER BY p.createdAt DESC
             """)
-            
+
             pages = []
             for record in result:
                 pages.append({
@@ -94,7 +131,10 @@ class StorageService:
                     "title": record.get("title"),
                     "createdAt": record.get("createdAt")
                 })
-            
+
+            # Log the count of pages returned for debugging
+            print(f"📊 Retrieved {len(pages)} pages from Neo4j")
+
             return pages
     
     @weave.op()
@@ -341,6 +381,12 @@ class StorageService:
             message_id = str(uuid.uuid4())
             timestamp = datetime.utcnow()
 
+            # Prepare metadata as JSON string if present
+            metadata_json = None
+            if message_data.get("metadata"):
+                import json
+                metadata_json = json.dumps(message_data["metadata"])
+
             query = """
             CREATE (m:ChatMessage {
                 id: $id,
@@ -348,6 +394,7 @@ class StorageService:
                 sender: $sender,
                 message: $message,
                 thinking: $thinking,
+                metadata: $metadata,
                 timestamp: datetime($timestamp)
             })
             RETURN m
@@ -359,18 +406,30 @@ class StorageService:
                 "sender": message_data.get("sender"),
                 "message": message_data.get("message"),
                 "thinking": message_data.get("thinking", ""),
+                "metadata": metadata_json,
                 "timestamp": timestamp.isoformat()
             })
 
             record = result.single()
             if record:
                 props = record["m"]
+
+                # Parse metadata if present
+                metadata = None
+                if props.get("metadata"):
+                    import json
+                    try:
+                        metadata = json.loads(props["metadata"])
+                    except json.JSONDecodeError:
+                        metadata = None
+
                 return {
                     "id": props["id"],
                     "sessionId": props["sessionId"],
                     "sender": props["sender"],
                     "message": props["message"],
                     "thinking": props["thinking"],
+                    "metadata": metadata,
                     "timestamp": props["timestamp"]
                 }
 
@@ -399,16 +458,89 @@ class StorageService:
 
             for record in result:
                 props = record["m"]
+
+                # Parse metadata if present
+                metadata = None
+                if props.get("metadata"):
+                    import json
+                    try:
+                        metadata = json.loads(props["metadata"])
+                    except json.JSONDecodeError:
+                        metadata = None
+
                 messages.append({
                     "id": props["id"],
                     "sessionId": props["sessionId"],
                     "sender": props["sender"],
                     "message": props["message"],
                     "thinking": props.get("thinking", ""),
+                    "metadata": metadata,
                     "timestamp": self._convert_neo4j_datetime(props["timestamp"])
                 })
 
             return messages
+
+    @weave.op()
+    def get_recent_conversation_history(self, session_id: str, num_pairs: int = 3) -> List[Dict[str, Any]]:
+        """
+        Retrieve recent conversation history as Q&A pairs for LLM context.
+
+        Gets the most recent N question-answer pairs, excluding the current conversation
+        (since we don't want to include the question we're about to answer).
+
+        Args:
+            session_id: Session ID to retrieve history for
+            num_pairs: Number of Q&A pairs to retrieve (default: 3)
+
+        Returns:
+            List of Q&A pair dictionaries with 'question' and 'answer' keys,
+            ordered from oldest to newest
+        """
+        with self._get_session() as session:
+            # Get recent messages, excluding the very last user message (current question)
+            # We want pairs, so we get (num_pairs * 2) messages and pair them up
+            query = """
+            MATCH (m:ChatMessage {sessionId: $sessionId})
+            WHERE m.sender IN ['user', 'ai']
+            RETURN m.sender as sender, m.message as message, m.timestamp as timestamp
+            ORDER BY m.timestamp DESC
+            LIMIT $limit
+            """
+
+            # Get more messages than needed to ensure we have complete pairs
+            limit = (num_pairs * 2) + 2  # Extra buffer for incomplete pairs
+            result = session.run(query, {"sessionId": session_id, "limit": limit})
+            messages = list(result)
+
+            if len(messages) < 2:
+                # Not enough history for any pairs
+                return []
+
+            # Skip the most recent message if it's a user message (current question)
+            if messages and messages[0]["sender"] == "user":
+                messages = messages[1:]
+
+            # Group messages into Q&A pairs (user question + ai answer)
+            pairs = []
+            i = 0
+            while i < len(messages) - 1 and len(pairs) < num_pairs:
+                # Look for ai message followed by user message (reverse chronological order)
+                if (messages[i]["sender"] == "ai" and
+                    messages[i + 1]["sender"] == "user"):
+                    pairs.append({
+                        "question": messages[i + 1]["message"],
+                        "answer": messages[i]["message"],
+                        "timestamp": self._convert_neo4j_datetime(messages[i + 1]["timestamp"])
+                    })
+                    i += 2  # Skip both messages in the pair
+                else:
+                    i += 1  # Skip incomplete pair
+
+            # Reverse to get chronological order (oldest to newest)
+            pairs.reverse()
+
+            print(f"📚 Retrieved {len(pairs)} conversation pairs for session {session_id}")
+            return pairs
 
     @weave.op()
     def delete_chat_messages(self, session_id: str) -> bool:
@@ -434,6 +566,166 @@ class StorageService:
 
             return deleted_count > 0
 
+    @weave.op()
+    def delete_orphaned_messages(self) -> int:
+        """
+        Delete all orphaned chat messages (messages with null sessionId).
+
+        This is useful for cleaning up messages that were created before the session ID fix.
+
+        Returns:
+            Number of messages deleted
+        """
+        with self._get_session() as session:
+            query = """
+            MATCH (m:ChatMessage)
+            WHERE m.sessionId IS NULL
+            DETACH DELETE m
+            RETURN count(m) as deletedCount
+            """
+
+            result = session.run(query)
+            record = result.single()
+            deleted_count = record["deletedCount"] if record else 0
+
+            print(f"🧹 Deleted {deleted_count} orphaned messages with null sessionId")
+            return deleted_count
+
+    @weave.op()
+    def AIResponse(self,
+                   user_message: str,
+                   ai_message_data: Dict[str, Any],
+                   session_id: Optional[str] = None,
+                   user_message_result: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Special method to save AI response and return the response text for Weave trace capture.
+
+        This method is specifically designed to capture the final AI response in Weave traces
+        by returning the response text as the method output, while also saving the message
+        to the database with full metadata.
+
+        Args:
+            user_message: The original user query/message
+            ai_message_data: Dictionary containing AI message data
+            session_id: Optional session ID for Weave tracking
+            user_message_result: Optional result from saving the user message
+
+        Returns:
+            The AI response text for Weave trace capture
+        """
+        # Save the AI message to database using the standard method
+        saved_ai_message = self.create_chat_message(ai_message_data, session_id)
+
+        # Return the AI response text for Weave trace capture
+        ai_response_text = ai_message_data.get("message", "")
+
+        # Add Weave metadata for this special capture method
+        add_session_metadata(
+            operation_type="ai_response_capture",
+            session_id=session_id,
+            user_message=user_message,
+            user_message_length=len(user_message),
+            ai_response_length=len(ai_response_text),
+            has_thinking=bool(ai_message_data.get("thinking")),
+            has_metadata=bool(ai_message_data.get("metadata")),
+            user_message_id=user_message_result.get("id") if user_message_result else None,
+            ai_message_id=saved_ai_message.get("id") if saved_ai_message else None,
+            capture_method="AIResponse",
+            weave_trace_capture=True
+        )
+
+        self.finalAIResponse(user_message, ai_response_text)
+        return ai_response_text
+
+    @weave.op()
+    def finalAIResponse(self,
+                   user_message: str,
+                   ai_response: str ) -> Dict[str, Any]:
+        """
+        Special method to evaluate AI response relevance and return the score for Weave trace capture.
+
+        This method uses WeaveContextRelevanceScorerV1 to score whether the AI response
+        is relevant to the user's query.
+
+        Args:
+            user_message: The original user query
+            ai_response: The AI-generated response
+
+        Returns:
+            Dictionary containing relevance score and evaluation details
+        """
+        print(f"🎯 Evaluating response relevance...")
+        print(f"   Query: '{user_message[:100]}...'")
+        print(f"   Response: '{ai_response[:100]}...'")
+
+        # Score the response relevance using Weave's context relevance scorer
+        scorer_result = self.context_relevance_scorer.score(
+            query=user_message,
+            output=ai_response
+        )
+
+        # Convert WeaveScorerResult to dict for easier access
+        # The result object has attributes like 'passed' and can be converted to dict
+        result_dict = dict(scorer_result) if hasattr(scorer_result, '__iter__') else {}
+        passed = getattr(scorer_result, 'passed', False)
+
+        print(f"✅ Relevance evaluation complete:")
+        print(f"   Passed: {passed}")
+        print(f"   Full result: {scorer_result}")
+
+        # Add relevance metadata for Weave tracking
+        add_session_metadata(
+            operation_type="response_relevance_scoring",
+            relevance_passed=passed,
+            query_length=len(user_message),
+            response_length=len(ai_response)
+        )
+
+        return {
+            "status": "ok",
+            "relevance_evaluation": result_dict,
+            "scorer_result": str(scorer_result),
+            "passed": passed
+        }
+
+    @weave.op()
+    def delete_all_chat_messages(self) -> int:
+        """
+        Delete ALL chat messages from all sessions.
+
+        This completely clears the chat history database.
+
+        Returns:
+            Number of messages deleted
+        """
+        with self._get_session() as session:
+            # First count the messages
+            count_query = """
+            MATCH (m:ChatMessage)
+            RETURN count(m) as totalCount
+            """
+
+            count_result = session.run(count_query)
+            count_record = count_result.single()
+            total_count = count_record["totalCount"] if count_record else 0
+
+            print(f"🔍 Found {total_count} total chat messages to delete")
+
+            if total_count == 0:
+                print("✅ No messages to delete")
+                return 0
+
+            # Delete all messages
+            delete_query = """
+            MATCH (m:ChatMessage)
+            DELETE m
+            """
+
+            session.run(delete_query)
+
+            print(f"🧹 Deleted ALL {total_count} chat messages from database")
+            return total_count
+
     def get_recent_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent chat sessions with their latest message and metadata.
@@ -444,67 +736,82 @@ class StorageService:
         Returns:
             List of session dictionaries with metadata
         """
-        with self._get_session() as session:
-            # First get session summaries
-            summary_query = """
-            MATCH (m:ChatMessage)
-            WITH m.sessionId as sessionId,
-                 max(m.timestamp) as lastActivity,
-                 count(m) as messageCount
-            RETURN sessionId, lastActivity, messageCount
-            ORDER BY lastActivity DESC
-            LIMIT $limit
-            """
-
-            summary_result = session.run(summary_query, {"limit": limit})
-            session_summaries = list(summary_result)
-
-            sessions = []
-
-            for summary in session_summaries:
-                session_id = summary["sessionId"]
-                last_activity = summary["lastActivity"]
-                message_count = summary["messageCount"]
-
-                # Get latest message
-                latest_query = """
-                MATCH (m:ChatMessage {sessionId: $sessionId})
-                RETURN m.message as message, m.sender as sender, m.timestamp as timestamp
-                ORDER BY m.timestamp DESC
-                LIMIT 1
+        try:
+            print(f"🔍 Getting recent sessions (limit: {limit})")
+            with self._get_session() as session:
+                # First get session summaries
+                summary_query = """
+                MATCH (m:ChatMessage)
+                WITH m.sessionId as sessionId,
+                     max(m.timestamp) as lastActivity,
+                     count(m) as messageCount
+                RETURN sessionId, lastActivity, messageCount
+                ORDER BY lastActivity DESC
+                LIMIT $limit
                 """
 
-                latest_result = session.run(latest_query, {"sessionId": session_id})
-                latest_record = latest_result.single()
+                summary_result = session.run(summary_query, {"limit": limit})
+                session_summaries = list(summary_result)
 
-                # Get first message
-                first_query = """
-                MATCH (m:ChatMessage {sessionId: $sessionId})
-                RETURN m.message as message, m.timestamp as timestamp
-                ORDER BY m.timestamp ASC
-                LIMIT 1
-                """
+                sessions = []
 
-                first_result = session.run(first_query, {"sessionId": session_id})
-                first_record = first_result.single()
+                for summary in session_summaries:
+                    # Use proper Neo4j Record access
+                    session_id = summary.get("sessionId") if summary else None
+                    last_activity = summary.get("lastActivity") if summary else None
+                    message_count = summary.get("messageCount", 0) if summary else 0
 
-                # Create session data
-                first_message = first_record["message"] if first_record else ""
-                preview = first_message[:100] + "..." if len(first_message) > 100 else first_message
-                title = preview if preview else f"Chat {session_id[:8]}"
+                    # Skip if session_id is None
+                    if not session_id:
+                        print(f"⚠️ Skipping session with None sessionId")
+                        continue
 
-                sessions.append({
-                    "sessionId": session_id,
-                    "title": title,
-                    "preview": preview,
-                    "lastActivity": self._convert_neo4j_datetime(last_activity),
-                    "createdAt": self._convert_neo4j_datetime(first_record["timestamp"]) if first_record else None,
-                    "messageCount": message_count,
-                    "lastMessage": latest_record["message"] if latest_record else "",
-                    "lastSender": latest_record["sender"] if latest_record else ""
-                })
+                    # Get latest message
+                    latest_query = """
+                    MATCH (m:ChatMessage {sessionId: $sessionId})
+                    RETURN m.message as message, m.sender as sender, m.timestamp as timestamp
+                    ORDER BY m.timestamp DESC
+                    LIMIT 1
+                    """
 
-            return sessions
+                    latest_result = session.run(latest_query, {"sessionId": session_id})
+                    latest_record = latest_result.single()
+
+                    # Get first message
+                    first_query = """
+                    MATCH (m:ChatMessage {sessionId: $sessionId})
+                    RETURN m.message as message, m.timestamp as timestamp
+                    ORDER BY m.timestamp ASC
+                    LIMIT 1
+                    """
+
+                    first_result = session.run(first_query, {"sessionId": session_id})
+                    first_record = first_result.single()
+
+                    # Create session data with safe access to record fields
+                    first_message = first_record["message"] if first_record and "message" in first_record else ""
+                    preview = first_message[:100] + "..." if len(first_message) > 100 else first_message
+                    title = preview if preview else f"Chat {session_id[:8]}"
+
+                    sessions.append({
+                        "sessionId": session_id,
+                        "title": title,
+                        "preview": preview,
+                        "lastActivity": self._convert_neo4j_datetime(last_activity),
+                        "createdAt": self._convert_neo4j_datetime(first_record["timestamp"]) if first_record and first_record["timestamp"] else None,
+                        "messageCount": message_count,
+                        "lastMessage": latest_record["message"] if latest_record and latest_record["message"] else "",
+                        "lastSender": latest_record["sender"] if latest_record and latest_record["sender"] else ""
+                    })
+
+                print(f"✅ Returning {len(sessions)} sessions")
+                return sessions
+        except Exception as e:
+            print(f"❌ Error in get_recent_sessions: {e}")
+            print(f"   Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
+            raise e
 
     @weave.op()
     def get_relevant_pages(self, embedding: List[float], limit: int = 5, score_threshold: float = 0.9) -> List[Dict[str, Any]]:
