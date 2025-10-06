@@ -3,7 +3,7 @@ import { PromptOptimizationDashboard } from '../components/PromptOptimizationDas
 
 export const PromptOptimizationPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <PromptOptimizationDashboard />
     </div>
   );

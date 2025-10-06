@@ -130,6 +130,9 @@ export interface EnsembleResult {
 // ============================================================================
 
 export interface OptimizationConfig {
+  // Algorithm Selection
+  algorithmType: 'simple_llm' | 'multi_round' | 'ensemble';
+
   // Basic Configuration
   maxIterations: number;
   targetScore: number;

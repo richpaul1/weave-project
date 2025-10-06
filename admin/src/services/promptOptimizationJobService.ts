@@ -28,6 +28,8 @@ import { EnsembleCoordinator } from './rl/ensembleCoordinator.js';
 import { AdaptiveStoppingService } from './adaptiveStoppingService.js';
 import { PromptRLEnvironment } from './promptRLEnvironment.js';
 import { PromptEvaluationService } from './promptEvaluationService.js';
+import { SimpleLLMJobRunner } from './rl/simpleLLMJobRunner.js';
+import { StorageService } from './storageService.js';
 import { PromptTemplate, PromptCriteria } from '../models/promptOptimization.js';
 
 /**
@@ -203,6 +205,8 @@ class PromptOptimizationMemoryStore {
 export class PromptOptimizationJobService extends EventEmitter {
   private weave: any;
   private store: PromptOptimizationMemoryStore;
+  private storageService: StorageService;
+  private evaluationService: PromptEvaluationService;
   private multiRoundService: MultiRoundOptimizationService;
   private ensembleCoordinator: EnsembleCoordinator;
   private adaptiveStoppingService: AdaptiveStoppingService;
@@ -210,10 +214,12 @@ export class PromptOptimizationJobService extends EventEmitter {
   private pausedJobs: Set<string> = new Set();
   private defaultExecutionOptions: JobExecutionOptions;
 
-  constructor(weave: any) {
+  constructor(weave: any, storageService?: StorageService) {
     super();
     this.weave = weave;
     this.store = new PromptOptimizationMemoryStore();
+    this.storageService = storageService || StorageService.getInstance();
+    this.evaluationService = new PromptEvaluationService(null, null, weave);
     this.multiRoundService = new MultiRoundOptimizationService(weave);
     this.ensembleCoordinator = new EnsembleCoordinator(weave);
     this.adaptiveStoppingService = new AdaptiveStoppingService(weave);
@@ -256,14 +262,15 @@ export class PromptOptimizationJobService extends EventEmitter {
    * Create a new optimization job
    */
   async _createJobImpl(jobData: any): Promise<PromptOptimizationJob> {
+    const jobId = uuidv4();
     const traceId = this.weave.startTrace('create_optimization_job', {
+      jobId, // Include job ID in Weave instrumentation
       jobName: jobData.name,
       hasInitialPrompt: !!jobData.initialPrompt,
       trainingExamplesCount: jobData.trainingExamples?.length || 0
     });
 
     try {
-      const jobId = uuidv4();
       const now = new Date().toISOString();
 
       // Create default configuration if not provided
@@ -406,7 +413,19 @@ export class PromptOptimizationJobService extends EventEmitter {
         updatedAt: now
       };
 
+      // Store in memory for real-time access
       this.store.createJob(job);
+
+      // Persist to Neo4j database
+      if (this.storageService) {
+        try {
+          await this.storageService.createOptimizationJob(job);
+          console.log(`📊 Job ${job.id} persisted to Neo4j database`);
+        } catch (error) {
+          console.warn(`⚠️ Failed to persist job ${job.id} to Neo4j:`, error);
+          // Continue with in-memory storage only
+        }
+      }
 
       await this.weave.logEvent('job_created', {
         jobId: job.id,
@@ -660,24 +679,142 @@ export class PromptOptimizationJobService extends EventEmitter {
   }
 
   /**
-   * List all jobs
+   * List all jobs (from memory store for real-time data)
    */
   listJobs(): PromptOptimizationJob[] {
     return this.store.getAllJobs();
   }
 
   /**
+   * List jobs from Neo4j database with pagination
+   */
+  async listJobsFromDatabase(page: number = 1, pageSize: number = 10): Promise<{
+    jobs: PromptOptimizationJob[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    if (!this.storageService) {
+      // Fallback to memory store
+      const jobs = this.store.getAllJobs();
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      return {
+        jobs: jobs.slice(startIndex, endIndex),
+        total: jobs.length,
+        page,
+        pageSize
+      };
+    }
+
+    try {
+      return await this.storageService.listOptimizationJobs(page, pageSize);
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch jobs from Neo4j, using memory store:', error);
+      // Fallback to memory store
+      const jobs = this.store.getAllJobs();
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      return {
+        jobs: jobs.slice(startIndex, endIndex),
+        total: jobs.length,
+        page,
+        pageSize
+      };
+    }
+  }
+
+  /**
    * Delete job
    */
-  deleteJob(jobId: string): void {
+  async deleteJob(jobId: string): Promise<void> {
     const job = this.store.getJob(jobId);
     if (job && (job.status === 'running' || job.status === 'paused')) {
       throw new Error(`Cannot delete job ${jobId} while it is ${job.status}`);
     }
 
+    // Delete from memory store
     this.store.deleteJob(jobId);
     this.runningJobs.delete(jobId);
     this.pausedJobs.delete(jobId);
+
+    // Delete from Neo4j database if available
+    if (this.storageService) {
+      try {
+        await this.storageService.deleteOptimizationJob(jobId);
+        console.log(`📊 Job ${jobId} deleted from Neo4j database`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to delete job ${jobId} from Neo4j:`, error);
+        // Don't throw error - job is already deleted from memory
+      }
+    }
+  }
+
+  /**
+   * Update job
+   */
+  async updateJob(jobId: string, jobData: any): Promise<PromptOptimizationJob> {
+    const existingJob = this.store.getJob(jobId);
+    if (!existingJob) {
+      throw new Error(`Job ${jobId} not found`);
+    }
+
+    if (existingJob.status === 'running' || existingJob.status === 'paused') {
+      throw new Error(`Cannot update job ${jobId} while it is ${existingJob.status}`);
+    }
+
+    // Create updated job with new data but preserve certain fields
+    const updatedJob: PromptOptimizationJob = {
+      ...existingJob,
+      name: jobData.name || existingJob.name,
+      startingQuestion: jobData.startingQuestion || existingJob.startingQuestion,
+      initialPrompt: jobData.initialPrompt || existingJob.initialPrompt,
+      trainingExamples: jobData.trainingExamples || existingJob.trainingExamples,
+      config: {
+        ...existingJob.config,
+        algorithmType: jobData.algorithmType || existingJob.config?.algorithmType || 'simple_llm',
+        maxIterations: jobData.maxIterations || existingJob.config?.maxIterations || 50
+      },
+      status: 'created', // Reset status to created for rerun
+      updatedAt: new Date().toISOString(),
+      // Reset progress and results
+      progress: {
+        currentIteration: 0,
+        totalIterations: jobData.maxIterations || existingJob.config?.maxIterations || 50,
+        bestScore: 0,
+        averageScore: 0,
+        convergenceProgress: 0,
+        estimatedTimeRemaining: 0,
+        scoreHistory: [],
+        topPrompts: []
+      },
+      finalResults: undefined
+    };
+
+    // Update in memory store
+    this.store.updateJob(jobId, updatedJob);
+
+    // Update in Neo4j database if available
+    if (this.storageService) {
+      try {
+        await this.storageService.updateOptimizationJob(jobId, {
+          name: updatedJob.name,
+          startingQuestion: updatedJob.startingQuestion,
+          initialPrompt: updatedJob.initialPrompt,
+          trainingExamples: updatedJob.trainingExamples,
+          config: updatedJob.config,
+          status: updatedJob.status,
+          progress: updatedJob.progress,
+          updatedAt: updatedJob.updatedAt
+        });
+        console.log(`📊 Job ${jobId} updated in Neo4j database`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to update job ${jobId} in Neo4j:`, error);
+        // Don't throw error - job is already updated in memory
+      }
+    }
+
+    return updatedJob;
   }
 
   /**
@@ -812,17 +949,24 @@ export class PromptOptimizationJobService extends EventEmitter {
       try {
         console.log(`🚀 Starting job execution: ${job.name} (${jobId})`);
 
-        // Check if we should use ensemble approach
-        const useEnsemble = job.config.ensemble && job.config.ensemble.agents.length > 0;
+        // Determine execution strategy based on algorithm type
+        const algorithmType = job.config.algorithmType || 'multi_round'; // Default to existing behavior
 
-        if (useEnsemble) {
-          await this._executeEnsembleOptimization(jobId, options);
-        } else {
-          await this._executeMultiRoundOptimization(jobId, options);
+        switch (algorithmType) {
+          case 'simple_llm':
+            await this._executeSimpleLLMOptimization(jobId, options, traceId);
+            break;
+          case 'ensemble':
+            await this._executeEnsembleOptimization(jobId, options, traceId);
+            break;
+          case 'multi_round':
+          default:
+            await this._executeMultiRoundOptimization(jobId, options, traceId);
+            break;
         }
 
         // Mark job as completed
-        await this._completeJob(jobId);
+        await this._completeJob(jobId, traceId);
 
         this.weave.endTrace(traceId, { success: true });
       } catch (error) {
@@ -837,10 +981,133 @@ export class PromptOptimizationJobService extends EventEmitter {
   }
 
   /**
+   * Execute simple LLM-driven optimization approach
+   */
+  private async _executeSimpleLLMOptimization(jobId: string, options: JobExecutionOptions, parentTraceId?: string): Promise<void> {
+    const traceId = parentTraceId ?
+      this.weave.startChildTrace(parentTraceId, 'execute_simple_llm_optimization', { jobId }) :
+      this.weave.startTrace('execute_simple_llm_optimization', { jobId });
+
+    try {
+      const job = this.store.getJob(jobId);
+      if (!job) {
+        throw new Error(`Job ${jobId} not found`);
+      }
+
+      console.log(`🤖 Starting Simple LLM Optimization for job: ${job.name}`);
+
+      // Validate job configuration for simple LLM optimization
+      const validation = SimpleLLMJobRunner.validateJobConfig(job);
+      if (!validation.valid) {
+        throw new Error(`Invalid job configuration: ${validation.errors.join(', ')}`);
+      }
+
+      // Create simple LLM job runner
+      const jobRunner = new SimpleLLMJobRunner(this.weave, this.evaluationService);
+
+      // Set up progress callback
+      const progressCallback = (progress: {
+        currentIteration: number;
+        totalIterations: number;
+        bestScore: number;
+        status: string
+      }) => {
+        // Update job progress
+        const progressPercentage = Math.round((progress.currentIteration / progress.totalIterations) * 100);
+
+        this.store.updateProgress(jobId, {
+          currentIteration: progress.currentIteration,
+          totalIterations: progress.totalIterations,
+          progressPercentage,
+          currentScore: progress.bestScore,
+          status: progress.status,
+          lastUpdated: new Date().toISOString()
+        });
+
+        // Emit progress event
+        this.emit('progress', {
+          jobId,
+          progress: {
+            currentIteration: progress.currentIteration,
+            totalIterations: progress.totalIterations,
+            progressPercentage,
+            currentScore: progress.bestScore,
+            status: progress.status,
+            lastUpdated: new Date().toISOString()
+          }
+        });
+
+        console.log(`📊 Simple LLM Progress: ${progress.currentIteration}/${progress.totalIterations} (${progressPercentage}%) - Score: ${progress.bestScore.toFixed(3)}`);
+      };
+
+      // Execute the simple LLM optimization
+      const result = await jobRunner.executeJob(job, progressCallback);
+
+      // Store the results
+      const finalIteration = {
+        id: uuidv4(),
+        iteration: result.totalIterations,
+        prompt: result.bestPrompt.content,
+        score: result.bestScore,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          algorithmType: 'simple_llm',
+          convergenceAchieved: result.convergenceAchieved,
+          executionTime: result.executionTime
+        }
+      };
+
+      this.store.addIteration(jobId, finalIteration);
+
+      // Update job with final results
+      this.store.updateJob(jobId, {
+        finalResults: {
+          bestPrompts: [{
+            rank: 1,
+            prompt: result.bestPrompt.content,
+            score: result.bestScore,
+            metadata: {
+              algorithmType: 'simple_llm',
+              totalIterations: result.totalIterations,
+              convergenceAchieved: result.convergenceAchieved
+            }
+          }],
+          summary: {
+            totalIterations: result.totalIterations,
+            bestScore: result.bestScore,
+            convergenceAchieved: result.convergenceAchieved,
+            executionTime: result.executionTime,
+            algorithmUsed: 'simple_llm'
+          }
+        }
+      });
+
+      console.log(`✅ Simple LLM Optimization completed: ${result.bestScore.toFixed(3)} score in ${result.totalIterations} iterations`);
+
+      this.weave.endTrace(traceId, {
+        success: true,
+        bestScore: result.bestScore,
+        totalIterations: result.totalIterations,
+        convergenceAchieved: result.convergenceAchieved,
+        executionTime: result.executionTime
+      });
+
+    } catch (error) {
+      console.error(`❌ Simple LLM Optimization failed for job ${jobId}:`, error);
+      this.weave.endTrace(traceId, {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Execute ensemble optimization approach
    */
-  private async _executeEnsembleOptimization(jobId: string, options: JobExecutionOptions): Promise<void> {
-    const traceId = this.weave.startTrace('execute_ensemble_optimization', { jobId });
+  private async _executeEnsembleOptimization(jobId: string, options: JobExecutionOptions, parentTraceId?: string): Promise<void> {
+    const traceId = parentTraceId ?
+      this.weave.startChildTrace(parentTraceId, 'execute_ensemble_optimization', { jobId }) :
+      this.weave.startTrace('execute_ensemble_optimization', { jobId });
     try {
       const job = this.store.getJob(jobId);
       if (!job) throw new Error(`Job ${jobId} not found`);
@@ -903,8 +1170,10 @@ export class PromptOptimizationJobService extends EventEmitter {
   /**
    * Execute multi-round optimization approach
    */
-  private async _executeMultiRoundOptimization(jobId: string, options: JobExecutionOptions): Promise<void> {
-    const traceId = this.weave.startTrace('execute_multi_round_optimization', { jobId });
+  private async _executeMultiRoundOptimization(jobId: string, options: JobExecutionOptions, parentTraceId?: string): Promise<void> {
+    const traceId = parentTraceId ?
+      this.weave.startChildTrace(parentTraceId, 'execute_multi_round_optimization', { jobId }) :
+      this.weave.startTrace('execute_multi_round_optimization', { jobId });
     try {
       const job = this.store.getJob(jobId);
       if (!job) throw new Error(`Job ${jobId} not found`);
@@ -960,8 +1229,10 @@ export class PromptOptimizationJobService extends EventEmitter {
   /**
    * Complete job execution
    */
-  private async _completeJob(jobId: string): Promise<void> {
-    const traceId = this.weave.startTrace('complete_job', { jobId });
+  private async _completeJob(jobId: string, parentTraceId?: string): Promise<void> {
+    const traceId = parentTraceId ?
+      this.weave.startChildTrace(parentTraceId, 'complete_job', { jobId }) :
+      this.weave.startTrace('complete_job', { jobId });
     try {
       const job = this.store.getJob(jobId);
       if (!job) return;

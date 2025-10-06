@@ -1486,28 +1486,67 @@ export class StorageService {
   async updateOptimizationJob(jobId: string, updates: any): Promise<void> {
     const session = this.driver.session({ database: config.neo4jDatabase });
     try {
-      const setClause = Object.keys(updates)
-        .map(key => {
-          if (key === 'config' || key === 'progress') {
+      // Separate training examples from other updates
+      const { trainingExamples, ...jobUpdates } = updates;
+
+      // Update job properties (excluding trainingExamples)
+      if (Object.keys(jobUpdates).length > 0) {
+        const setClause = Object.keys(jobUpdates)
+          .map(key => {
+            if (key === 'config' || key === 'progress') {
+              return `job.${key} = $${key}`;
+            }
             return `job.${key} = $${key}`;
+          })
+          .join(', ');
+
+        const params: any = { jobId };
+        Object.keys(jobUpdates).forEach(key => {
+          if (key === 'config' || key === 'progress') {
+            params[key] = JSON.stringify(jobUpdates[key]);
+          } else {
+            params[key] = jobUpdates[key];
           }
-          return `job.${key} = $${key}`;
-        })
-        .join(', ');
+        });
 
-      const params: any = { jobId };
-      Object.keys(updates).forEach(key => {
-        if (key === 'config' || key === 'progress') {
-          params[key] = JSON.stringify(updates[key]);
-        } else {
-          params[key] = updates[key];
+        await session.run(`
+          MATCH (job:PromptOptimizationJob {id: $jobId})
+          SET ${setClause}, job.updatedAt = datetime()
+        `, params);
+      }
+
+      // Handle training examples separately if provided
+      if (trainingExamples && Array.isArray(trainingExamples)) {
+        // First, delete existing training examples
+        await session.run(`
+          MATCH (job:PromptOptimizationJob {id: $jobId})-[:HAS_TRAINING_EXAMPLE]->(example:TrainingExample)
+          DETACH DELETE example
+        `, { jobId });
+
+        // Then, create new training examples
+        for (const example of trainingExamples) {
+          await session.run(`
+            MATCH (job:PromptOptimizationJob {id: $jobId})
+            CREATE (example:TrainingExample {
+              id: $exampleId,
+              response: $response,
+              evaluation: $evaluation,
+              tags: $tags,
+              createdAt: $createdAt,
+              updatedAt: $updatedAt
+            })
+            CREATE (job)-[:HAS_TRAINING_EXAMPLE]->(example)
+          `, {
+            jobId,
+            exampleId: example.id,
+            response: example.response || '',
+            evaluation: JSON.stringify(example.evaluation || {}),
+            tags: JSON.stringify(example.tags || []),
+            createdAt: example.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
         }
-      });
-
-      await session.run(`
-        MATCH (job:PromptOptimizationJob {id: $jobId})
-        SET ${setClause}, job.updatedAt = datetime()
-      `, params);
+      }
     } finally {
       await session.close();
     }

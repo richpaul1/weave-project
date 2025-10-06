@@ -131,8 +131,12 @@ async function startServer() {
     // Initialize WeaveService singleton and Weave
     console.log('Initializing WeaveService...');
     const weaveService = new WeaveService();
-    await weaveService.initialize();
-    console.log('WeaveService initialized');
+    try {
+        await weaveService.initialize();
+        console.log('WeaveService initialized');
+    } catch (error) {
+        console.warn('⚠️ Weave initialization failed, continuing with local logging:', error instanceof Error ? error.message : String(error));
+    }
 
     // Initialize database schema
     console.log('Initializing database schema...');

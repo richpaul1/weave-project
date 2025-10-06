@@ -17,7 +17,7 @@ function Router() {
   return (
     <div className="flex h-screen overflow-hidden">
       <Navigation />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-background">
         <Switch>
           <Route path="/">
             {() => {

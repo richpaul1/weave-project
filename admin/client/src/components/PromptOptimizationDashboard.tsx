@@ -6,8 +6,9 @@ import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Play, Pause, Square, RotateCcw } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Trash2, Edit } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface TrainingExample {
   id: string;
@@ -96,15 +97,20 @@ interface JobAnalytics {
 }
 
 export const PromptOptimizationDashboard: React.FC = () => {
+  const { theme } = useTheme();
   const [jobs, setJobs] = useState<OptimizationJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<OptimizationJob | null>(null);
   const [analytics, setAnalytics] = useState<JobAnalytics | null>(null);
   const [realtimeProgress, setRealtimeProgress] = useState<RealtimeProgress | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [newJob, setNewJob] = useState({
     name: '',
     startingQuestion: '',
     initialPrompt: '',
+    maxIterations: 50,
+    algorithmType: 'simple_llm' as 'simple_llm' | 'multi_round' | 'ensemble',
     trainingExamples: [] as TrainingExample[]
   });
   const [newExample, setNewExample] = useState({
@@ -221,21 +227,70 @@ export const PromptOptimizationDashboard: React.FC = () => {
 
   const createJob = async () => {
     try {
-      const response = await fetch('/api/prompt-optimization/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newJob)
-      });
-      
-      if (response.ok) {
-        const job = await response.json();
-        setJobs([...jobs, job]);
-        setNewJob({ name: '', startingQuestion: '', initialPrompt: '', trainingExamples: [] });
-        setIsCreating(false);
+      if (isEditing && editingJobId) {
+        // Update existing job
+        const jobData = {
+          name: newJob.name,
+          startingQuestion: newJob.startingQuestion,
+          initialPrompt: newJob.initialPrompt,
+          trainingExamples: newJob.trainingExamples,
+          algorithmType: newJob.algorithmType,
+          maxIterations: newJob.maxIterations
+        };
+
+        const response = await fetch(`/api/prompt-optimization/jobs/${editingJobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jobData)
+        });
+
+        if (response.ok) {
+          const updatedJob = await response.json();
+          setJobs(jobs.map(job => job.id === editingJobId ? updatedJob : job));
+          resetForm();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`Failed to update job: ${errorData.error || 'Unknown error'}`);
+        }
+      } else {
+        // Create new job
+        const jobData = {
+          name: newJob.name,
+          startingQuestion: newJob.startingQuestion,
+          initialPrompt: newJob.initialPrompt,
+          trainingExamples: newJob.trainingExamples,
+          config: {
+            algorithmType: newJob.algorithmType,
+            maxIterations: newJob.maxIterations
+          }
+        };
+
+        const response = await fetch('/api/prompt-optimization/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jobData)
+        });
+
+        if (response.ok) {
+          const job = await response.json();
+          setJobs([...jobs, job]);
+          resetForm();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          alert(`Failed to create job: ${errorData.error || 'Unknown error'}`);
+        }
       }
     } catch (error) {
-      console.error('Failed to create job:', error);
+      console.error('Failed to save job:', error);
+      alert(`Failed to save job: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  };
+
+  const resetForm = () => {
+    setNewJob({ name: '', startingQuestion: '', initialPrompt: '', maxIterations: 50, algorithmType: 'simple_llm', trainingExamples: [] });
+    setIsCreating(false);
+    setIsEditing(false);
+    setEditingJobId(null);
   };
 
   const addTrainingExample = () => {
@@ -321,15 +376,78 @@ export const PromptOptimizationDashboard: React.FC = () => {
     }
   };
 
+  const deleteJob = async (jobId: string) => {
+    // Show confirmation dialog
+    if (!window.confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/prompt-optimization/jobs/${jobId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to delete job: ${response.status} ${response.statusText}`);
+      }
+
+      // Remove job from the list
+      setJobs(jobs.filter(job => job.id !== jobId));
+
+      // Clear selected job if it was the deleted one
+      if (selectedJob?.id === jobId) {
+        setSelectedJob(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete job:', error);
+      alert(`Failed to delete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const editJob = (job: OptimizationJob) => {
+    // Populate form with existing job data
+    // Transform server training examples to UI format
+    const transformedExamples = (job.trainingExamples || []).map((example: any, index: number) => ({
+      id: example.id || `example-${Date.now()}-${index}`,
+      response: example.response || example.expectedResponse || '',
+      evaluation: example.evaluation || {
+        overallScore: 8,
+        criteria: {
+          relevance: 8,
+          clarity: 8,
+          completeness: 8,
+          accuracy: 8,
+          helpfulness: 8,
+          engagement: 8
+        },
+        reason: 'Default evaluation for existing example'
+      }
+    }));
+
+    setNewJob({
+      name: job.name,
+      startingQuestion: job.startingQuestion,
+      initialPrompt: job.initialPrompt,
+      maxIterations: job.config?.maxIterations || 50,
+      algorithmType: job.config?.algorithmType || 'simple_llm',
+      trainingExamples: transformedExamples
+    });
+
+    setEditingJobId(job.id);
+    setIsEditing(true);
+    setIsCreating(true); // Reuse the same modal
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'created': return 'bg-gray-500';
-      case 'running': return 'bg-blue-500';
+      case 'created': return 'bg-muted-foreground';
+      case 'running': return 'bg-primary';
       case 'paused': return 'bg-yellow-500';
-      case 'completed': return 'bg-green-500';
-      case 'failed': return 'bg-red-500';
+      case 'completed': return 'bg-accent';
+      case 'failed': return 'bg-destructive';
       case 'cancelled': return 'bg-orange-500';
-      default: return 'bg-gray-500';
+      default: return 'bg-muted-foreground';
     }
   };
 
@@ -351,17 +469,41 @@ export const PromptOptimizationDashboard: React.FC = () => {
     switch (job.status) {
       case 'created':
         return (
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              startOptimization(job.id);
-            }}
-            className="w-full mt-2"
-          >
-            <Play className="w-4 h-4 mr-1" />
-            Start Optimization
-          </Button>
+          <div className="flex gap-1 mt-2">
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                startOptimization(job.id);
+              }}
+              className="flex-1"
+            >
+              <Play className="w-4 h-4 mr-1" />
+              Start
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                editJob(job);
+              }}
+              className="px-2"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteJob(job.id);
+              }}
+              className="px-2"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
         );
 
       case 'running':
@@ -420,6 +562,48 @@ export const PromptOptimizationDashboard: React.FC = () => {
               <Square className="w-4 h-4 mr-1" />
               Stop
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteJob(job.id);
+              }}
+              className="px-2"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+
+      case 'completed':
+      case 'failed':
+      case 'cancelled':
+        return (
+          <div className="flex gap-1 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                editJob(job);
+              }}
+              className="flex-1"
+            >
+              <Edit className="w-4 h-4 mr-1" />
+              Edit & Rerun
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteJob(job.id);
+              }}
+              className="px-2"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </div>
         );
 
@@ -434,8 +618,8 @@ export const PromptOptimizationDashboard: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold">Prompt Optimization Dashboard</h1>
           <div className="flex items-center gap-2 mt-1">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="text-sm text-gray-600">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent' : 'bg-destructive'}`}></div>
+            <span className="text-sm text-muted-foreground">
               {isConnected ? 'Connected' : 'Disconnected'}
             </span>
           </div>
@@ -445,11 +629,11 @@ export const PromptOptimizationDashboard: React.FC = () => {
         </Button>
       </div>
 
-      {/* Create Job Modal */}
+      {/* Create/Edit Job Modal */}
       {isCreating && (
         <Card className="border-2 border-blue-200">
           <CardHeader>
-            <CardTitle>Create Optimization Job</CardTitle>
+            <CardTitle>{isEditing ? 'Edit Optimization Job' : 'Create Optimization Job'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -468,7 +652,44 @@ export const PromptOptimizationDashboard: React.FC = () => {
               onChange={(e) => setNewJob({ ...newJob, initialPrompt: e.target.value })}
               rows={4}
             />
-            
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Optimization Algorithm
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                value={newJob.algorithmType}
+                onChange={(e) => setNewJob({ ...newJob, algorithmType: e.target.value as 'simple_llm' | 'multi_round' | 'ensemble' })}
+              >
+                <option value="simple_llm">Simple LLM (Recommended)</option>
+                <option value="multi_round">Multi-Round RL</option>
+                <option value="ensemble">Ensemble RL</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {newJob.algorithmType === 'simple_llm' && 'Uses LLM to iteratively improve prompts based on feedback. Fast and effective.'}
+                {newJob.algorithmType === 'multi_round' && 'Advanced reinforcement learning with multiple optimization rounds.'}
+                {newJob.algorithmType === 'ensemble' && 'Coordinates multiple specialized RL agents for complex optimization.'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Maximum Iterations
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="200"
+                placeholder="Number of optimization attempts"
+                value={newJob.maxIterations}
+                onChange={(e) => setNewJob({ ...newJob, maxIterations: parseInt(e.target.value) || 50 })}
+              />
+              <p className="text-xs text-muted-foreground">
+                How many times the agent should attempt to improve the prompt (default: 50)
+              </p>
+            </div>
+
             <div className="border-t pt-4">
               <h3 className="font-semibold mb-2">Training Examples</h3>
               <div className="space-y-2">
@@ -503,9 +724,9 @@ export const PromptOptimizationDashboard: React.FC = () => {
                   <h4 className="font-medium mb-2">Added Examples ({newJob.trainingExamples.length})</h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {newJob.trainingExamples.map((example, index) => (
-                      <div key={example.id} className="p-2 bg-gray-50 rounded text-sm">
-                        <div className="font-medium">Score: {example.evaluation.overallScore}/10</div>
-                        <div className="text-gray-600 truncate">{example.response}</div>
+                      <div key={example.id} className="p-2 bg-muted rounded text-sm">
+                        <div className="font-medium">Score: {example.evaluation?.overallScore || 0}/10</div>
+                        <div className="text-muted-foreground truncate">{example.response}</div>
                       </div>
                     ))}
                   </div>
@@ -515,9 +736,9 @@ export const PromptOptimizationDashboard: React.FC = () => {
 
             <div className="flex gap-2">
               <Button onClick={createJob} disabled={!newJob.name || !newJob.startingQuestion || !newJob.initialPrompt}>
-                Create Job
+                {isEditing ? 'Update Job' : 'Create Job'}
               </Button>
-              <Button variant="outline" onClick={() => setIsCreating(false)}>
+              <Button variant="outline" onClick={resetForm}>
                 Cancel
               </Button>
             </div>
@@ -545,7 +766,7 @@ export const PromptOptimizationDashboard: React.FC = () => {
               <div className="space-y-2 text-sm">
                 <div><strong>Question:</strong> {job.startingQuestion}</div>
                 <div><strong>Examples:</strong> {job.trainingExamples.length}</div>
-                <div><strong>Best Score:</strong> {job.progress.bestScore.toFixed(1)}/10</div>
+                <div><strong>Best Score:</strong> {(job.progress.bestScore || 0).toFixed(1)}/10</div>
 
                 {(job.status === 'running' || job.status === 'paused') && (
                   <div className="space-y-1">
@@ -553,11 +774,11 @@ export const PromptOptimizationDashboard: React.FC = () => {
                       <span>Progress</span>
                       <span>{job.progress.currentIteration}/{job.progress.totalIterations || 20}</span>
                     </div>
-                    <Progress value={(job.progress.currentIteration / (job.progress.totalIterations || 20)) * 100} />
+                    <Progress value={((job.progress.currentIteration || 0) / (job.progress.totalIterations || 20)) * 100} />
 
                     {/* Show real-time progress for selected job */}
                     {selectedJob?.id === job.id && realtimeProgress && (
-                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                      <div className="mt-2 p-2 bg-muted rounded text-xs">
                         <div className="flex justify-between">
                           <span>Phase:</span>
                           <span className="font-medium">{realtimeProgress.overallProgress.currentPhase}</span>
@@ -568,8 +789,8 @@ export const PromptOptimizationDashboard: React.FC = () => {
                         </div>
                         <div className="flex justify-between">
                           <span>Improvement:</span>
-                          <span className="text-green-600">
-                            +{realtimeProgress.scores.improvementPercentage.toFixed(1)}%
+                          <span className="text-accent">
+                            +{(realtimeProgress.scores.improvementPercentage || 0).toFixed(1)}%
                           </span>
                         </div>
                         {realtimeProgress.timing.estimatedCompletion && (
@@ -595,38 +816,38 @@ export const PromptOptimizationDashboard: React.FC = () => {
         <div className="space-y-6">
           {/* Real-time Progress Panel */}
           {realtimeProgress && (selectedJob.status === 'running' || selectedJob.status === 'paused') && (
-            <Card className="border-blue-200 bg-blue-50">
+            <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${selectedJob.status === 'running' ? 'bg-blue-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                  <div className={`w-3 h-3 rounded-full ${selectedJob.status === 'running' ? 'bg-primary animate-pulse' : 'bg-yellow-500'}`}></div>
                   Real-time Progress
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {realtimeProgress.overallProgress.percentage.toFixed(1)}%
+                    <div className="text-2xl font-bold text-primary">
+                      {(realtimeProgress.overallProgress.percentage || 0).toFixed(1)}%
                     </div>
-                    <div className="text-sm text-gray-600">Complete</div>
+                    <div className="text-sm text-muted-foreground">Complete</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {realtimeProgress.scores.best.toFixed(1)}
+                    <div className="text-2xl font-bold text-accent">
+                      {(realtimeProgress.scores.best || 0).toFixed(1)}
                     </div>
-                    <div className="text-sm text-gray-600">Best Score</div>
+                    <div className="text-sm text-muted-foreground">Best Score</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
+                    <div className="text-2xl font-bold text-purple-500">
                       {realtimeProgress.currentRound.roundNumber}
                     </div>
-                    <div className="text-sm text-gray-600">Round</div>
+                    <div className="text-sm text-muted-foreground">Round</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-orange-600">
+                    <div className="text-2xl font-bold text-orange-500">
                       {formatTime(realtimeProgress.timing.elapsedTime)}
                     </div>
-                    <div className="text-sm text-gray-600">Elapsed</div>
+                    <div className="text-sm text-muted-foreground">Elapsed</div>
                   </div>
                 </div>
 
@@ -646,16 +867,16 @@ export const PromptOptimizationDashboard: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                     <div>
                       <div className="font-medium">Score Improvement</div>
-                      <div className="text-green-600">
-                        +{realtimeProgress.scores.improvement.toFixed(2)}
-                        ({realtimeProgress.scores.improvementPercentage.toFixed(1)}%)
+                      <div className="text-accent">
+                        +{(realtimeProgress.scores.improvement || 0).toFixed(2)}
+                        ({(realtimeProgress.scores.improvementPercentage || 0).toFixed(1)}%)
                       </div>
                     </div>
                     <div>
                       <div className="font-medium">Convergence</div>
-                      <div className={realtimeProgress.convergence.isConverging ? 'text-green-600' : 'text-gray-600'}>
-                        {realtimeProgress.convergence.progress.toFixed(1)}%
-                        {realtimeProgress.convergence.isConverging ? ' (Converging)' : ' (Exploring)'}
+                      <div className={realtimeProgress.convergence?.isConverging ? 'text-accent' : 'text-muted-foreground'}>
+                        {(realtimeProgress.convergence?.progress || 0).toFixed(1)}%
+                        {realtimeProgress.convergence?.isConverging ? ' (Converging)' : ' (Exploring)'}
                       </div>
                     </div>
                   </div>
@@ -678,7 +899,7 @@ export const PromptOptimizationDashboard: React.FC = () => {
               </div>
               <div>
                 <strong>Initial Prompt:</strong>
-                <div className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                <div className="mt-1 p-2 bg-muted rounded text-sm">
                   {selectedJob.initialPrompt}
                 </div>
               </div>
@@ -686,12 +907,12 @@ export const PromptOptimizationDashboard: React.FC = () => {
                 <strong>Training Examples:</strong>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
                   {selectedJob.trainingExamples.map((example, index) => (
-                    <div key={example.id} className="p-2 bg-gray-50 rounded text-sm">
+                    <div key={example.id} className="p-2 bg-muted rounded text-sm">
                       <div className="flex justify-between">
-                        <span className="font-medium">Score: {example.evaluation.overallScore}/10</span>
+                        <span className="font-medium">Score: {example.evaluation?.overallScore || 0}/10</span>
                       </div>
-                      <div className="text-gray-600 mt-1">{example.response}</div>
-                      <div className="text-gray-500 text-xs mt-1">{example.evaluation.reason}</div>
+                      <div className="text-muted-foreground mt-1">{example.response}</div>
+                      <div className="text-muted-foreground text-xs mt-1">{example.evaluation?.reason || 'No evaluation reason provided'}</div>
                     </div>
                   ))}
                 </div>
@@ -708,20 +929,20 @@ export const PromptOptimizationDashboard: React.FC = () => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">{analytics.totalIterations}</div>
-                        <div className="text-sm text-gray-600">Total Iterations</div>
+                        <div className="text-2xl font-bold text-primary">{analytics.totalIterations}</div>
+                        <div className="text-sm text-muted-foreground">Total Iterations</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">{analytics.bestScore.toFixed(1)}</div>
-                        <div className="text-sm text-gray-600">Best Score</div>
+                        <div className="text-2xl font-bold text-accent">{(analytics.bestScore || 0).toFixed(1)}</div>
+                        <div className="text-sm text-muted-foreground">Best Score</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-600">{analytics.averageScore.toFixed(1)}</div>
-                        <div className="text-sm text-gray-600">Average Score</div>
+                        <div className="text-2xl font-bold text-orange-500">{(analytics.averageScore || 0).toFixed(1)}</div>
+                        <div className="text-sm text-muted-foreground">Average Score</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">{(analytics.improvementRate * 100).toFixed(0)}%</div>
-                        <div className="text-sm text-gray-600">Improvement Rate</div>
+                        <div className="text-2xl font-bold text-purple-500">{((analytics.improvementRate || 0) * 100).toFixed(0)}%</div>
+                        <div className="text-sm text-muted-foreground">Improvement Rate</div>
                       </div>
                     </div>
 
@@ -730,20 +951,35 @@ export const PromptOptimizationDashboard: React.FC = () => {
                         <h4 className="font-medium mb-2">Score Progression</h4>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={analytics.scoreProgression}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="iteration" />
-                            <YAxis domain={[0, 10]} />
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              stroke={theme === 'dark' ? 'hsl(217, 32%, 17%)' : 'hsl(214, 32%, 91%)'}
+                            />
+                            <XAxis
+                              dataKey="iteration"
+                              stroke={theme === 'dark' ? 'hsl(215, 20%, 75%)' : 'hsl(215, 16%, 47%)'}
+                            />
+                            <YAxis
+                              domain={[0, 10]}
+                              stroke={theme === 'dark' ? 'hsl(215, 20%, 75%)' : 'hsl(215, 16%, 47%)'}
+                            />
                             <Tooltip
                               formatter={(value, name) => [value, 'Score']}
                               labelFormatter={(label) => `Iteration ${label}`}
+                              contentStyle={{
+                                backgroundColor: theme === 'dark' ? 'hsl(222, 84%, 4.9%)' : 'hsl(0, 0%, 100%)',
+                                border: `1px solid ${theme === 'dark' ? 'hsl(217, 32%, 17%)' : 'hsl(214, 32%, 91%)'}`,
+                                borderRadius: '6px',
+                                color: theme === 'dark' ? 'hsl(210, 40%, 98%)' : 'hsl(222, 47%, 11%)'
+                              }}
                             />
                             <Line
                               type="monotone"
                               dataKey="score"
-                              stroke="#2563eb"
+                              stroke="hsl(217, 91%, 60%)"
                               strokeWidth={2}
-                              dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
-                              activeDot={{ r: 6, stroke: '#2563eb', strokeWidth: 2 }}
+                              dot={{ fill: 'hsl(217, 91%, 60%)', strokeWidth: 2, r: 4 }}
+                              activeDot={{ r: 6, stroke: 'hsl(217, 91%, 60%)', strokeWidth: 2 }}
                             />
                           </LineChart>
                         </ResponsiveContainer>
@@ -755,24 +991,24 @@ export const PromptOptimizationDashboard: React.FC = () => {
                       <div className="border-t pt-4">
                         <h4 className="font-medium mb-2">Current Session Scores</h4>
                         <div className="grid grid-cols-3 gap-2 text-sm">
-                          <div className="text-center p-2 bg-gray-50 rounded">
-                            <div className="font-bold">{realtimeProgress.scores.baseline.toFixed(1)}</div>
-                            <div className="text-gray-600">Baseline</div>
+                          <div className="text-center p-2 bg-muted rounded">
+                            <div className="font-bold">{(realtimeProgress.scores.baseline || 0).toFixed(1)}</div>
+                            <div className="text-muted-foreground">Baseline</div>
                           </div>
-                          <div className="text-center p-2 bg-blue-50 rounded">
-                            <div className="font-bold text-blue-600">{realtimeProgress.scores.current.toFixed(1)}</div>
-                            <div className="text-gray-600">Current</div>
+                          <div className="text-center p-2 bg-primary/10 rounded">
+                            <div className="font-bold text-primary">{(realtimeProgress.scores.current || 0).toFixed(1)}</div>
+                            <div className="text-muted-foreground">Current</div>
                           </div>
-                          <div className="text-center p-2 bg-green-50 rounded">
-                            <div className="font-bold text-green-600">{realtimeProgress.scores.best.toFixed(1)}</div>
-                            <div className="text-gray-600">Best</div>
+                          <div className="text-center p-2 bg-accent/10 rounded">
+                            <div className="font-bold text-accent">{(realtimeProgress.scores.best || 0).toFixed(1)}</div>
+                            <div className="text-muted-foreground">Best</div>
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center text-gray-500">
+                  <div className="text-center text-muted-foreground">
                     No analytics available yet
                   </div>
                 )}

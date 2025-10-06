@@ -1,6 +1,7 @@
 import express from 'express';
 import { PromptOptimizationJobService } from '../services/promptOptimizationJobService.js';
 import { WeaveService } from '../weave/weaveService.js';
+import { StorageService } from '../services/storageService.js';
 import type {
   PromptOptimizationJob,
   TrainingExample
@@ -14,8 +15,13 @@ let jobService: PromptOptimizationJobService;
 
 // Initialize the job service
 const initializeServices = async () => {
-  await weaveService.initialize();
-  jobService = new PromptOptimizationJobService(weaveService);
+  try {
+    await weaveService.initialize();
+  } catch (error) {
+    console.warn('⚠️ Weave initialization failed in routes, continuing with local logging:', error.message);
+  }
+  const storageService = StorageService.getInstance();
+  jobService = new PromptOptimizationJobService(weaveService, storageService);
 };
 
 // Route handlers for prompt optimization
@@ -41,6 +47,10 @@ class PromptOptimizationRoutes {
 
   deleteJob = async (req: express.Request, res: express.Response): Promise<void> => {
     await this._deleteJobImpl(req, res);
+  };
+
+  updateJob = async (req: express.Request, res: express.Response): Promise<void> => {
+    await this._updateJobImpl(req, res);
   };
 
   startOptimization = async (req: express.Request, res: express.Response): Promise<void> => {
@@ -69,6 +79,14 @@ class PromptOptimizationRoutes {
 
   getJobAnalytics = async (req: express.Request, res: express.Response): Promise<void> => {
     await this._getJobAnalyticsImpl(req, res);
+  };
+
+  setMonitoringLevel = async (req: express.Request, res: express.Response): Promise<void> => {
+    await this._setMonitoringLevelImpl(req, res);
+  };
+
+  getMonitoringStats = async (req: express.Request, res: express.Response): Promise<void> => {
+    await this._getMonitoringStatsImpl(req, res);
   };
 
   // Implementation methods (private)
@@ -111,8 +129,19 @@ class PromptOptimizationRoutes {
 
   async _listJobsImpl(req: express.Request, res: express.Response): Promise<void> {
     try {
-      const jobs = this.jobService.getAllJobs();
-      res.json({ jobs, total: jobs.length });
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 10;
+      const useDatabase = req.query.useDatabase === 'true';
+
+      if (useDatabase) {
+        // Fetch from Neo4j database with pagination
+        const result = await this.jobService.listJobsFromDatabase(page, pageSize);
+        res.json(result);
+      } else {
+        // Fetch from memory store (real-time data)
+        const jobs = this.jobService.listJobs();
+        res.json({ jobs, total: jobs.length });
+      }
     } catch (error) {
       console.error('Error listing optimization jobs:', error);
       res.status(500).json({ error: 'Failed to list optimization jobs' });
@@ -122,11 +151,31 @@ class PromptOptimizationRoutes {
   async _deleteJobImpl(req: express.Request, res: express.Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      this.jobService.deleteJob(jobId);
+      await this.jobService.deleteJob(jobId);
       res.status(204).send();
     } catch (error) {
       console.error('Error deleting optimization job:', error);
-      res.status(500).json({ error: 'Failed to delete optimization job' });
+      if (error instanceof Error && error.message.includes('Cannot delete job')) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to delete optimization job' });
+      }
+    }
+  }
+
+  async _updateJobImpl(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const jobData = req.body;
+      const updatedJob = await this.jobService.updateJob(jobId, jobData);
+      res.json(updatedJob);
+    } catch (error) {
+      console.error('Error updating optimization job:', error);
+      if (error instanceof Error && error.message.includes('Cannot update job')) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to update optimization job' });
+      }
     }
   }
 
@@ -236,6 +285,46 @@ class PromptOptimizationRoutes {
       res.status(500).json({ error: 'Failed to get job analytics' });
     }
   }
+
+  async _setMonitoringLevelImpl(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      const { level } = req.body;
+
+      if (!['minimal', 'essential', 'detailed', 'verbose'].includes(level)) {
+        res.status(400).json({ error: 'Invalid monitoring level. Must be: minimal, essential, detailed, or verbose' });
+        return;
+      }
+
+      // Get WeaveService instance and set monitoring level
+      const { WeaveService } = await import('../weave/weaveService.js');
+      const weaveInstance = WeaveService.getInstance();
+      weaveInstance.setMonitoringLevel(level);
+
+      res.json({
+        message: `Monitoring level set to ${level}`,
+        stats: weaveInstance.getStats()
+      });
+    } catch (error) {
+      console.error('Error setting monitoring level:', error);
+      res.status(500).json({ error: 'Failed to set monitoring level' });
+    }
+  }
+
+  async _getMonitoringStatsImpl(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      // Get WeaveService instance and return stats
+      const { WeaveService } = await import('../weave/weaveService.js');
+      const weaveInstance = WeaveService.getInstance();
+
+      res.json({
+        weaveStats: weaveInstance.getStats(),
+        monitoringLevel: weaveInstance.getMonitoringLevel()
+      });
+    } catch (error) {
+      console.error('Error getting monitoring stats:', error);
+      res.status(500).json({ error: 'Failed to get monitoring stats' });
+    }
+  }
 }
 
 // Initialize services and routes handler
@@ -253,6 +342,7 @@ initializeRoutes().catch(console.error);
 router.post('/jobs', (req, res) => routesHandler?.createJob(req, res));
 router.get('/jobs', (req, res) => routesHandler?.listJobs(req, res));
 router.get('/jobs/:jobId', (req, res) => routesHandler?.getJob(req, res));
+router.put('/jobs/:jobId', (req, res) => routesHandler?.updateJob(req, res));
 router.delete('/jobs/:jobId', (req, res) => routesHandler?.deleteJob(req, res));
 router.post('/jobs/:jobId/start', (req, res) => routesHandler?.startOptimization(req, res));
 router.post('/jobs/:jobId/pause', (req, res) => routesHandler?.pauseJob(req, res));
@@ -261,6 +351,10 @@ router.post('/jobs/:jobId/cancel', (req, res) => routesHandler?.cancelJob(req, r
 router.get('/jobs/:jobId/progress', (req, res) => routesHandler?.getJobProgress(req, res));
 router.get('/jobs/:jobId/realtime-progress', (req, res) => routesHandler?.getRealtimeProgress(req, res));
 router.get('/jobs/:jobId/analytics', (req, res) => routesHandler?.getJobAnalytics(req, res));
+
+// Monitoring control routes
+router.post('/monitoring/level', (req, res) => routesHandler?.setMonitoringLevel(req, res));
+router.get('/monitoring/stats', (req, res) => routesHandler?.getMonitoringStats(req, res));
 
 // WebSocket endpoint for real-time progress updates
 export const setupWebSocketHandlers = (io: any) => {

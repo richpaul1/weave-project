@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { monitoringConfig, traceHierarchy, ReducedMonitoringConfig } from './reducedMonitoringConfig.js';
 
 /**
  * WeaveService - Handles W&B Weave integration for LLM workflow tracking
@@ -333,6 +334,11 @@ export class WeaveService {
             return '';
         }
 
+        // Check if this operation should be traced based on monitoring level
+        if (!monitoringConfig.shouldTraceOperation(operation)) {
+            return '';
+        }
+
         const traceId = uuidv4();
         const callId = uuidv4();
 
@@ -369,6 +375,11 @@ export class WeaveService {
         };
 
         this.activeTraces.set(traceId, trace);
+
+        // Register parent-child relationship
+        if (parentTraceId) {
+            traceHierarchy.registerChildTrace(parentTraceId, traceId);
+        }
 
         const prefix = parentTraceId ? '  🔗' : '🔍';
         console.log(`${prefix} [Weave] Started trace: ${operation} (${traceId.substring(0, 8)})${parentTraceId ? ` → child of (${parentTraceId.substring(0, 8)})` : ''}`);
@@ -445,6 +456,12 @@ export class WeaveService {
         // Mark as ended but keep in activeTraces for potential child operations
         trace.ended = true;
         // Don't delete from activeTraces yet - child operations may need parent info
+
+        // Clean up trace hierarchy after a delay to allow child operations to complete
+        setTimeout(() => {
+            traceHierarchy.cleanup(traceId);
+            this.activeTraces.delete(traceId);
+        }, 5000);
 
         const status = error ? '❌' : '✅';
         console.log(`${status} [Weave] Finished trace: ${trace.operation} (${traceId.substring(0, 8)}) - ${duration}ms`);
@@ -667,8 +684,26 @@ export class WeaveService {
             enabled: this.isEnabled,
             activeTraces: this.activeTraces.size,
             sampleRate: this.sampleRate,
-            project: `${this.entity}/${this.projectName}`
+            project: `${this.entity}/${this.projectName}`,
+            monitoring: monitoringConfig.getStats(),
+            traceHierarchy: traceHierarchy.getStats()
         };
+    }
+
+    /**
+     * Set monitoring level
+     */
+    setMonitoringLevel(level: 'minimal' | 'essential' | 'detailed' | 'verbose'): void {
+        monitoringConfig.setLevel(level);
+        console.log(`🔧 [Weave] Monitoring level set to: ${level}`);
+        console.log(`📊 [Weave] Monitoring config:`, monitoringConfig.getStats());
+    }
+
+    /**
+     * Get current monitoring level
+     */
+    getMonitoringLevel(): any {
+        return monitoringConfig.getCurrentLevel();
     }
 
     /**
@@ -719,6 +754,11 @@ export class WeaveService {
             return;
         }
 
+        // Check if this event should be logged based on monitoring level
+        if (!monitoringConfig.shouldLogEvent(event)) {
+            return;
+        }
+
         console.log(`📝 [Weave Event] ${event}:`, this.sanitizeData(data));
     }
 
@@ -727,6 +767,14 @@ export class WeaveService {
      */
     logMetrics(metrics: any): void {
         if (!this.isEnabled) {
+            return;
+        }
+
+        // Check if metrics should be logged based on monitoring level
+        const metricNames = Object.keys(metrics);
+        const shouldLog = metricNames.some(name => monitoringConfig.shouldLogMetrics(name));
+
+        if (!shouldLog) {
             return;
         }
 
