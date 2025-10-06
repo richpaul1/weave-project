@@ -2,9 +2,58 @@
 
 This directory contains reinforcement learning algorithms and training scripts for improving AI agents, with a focus on training agents to return both text and images when appropriate.
 
+## ✅ Current Status
+
+- ✅ **Model Trained**: `openpipe:multimodal-agent-v1` (Qwen2.5-1.5B-Instruct)
+- ✅ **Training Data**: 103 high-quality text-image pairs (0.88 avg confidence)
+- ✅ **Evaluation Complete**: 86.7% score with complex prompt
+- ✅ **Production Ready**: Use complex prompt for 83.3% image inclusion
+- ✅ **Test Scripts**: 6 test scripts available
+- ✅ **Weave Tracking**: All evaluations tracked at https://wandb.ai/richpaul1-stealth/rl-demo
+
+## 🚀 Quick Start - Testing Your Model
+
+### Production Test (Recommended)
+```bash
+cd rl
+source venv/bin/activate
+python production_test.py
+```
+**Expected**: 100% success rate with complex prompt
+
+### Full Evaluation
+```bash
+cd ../evaluation
+./run_evaluation.sh
+```
+**Expected**: Detailed comparison, Weave tracking, JSON results
+
+### Quick Test
+```bash
+cd rl
+source venv/bin/activate
+python test_simple.py
+```
+
+## 📚 Documentation
+
+- **QUICK_REFERENCE.md** - Quick reference card ⭐ **Start here**
+- **TESTING_GUIDE.md** - Complete testing guide
+- **OPENPIPE_WEB_GUIDE.md** - Training walkthrough
+- **../evaluation/EVALUATION_SUMMARY.md** - Latest evaluation results
+
+## 📊 Performance
+
+| Metric | Simple Prompt | Complex Prompt | Improvement |
+|--------|---------------|----------------|-------------|
+| Avg Score | 19.2% | 86.7% | **+67.5%** |
+| Image Rate | 0% | 83.3% | **+83.3%** |
+
+**Recommendation**: ✅ Use complex prompt (see QUICK_REFERENCE.md)
+
 ## Project Overview
 
-The goal is to train a custom model (similar to qwen3:0.6b) that can intelligently decide when to include images alongside text responses, creating a more comprehensive and helpful user experience.
+The goal is to train a custom model that can intelligently decide when to include images alongside text responses, creating a more comprehensive and helpful user experience.
 
 ## Directory Structure
 
