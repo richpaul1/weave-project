@@ -598,7 +598,19 @@ class StorageService:
             weave_trace_capture=True
         )
 
+        self.finalAIResponse(user_message, ai_response_text)
         return ai_response_text
+
+    @weave.op()
+    def finalAIResponse(self,
+                   user_message: str,
+                   ai_response: str ) -> str:
+        """
+        Special method to save AI response and return the response text for Weave trace capture.
+
+        This method is specifically designed to capture the final AI response in Weave traces
+        """
+        return "ok"
 
     @weave.op()
     def delete_all_chat_messages(self) -> int:
