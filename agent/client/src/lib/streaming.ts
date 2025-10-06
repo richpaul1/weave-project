@@ -1,5 +1,7 @@
 export interface StreamingResponse {
-  type: 'thinking' | 'response' | 'done' | 'related_content' | 'user_saved' | 'complete' | 'error';
+  type: 'thinking' | 'response' | 'done' | 'related_content' | 'user_saved' | 'complete' | 'error' |
+        'tool_calling_start' | 'tool_iteration' | 'tool_calls_requested' | 'tool_execution_start' |
+        'tool_execution_result' | 'final_response_start';
   content?: string | any; // Allow any type for related_content
   message_id?: string;
   user_message_id?: string;
@@ -101,6 +103,24 @@ export class StreamingClient {
                   console.error('❌ Server error:', data.data);
                   onError(new Error(data.data?.error || 'Server error'));
                   return;
+                case 'tool_calling_start':
+                  console.log('🔧 Tool calling started:', data.data);
+                  break;
+                case 'tool_iteration':
+                  console.log('🔄 Tool iteration:', data.data);
+                  break;
+                case 'tool_calls_requested':
+                  console.log('📞 Tool calls requested:', data.data);
+                  break;
+                case 'tool_execution_start':
+                  console.log('⚙️ Tool execution started:', data.data);
+                  break;
+                case 'tool_execution_result':
+                  console.log('✅ Tool execution result:', data.data);
+                  break;
+                case 'final_response_start':
+                  console.log('🎯 Final response starting:', data.data);
+                  break;
               }
             } catch (e) {
               console.warn('⚠️ Failed to parse streaming data:', line, e);

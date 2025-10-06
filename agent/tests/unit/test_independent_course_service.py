@@ -113,11 +113,12 @@ class TestIndependentCourseService:
         )
 
         # Verify the result
-        assert result["searchMethod"] == "vector"
-        assert result["total"] == 2
-        assert len(result["results"]) == 2
+        assert result["success"] is True
+        assert result["data"]["searchMethod"] == "vector"
+        assert result["data"]["total"] == 2
+        assert len(result["data"]["results"]) == 2
         # Don't assert specific order since it depends on the mock iteration
-        titles = [course["title"] for course in result["results"]]
+        titles = [course["title"] for course in result["data"]["results"]]
         assert "Machine Learning Basics" in titles
         assert "Advanced Deep Learning" in titles
 
@@ -152,11 +153,12 @@ class TestIndependentCourseService:
         )
 
         # Verify the result
-        assert result["searchMethod"] == "text"
-        assert result["total"] == 2
-        assert len(result["results"]) == 2
+        assert result["success"] is True
+        assert result["data"]["searchMethod"] == "text"
+        assert result["data"]["total"] == 2
+        assert len(result["data"]["results"]) == 2
         # Don't assert specific order since it depends on the mock iteration
-        titles = [course["title"] for course in result["results"]]
+        titles = [course["title"] for course in result["data"]["results"]]
         assert "Machine Learning Basics" in titles
         assert "Advanced Deep Learning" in titles
 
@@ -241,8 +243,9 @@ class TestIndependentCourseService:
         )
 
         # Verify fallback occurred
-        assert result["searchMethod"] == "text"
-        assert result["total"] == 2
+        assert result["success"] is True
+        assert result["data"]["searchMethod"] == "text"
+        assert result["data"]["total"] == 2
 
     @pytest.mark.asyncio
     async def test_get_course_details_success(self, course_service, mock_storage_service, sample_course_data):

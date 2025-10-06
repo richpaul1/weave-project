@@ -10,6 +10,7 @@ from app.services.llm_service import LLMService
 from app.tools.tool_definitions import get_tools_for_llm
 from app.tools.tool_executor import ToolExecutor
 from app.utils.weave_utils import add_session_metadata
+from app.config.prompts import PromptConfig
 
 
 class ToolCallingService:
@@ -19,26 +20,6 @@ class ToolCallingService:
         """Initialize the tool calling service."""
         self.llm_service = llm_service
         self.tool_executor = tool_executor
-        
-        # System prompt for tool-calling
-        self.TOOL_CALLING_SYSTEM_PROMPT = """You are a helpful AI assistant with access to specialized tools for learning and knowledge. You can call tools to help answer user questions effectively.
-
-Available tools:
-- search_courses: Find specific courses on topics. Use when users want to find existing courses or tutorials.
-- search_knowledge: Search general knowledge base for factual information, explanations, or concepts.
-- recommend_learning_path: Create personalized learning roadmaps. Use when users want structured learning plans or ask "how to learn" something.
-- assess_skill_level: Evaluate user's current knowledge level. Use when users describe their experience or ask what level they're at.
-- compare_courses: Compare multiple courses on similar topics. Use when users are deciding between options or want course comparisons.
-
-Tool Selection Guidelines:
-1. For "I want to learn X" → use recommend_learning_path
-2. For "What courses are available for X" → use search_courses
-3. For "I know some X, what should I learn next" → use assess_skill_level
-4. For "Which X course is better" → use compare_courses
-5. For "What is X" or factual questions → use search_knowledge
-6. You can call multiple tools if the question has multiple aspects
-7. Always provide a natural, conversational response after using tools
-8. Include specific recommendations and actionable advice from tool results"""
 
     @weave.op()
     async def process_query_with_tools(
@@ -71,6 +52,10 @@ Tool Selection Guidelines:
             "max_tool_calls": max_tool_calls,
             "tool_calling_enabled": True,
             "llm_tool_usage": True,  # Flag for filtering tool-calling queries
+            # Track tool calling prompt version
+            "tool_calling_prompt_version": PromptConfig.get_current_version(),
+            "tool_calling_service": True,
+            "prompt_type": "tool_calling_system"
         }
 
         add_session_metadata(**session_metadata)
@@ -80,7 +65,7 @@ Tool Selection Guidelines:
         
         # Build messages for LLM
         messages = [
-            {"role": "system", "content": self.TOOL_CALLING_SYSTEM_PROMPT},
+            {"role": "system", "content": PromptConfig.get_tool_calling_system_prompt()},
             {"role": "user", "content": query}
         ]
         
@@ -94,7 +79,7 @@ Tool Selection Guidelines:
             llm_response = await self.llm_service.generate_completion_with_tools(
                 messages=messages,
                 tools=tools,
-                system_prompt=self.TOOL_CALLING_SYSTEM_PROMPT
+                system_prompt=PromptConfig.get_tool_calling_system_prompt()
             )
             
             # Check if LLM wants to call tools
@@ -120,20 +105,28 @@ Tool Selection Guidelines:
                         tool_arguments = {}
                 
                 print(f"   Executing: {tool_name} with {tool_arguments}")
-                
-                # Execute the tool
-                tool_result = await self.tool_executor.execute_tool(
-                    tool_name=tool_name,
-                    tool_arguments=tool_arguments,
-                    session_id=session_id
-                )
-                
+
+                # Execute the tool with error handling
+                try:
+                    tool_result = await self.tool_executor.execute_tool(
+                        tool_name=tool_name,
+                        tool_arguments=tool_arguments,
+                        session_id=session_id
+                    )
+                except Exception as e:
+                    print(f"❌ Tool execution failed: {str(e)}")
+                    tool_result = {
+                        "success": False,
+                        "error": str(e),
+                        "data": {}
+                    }
+
                 tool_calls_made.append({
                     "tool_name": tool_name,
                     "arguments": tool_arguments,
                     "result": tool_result
                 })
-                
+
                 # Format result for LLM
                 formatted_result = self.tool_executor.format_tool_result_for_llm(tool_result)
                 tool_results.append(formatted_result)
@@ -154,7 +147,7 @@ Tool Selection Guidelines:
         # Get final response from LLM
         final_response = await self.llm_service.generate_completion(
             prompt=f"Based on the tool results, provide a comprehensive answer to: {query}",
-            system_prompt=self.TOOL_CALLING_SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_tool_calling_system_prompt()
         )
         
         # Create comprehensive tool usage summary for Weave
@@ -220,7 +213,7 @@ Tool Selection Guidelines:
         
         # Build messages for LLM
         messages = [
-            {"role": "system", "content": self.TOOL_CALLING_SYSTEM_PROMPT},
+            {"role": "system", "content": PromptConfig.get_tool_calling_system_prompt()},
             {"role": "user", "content": query}
         ]
         
@@ -237,7 +230,7 @@ Tool Selection Guidelines:
             llm_response = await self.llm_service.generate_completion_with_tools(
                 messages=messages,
                 tools=tools,
-                system_prompt=self.TOOL_CALLING_SYSTEM_PROMPT
+                system_prompt=PromptConfig.get_tool_calling_system_prompt()
             )
             
             # Check if LLM wants to call tools
@@ -277,12 +270,20 @@ Tool Selection Guidelines:
                     }
                 }
                 
-                # Execute the tool
-                tool_result = await self.tool_executor.execute_tool(
-                    tool_name=tool_name,
-                    tool_arguments=tool_arguments,
-                    session_id=session_id
-                )
+                # Execute the tool with error handling
+                try:
+                    tool_result = await self.tool_executor.execute_tool(
+                        tool_name=tool_name,
+                        tool_arguments=tool_arguments,
+                        session_id=session_id
+                    )
+                except Exception as e:
+                    print(f"❌ Tool execution failed: {str(e)}")
+                    tool_result = {
+                        "success": False,
+                        "error": str(e),
+                        "data": {}
+                    }
                 
                 tool_calls_made.append({
                     "tool_name": tool_name,
@@ -322,17 +323,38 @@ Tool Selection Guidelines:
             }
         }
         
-        # Stream final response from LLM
+        # Stream final response from LLM with thinking tag filtering
         full_response = ""
+        response_content = ""
+
         async for chunk in self.llm_service.generate_streaming(
             prompt=f"Based on the tool results, provide a comprehensive answer to: {query}",
-            system_prompt=self.TOOL_CALLING_SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_tool_calling_system_prompt()
         ):
             full_response += chunk
-            yield {
-                "type": "response",
-                "data": {"text": chunk}
-            }
+
+            # Process the accumulated text to handle thinking tags
+            # This approach handles split tags correctly by working with the full accumulated text
+            processed_text = full_response
+
+            # Remove all complete thinking blocks
+            import re
+            # Use regex to remove all thinking blocks (handles split tags correctly)
+            processed_text = re.sub(r'<think>.*?</think>', '', processed_text, flags=re.DOTALL)
+
+            # Remove incomplete thinking tags at the end (if <think> exists but no </think>)
+            if "<think>" in processed_text:
+                think_start = processed_text.find("<think>")
+                processed_text = processed_text[:think_start]
+
+            # Send only the new content that wasn't sent before
+            new_content = processed_text[len(response_content):]
+            if new_content:
+                response_content += new_content
+                yield {
+                    "type": "response",
+                    "data": {"text": new_content}
+                }
         
         # Send completion event
         yield {

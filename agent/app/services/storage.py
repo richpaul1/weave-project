@@ -414,6 +414,68 @@ class StorageService:
             return messages
 
     @weave.op()
+    def get_recent_conversation_history(self, session_id: str, num_pairs: int = 3) -> List[Dict[str, Any]]:
+        """
+        Retrieve recent conversation history as Q&A pairs for LLM context.
+
+        Gets the most recent N question-answer pairs, excluding the current conversation
+        (since we don't want to include the question we're about to answer).
+
+        Args:
+            session_id: Session ID to retrieve history for
+            num_pairs: Number of Q&A pairs to retrieve (default: 3)
+
+        Returns:
+            List of Q&A pair dictionaries with 'question' and 'answer' keys,
+            ordered from oldest to newest
+        """
+        with self._get_session() as session:
+            # Get recent messages, excluding the very last user message (current question)
+            # We want pairs, so we get (num_pairs * 2) messages and pair them up
+            query = """
+            MATCH (m:ChatMessage {sessionId: $sessionId})
+            WHERE m.sender IN ['user', 'ai']
+            RETURN m.sender as sender, m.message as message, m.timestamp as timestamp
+            ORDER BY m.timestamp DESC
+            LIMIT $limit
+            """
+
+            # Get more messages than needed to ensure we have complete pairs
+            limit = (num_pairs * 2) + 2  # Extra buffer for incomplete pairs
+            result = session.run(query, {"sessionId": session_id, "limit": limit})
+            messages = list(result)
+
+            if len(messages) < 2:
+                # Not enough history for any pairs
+                return []
+
+            # Skip the most recent message if it's a user message (current question)
+            if messages and messages[0]["sender"] == "user":
+                messages = messages[1:]
+
+            # Group messages into Q&A pairs (user question + ai answer)
+            pairs = []
+            i = 0
+            while i < len(messages) - 1 and len(pairs) < num_pairs:
+                # Look for ai message followed by user message (reverse chronological order)
+                if (messages[i]["sender"] == "ai" and
+                    messages[i + 1]["sender"] == "user"):
+                    pairs.append({
+                        "question": messages[i + 1]["message"],
+                        "answer": messages[i]["message"],
+                        "timestamp": self._convert_neo4j_datetime(messages[i + 1]["timestamp"])
+                    })
+                    i += 2  # Skip both messages in the pair
+                else:
+                    i += 1  # Skip incomplete pair
+
+            # Reverse to get chronological order (oldest to newest)
+            pairs.reverse()
+
+            print(f"📚 Retrieved {len(pairs)} conversation pairs for session {session_id}")
+            return pairs
+
+    @weave.op()
     def delete_chat_messages(self, session_id: str) -> bool:
         """
         Delete all chat messages for a session.
@@ -436,6 +498,69 @@ class StorageService:
             deleted_count = record["deletedCount"] if record else 0
 
             return deleted_count > 0
+
+    @weave.op()
+    def delete_orphaned_messages(self) -> int:
+        """
+        Delete all orphaned chat messages (messages with null sessionId).
+
+        This is useful for cleaning up messages that were created before the session ID fix.
+
+        Returns:
+            Number of messages deleted
+        """
+        with self._get_session() as session:
+            query = """
+            MATCH (m:ChatMessage)
+            WHERE m.sessionId IS NULL
+            DETACH DELETE m
+            RETURN count(m) as deletedCount
+            """
+
+            result = session.run(query)
+            record = result.single()
+            deleted_count = record["deletedCount"] if record else 0
+
+            print(f"🧹 Deleted {deleted_count} orphaned messages with null sessionId")
+            return deleted_count
+
+    @weave.op()
+    def delete_all_chat_messages(self) -> int:
+        """
+        Delete ALL chat messages from all sessions.
+
+        This completely clears the chat history database.
+
+        Returns:
+            Number of messages deleted
+        """
+        with self._get_session() as session:
+            # First count the messages
+            count_query = """
+            MATCH (m:ChatMessage)
+            RETURN count(m) as totalCount
+            """
+
+            count_result = session.run(count_query)
+            count_record = count_result.single()
+            total_count = count_record["totalCount"] if count_record else 0
+
+            print(f"🔍 Found {total_count} total chat messages to delete")
+
+            if total_count == 0:
+                print("✅ No messages to delete")
+                return 0
+
+            # Delete all messages
+            delete_query = """
+            MATCH (m:ChatMessage)
+            DELETE m
+            """
+
+            session.run(delete_query)
+
+            print(f"🧹 Deleted ALL {total_count} chat messages from database")
+            return total_count
 
     def get_recent_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -467,9 +592,10 @@ class StorageService:
                 sessions = []
 
                 for summary in session_summaries:
-                    session_id = summary["sessionId"] if summary and "sessionId" in summary else None
-                    last_activity = summary["lastActivity"] if summary and "lastActivity" in summary else None
-                    message_count = summary["messageCount"] if summary and "messageCount" in summary else 0
+                    # Use proper Neo4j Record access
+                    session_id = summary.get("sessionId") if summary else None
+                    last_activity = summary.get("lastActivity") if summary else None
+                    message_count = summary.get("messageCount", 0) if summary else 0
 
                     # Skip if session_id is None
                     if not session_id:

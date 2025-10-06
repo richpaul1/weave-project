@@ -315,7 +315,10 @@ class LLMService:
             max_tokens=max_tokens,
             temperature=temperature,
             prompt_length=len(prompt),
-            has_system_prompt=system_prompt is not None
+            has_system_prompt=system_prompt is not None,
+            # Track system prompt usage for prompt version analysis
+            system_prompt_length=len(system_prompt) if system_prompt else 0,
+            llm_provider=self.provider
         )
         if self.provider == "ollama":
             return await self._generate_completion_ollama(

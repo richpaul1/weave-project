@@ -42,7 +42,7 @@ describe('Agent Chat Weave Explanation Tests', () => {
     await page.goto(`${CLIENT_URL}/chat/${sessionId}`);
     
     // Wait for page to load
-    await expect(page.locator('h2')).toContainText('RAG Chat Interface');
+    await expect(page.locator('h2')).toContainText('Chat Session:');
     
     // Find the textarea and send button
     const textarea = page.locator('textarea');
@@ -92,7 +92,7 @@ describe('Agent Chat Weave Explanation Tests', () => {
     await page.goto(`${CLIENT_URL}/chat/${sessionId}`);
     
     // Wait for page to load
-    await expect(page.locator('h2')).toContainText('RAG Chat Interface');
+    await expect(page.locator('h2')).toContainText('Chat Session:');
     
     // Find the textarea and send button
     const textarea = page.locator('textarea');
@@ -150,7 +150,7 @@ describe('Agent Chat Weave Explanation Tests', () => {
     await page.goto(`${CLIENT_URL}/chat/${sessionId}`);
 
     // Wait for page to load
-    await expect(page.locator('h2')).toContainText('RAG Chat Interface');
+    await expect(page.locator('h2')).toContainText('Chat Session:');
 
     const textarea = page.locator('textarea');
     const sendButton = page.locator('button', { hasText: 'Send' });
@@ -202,7 +202,7 @@ describe('Agent Chat Weave Explanation Tests', () => {
     await page.goto(`${CLIENT_URL}/chat/${sessionId}`);
     
     // Wait for page to load completely
-    await expect(page.locator('h2')).toContainText('RAG Chat Interface');
+    await expect(page.locator('h2')).toContainText('Chat Session:');
     await expect(page.locator('textarea')).toBeVisible();
     await expect(page.locator('button', { hasText: 'Send' })).toBeVisible();
     
