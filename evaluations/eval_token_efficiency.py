@@ -3,14 +3,68 @@ End-to-End RAG Evaluation
 
 Evaluates the complete RAG pipeline from query to response using Weave evaluations.
 """
+from __future__ import annotations
 import weave
-from weave import Evaluation, Model
-from weave.scorers import HallucinationFreeScorer
+from weave import Evaluation, Model, Dataset
+from weave.scorers import WeaveHallucinationScorerV1
 import asyncio
 from typing import Dict, Any, List
+from concurrent.futures import Future
 import sys
 import os
 from dotenv import load_dotenv
+
+# Make Future available globally to resolve forward reference issues
+globals()['Future'] = Future
+
+# Patch typing module and weave module
+import typing
+typing.Future = Future
+if hasattr(typing, '__dict__'):
+    typing.__dict__['Future'] = Future
+
+import weave
+weave.Future = Future
+if hasattr(weave, '__dict__'):
+    weave.__dict__['Future'] = Future
+
+# Also patch sys.modules to make Future available everywhere
+import sys
+if 'typing' in sys.modules:
+    sys.modules['typing'].Future = Future
+
+# Patch the modules where Weave models are defined so forward ref 'Future' resolves
+try:
+    import importlib
+    patched_modules = set()
+    # Patch Evaluation module
+    eval_module_name = Evaluation.__module__
+    eval_mod = sys.modules.get(eval_module_name) or importlib.import_module(eval_module_name)
+    setattr(eval_mod, 'Future', Future)
+    if hasattr(eval_mod, '__dict__'):
+        eval_mod.__dict__['Future'] = Future
+    patched_modules.add(eval_module_name)
+    print(f"🐛 DEBUG: Patched Future into module: {eval_module_name}")
+
+    # Patch dataset modules (including the actual module of Dataset)
+    candidate_modules = [
+        Dataset.__module__,
+        'weave.flow.dataset',
+        'weave.dataset',
+        'weave.trace.dataset'
+    ]
+    for mod_name in candidate_modules:
+        try:
+            mod = sys.modules.get(mod_name) or importlib.import_module(mod_name)
+            setattr(mod, 'Future', Future)
+            if hasattr(mod, '__dict__'):
+                mod.__dict__['Future'] = Future
+            patched_modules.add(mod_name)
+            print(f"🐛 DEBUG: Patched Future into module: {mod_name}")
+        except Exception as inner_e:
+            print(f"⚠️ DEBUG: Could not patch module {mod_name}: {inner_e}")
+except Exception as e:
+    print(f"⚠️ DEBUG: Failed to patch Weave modules with Future: {e}")
 
 # Load environment variables from .env.local
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env.local'))
@@ -63,7 +117,7 @@ class RAGPipelineModel(Model):
     """Weave Model for the RAG pipeline evaluation"""
 
     # Define model fields
-    model_name: str = "rag_pipeline"
+    model_name: str = "eval_efficiency"
 
     def model_post_init(self, __context):
         """Initialize services after model creation"""
@@ -107,6 +161,7 @@ class RAGPipelineModel(Model):
 
         return {
             "response": response_text,
+            "query": sentence,  # Add original query for hallucination scorer
             "context_text": context_text,  # Add context for hallucination scorer
             "sources": result["sources"],
             "num_chunks": result["metadata"]["num_chunks"],
@@ -355,16 +410,16 @@ def token_usage_eval_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
     return token_usage_scorer(output)
 
 @weave.op()
-def custom_hallucination_eval_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
-    """Scorer for hallucination detection in Weave evaluation format"""
-    return custom_hallucination_scorer(output)
+def simple_hallucination_eval_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
+    """Scorer for simple rule-based hallucination detection in evaluation format"""
+    return simple_hallucination_scorer(output)
 
 
-# Custom hallucination scorer that works with our RAG output
+# Simple rule-based hallucination scorer (no external dependencies)
 @weave.op()
-def custom_hallucination_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
+def simple_hallucination_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Custom hallucination scorer that uses the context from RAG output.
+    Simple rule-based hallucination scorer that checks for basic consistency.
 
     Args:
         output: The RAG pipeline output containing response and context_text
@@ -372,62 +427,75 @@ def custom_hallucination_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with hallucination score and details
     """
-    import openai
-
-    response = output.get("response", "")
-    context_text = output.get("context_text", "")
+    response = output.get("response", "").lower()
+    context_text = output.get("context_text", "").lower()
+    query = output.get("query", "").lower()
 
     if not context_text or not response:
         return {
             "score": 0.0,
             "has_hallucination": True,
+            "passed": False,
             "details": "Missing context or response for hallucination detection"
         }
 
-    # Use OpenAI to check for hallucinations
+    # Simple heuristic-based hallucination detection
     try:
-        client = openai.OpenAI()
+        # Check 1: Response should contain some words from context
+        context_words = set(context_text.split())
+        response_words = set(response.split())
 
-        prompt = f"""
-        You are an expert fact-checker. Your task is to determine if the given response contains any hallucinations (false or unsupported information) based on the provided context.
+        # Remove common stop words for better matching
+        stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were", "be", "been", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "this", "that", "these", "those"}
 
-        Context:
-        {context_text}
+        context_content_words = context_words - stop_words
+        response_content_words = response_words - stop_words
 
-        Response to check:
-        {response}
+        # Calculate overlap
+        if len(context_content_words) > 0:
+            overlap = len(context_content_words.intersection(response_content_words))
+            overlap_ratio = overlap / len(context_content_words)
+        else:
+            overlap_ratio = 0.0
 
-        Instructions:
-        1. Compare the response against the context
-        2. Identify any claims in the response that are not supported by the context
-        3. Return "true" if the response contains hallucinations, "false" if it's factually grounded in the context
+        # Check 2: Response shouldn't contradict context with negative words
+        contradiction_indicators = ["not", "never", "no", "false", "incorrect", "wrong", "opposite"]
+        has_contradiction = any(word in response for word in contradiction_indicators)
 
-        Answer with only "true" or "false":
-        """
+        # Check 3: Response length should be reasonable (not too short or too long)
+        response_length = len(response.split())
+        reasonable_length = 5 <= response_length <= 200
 
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a precise fact-checker. Respond only with 'true' or 'false'."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.0
-        )
-
-        result = completion.choices[0].message.content.strip().lower()
-        has_hallucination = result == "true"
+        # Scoring logic
+        if overlap_ratio >= 0.3 and not has_contradiction and reasonable_length:
+            score = 1.0
+            passed = True
+            has_hallucination = False
+        elif overlap_ratio >= 0.1 and reasonable_length:
+            score = 0.5
+            passed = False
+            has_hallucination = True
+        else:
+            score = 0.0
+            passed = False
+            has_hallucination = True
 
         return {
-            "score": 0.0 if has_hallucination else 1.0,
+            "score": score,
             "has_hallucination": has_hallucination,
-            "details": f"Hallucination detected: {has_hallucination}"
+            "passed": passed,
+            "overlap_ratio": overlap_ratio,
+            "has_contradiction": has_contradiction,
+            "reasonable_length": reasonable_length,
+            "details": f"Overlap: {overlap_ratio:.2f}, Contradiction: {has_contradiction}, Length OK: {reasonable_length}"
         }
 
     except Exception as e:
         return {
             "score": 0.0,
             "has_hallucination": True,
-            "details": f"Error in hallucination detection: {str(e)}"
+            "passed": False,
+            "details": f"Error in simple hallucination detection: {str(e)}"
         }
 
 
@@ -435,10 +503,15 @@ async def run_e2e_evaluation():
     """Run end-to-end RAG evaluation using proper Weave evaluation framework"""
     print("🔍 Starting End-to-End RAG Evaluation with Weave Framework...")
 
+    # Add debugger breakpoint (uncomment to use)
+    # import pdb; pdb.set_trace()
+
     # Initialize Weave with project name from environment
     wandb_project = os.getenv("WANDB_PROJECT", "weave-rag-project")
     print(f"📊 Using Weave project: {wandb_project}")
+    print("🐛 DEBUG: About to call weave.init()")
     weave.init(wandb_project)
+    print("🐛 DEBUG: weave.init() completed")
 
     print("🎯 Creating RAG Pipeline Model...")
 
@@ -456,7 +529,7 @@ async def run_e2e_evaluation():
             efficiency_eval_scorer,
             source_citation_eval_scorer,
             token_usage_eval_scorer,
-            custom_hallucination_eval_scorer
+            simple_hallucination_eval_scorer
         ]
     )
 
@@ -479,14 +552,18 @@ async def run_e2e_evaluation():
         print(f"   Token Efficiency Score: {token_results.get('score', {}).get('mean', 0):.2f}")
 
     # Hallucination detection summary
-    if "custom_hallucination_eval_scorer" in results:
-        hallucination_results = results["custom_hallucination_eval_scorer"]
+    if "simple_hallucination_eval_scorer" in results:
+        hallucination_results = results["simple_hallucination_eval_scorer"]
         hallucination_score = hallucination_results.get("score", {}).get("mean", 0)
         has_hallucination_count = hallucination_results.get("has_hallucination", {}).get("true_count", 0)
+        passed_count = hallucination_results.get("passed", {}).get("true_count", 0)
+        overlap_ratio = hallucination_results.get("overlap_ratio", {}).get("mean", 0)
         total_examples = 5  # We have 5 test cases
-        print(f"\n🔍 Hallucination Analysis:")
+        print(f"\n🔍 Simple Hallucination Analysis:")
         print(f"   Hallucination-Free Score: {hallucination_score:.2f}")
+        print(f"   Examples Passed: {passed_count}/{total_examples}")
         print(f"   Examples with Hallucinations: {has_hallucination_count}/{total_examples}")
+        print(f"   Average Context Overlap: {overlap_ratio:.2f}")
         print(f"   Factual Accuracy: {'High' if hallucination_score > 0.8 else 'Medium' if hallucination_score > 0.6 else 'Low'}")
 
     # Other metrics summary
@@ -508,5 +585,46 @@ async def run_e2e_evaluation():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_e2e_evaluation())
+    print("🐛 DEBUG: Starting e2e_eval1.py")
+    print(f"🐛 DEBUG: Python version: {sys.version}")
+    print(f"🐛 DEBUG: Weave version: {weave.__version__}")
+
+    # Try to rebuild the models to resolve forward reference issues
+    try:
+        print("🐛 DEBUG: Attempting to rebuild RAGPipelineModel...")
+        RAGPipelineModel.model_rebuild()
+        print("✅ RAGPipelineModel rebuilt successfully")
+    except Exception as e:
+        print(f"⚠️ RAGPipelineModel rebuild failed: {e}")
+        print(f"🐛 DEBUG: Exception type: {type(e)}")
+        print("Proceeding anyway...")
+
+    try:
+        print("🐛 DEBUG: Attempting to rebuild Evaluation...")
+        Evaluation.model_rebuild()
+        print("✅ Evaluation rebuilt successfully")
+    except Exception as e:
+        print(f"⚠️ Evaluation rebuild failed: {e}")
+        print(f"🐛 DEBUG: Exception type: {type(e)}")
+        print("Proceeding anyway...")
+
+    # Rebuild Dataset as well to resolve forward reference issues
+    try:
+        print("🐛 DEBUG: Attempting to rebuild Dataset...")
+        Dataset.model_rebuild()
+        print("✅ Dataset rebuilt successfully")
+    except Exception as e:
+        print(f"⚠️ Dataset rebuild failed: {e}")
+        print(f"🐛 DEBUG: Exception type: {type(e)}")
+        print("Proceeding anyway...")
+
+
+    print("🐛 DEBUG: Starting asyncio.run(run_e2e_evaluation())")
+    try:
+        asyncio.run(run_e2e_evaluation())
+    except Exception as e:
+        print(f"🐛 DEBUG: Main execution failed: {e}")
+        print(f"🐛 DEBUG: Exception type: {type(e)}")
+        import traceback
+        traceback.print_exc()
 
