@@ -19,6 +19,7 @@ import { openWeaveUI, getWeaveConfig, type WeaveConfig } from "@/lib/weave";
 interface StreamingMessage extends ChatMessage {
   isStreaming?: boolean;
   isThinkingComplete?: boolean;
+  thinkingBlocks?: { [blockNumber: number]: string };
 }
 
 export default function ChatPage() {
@@ -178,6 +179,7 @@ export default function ChatPage() {
       role: "ai",
       content: "",
       thinking: "",
+      thinkingBlocks: {},
       isStreaming: true,
       isThinkingComplete: false,
       createdAt: timestamp + 1000, // Show after user message
@@ -196,14 +198,30 @@ export default function ChatPage() {
       await streamingClient.startStream(
         "/api/chat/stream-with-tools",
         { query: userMessage, session_id: sessionId },
-        (newThinking) => {
-          console.log('🧠 [STREAMING] Thinking received:', newThinking);
-          currentThinkingRef.current = newThinking;
+        (newThinking, blockNumber = 1) => {
+          console.log('🧠 [STREAMING] Thinking received:', newThinking, 'Block:', blockNumber);
+          currentThinkingRef.current += newThinking;
           setStreamingMessages((prev) => {
-            console.log('🔄 [STREAMING] Updating thinking for assistant ID:', assistantId);
-            return prev.map((msg) =>
-              msg.id === assistantId ? { ...msg, thinking: newThinking } : msg
-            );
+            console.log('🔄 [STREAMING] Updating thinking for assistant ID:', assistantId, 'Block:', blockNumber);
+            return prev.map((msg) => {
+              if (msg.id === assistantId) {
+                const updatedBlocks = { ...msg.thinkingBlocks };
+                updatedBlocks[blockNumber] = (updatedBlocks[blockNumber] || '') + newThinking;
+
+                // Combine all thinking blocks for the legacy thinking field
+                const combinedThinking = Object.entries(updatedBlocks)
+                  .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                  .map(([blockNum, content]) => `--- Thinking Block ${blockNum} ---\n${content}`)
+                  .join('\n\n');
+
+                return {
+                  ...msg,
+                  thinking: combinedThinking,
+                  thinkingBlocks: updatedBlocks
+                };
+              }
+              return msg;
+            });
           });
         },
         (newResponse) => {

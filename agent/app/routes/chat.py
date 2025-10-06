@@ -521,7 +521,7 @@ async def chat_message_with_tools(request: ChatRequest):
             result = await tool_calling_service.process_query_with_tools(
                 query=request.query,
                 session_id=request.session_id,
-                max_tool_calls=3
+                max_tool_calls=1
             )
 
             # Create comprehensive tool trace summary for Weave
@@ -615,7 +615,7 @@ async def stream_chat_with_tools(request: ChatRequest):
                 async for event in tool_calling_service.process_query_with_tools_streaming(
                     query=request.query,
                     session_id=request.session_id,
-                    max_tool_calls=3
+                    max_tool_calls=1
                 ):
                     # Send event to client
                     yield f"data: {json.dumps(event)}\n\n"

@@ -1,7 +1,7 @@
 export interface StreamingResponse {
   type: 'thinking' | 'response' | 'done' | 'related_content' | 'user_saved' | 'complete' | 'error' |
         'tool_calling_start' | 'tool_iteration' | 'tool_calls_requested' | 'tool_execution_start' |
-        'tool_execution_result' | 'final_response_start';
+        'tool_execution_result' | 'final_response_start' | 'thinking_start' | 'thinking_content' | 'thinking_end';
   content?: string | any; // Allow any type for related_content
   message_id?: string;
   user_message_id?: string;
@@ -16,7 +16,7 @@ export class StreamingClient {
   async startStream(
     endpoint: string,
     data: any,
-    onThinking: (content: string) => void,
+    onThinking: (content: string, blockNumber?: number) => void,
     onResponse: (content: string) => void,
     onComplete: (completionData?: any) => void,
     onError: (error: Error) => void,
@@ -68,10 +68,24 @@ export class StreamingClient {
                   console.log('💾 User message saved with ID:', data.message_id);
                   break;
                 case 'thinking':
-                  // Backend sends data.data.text
+                  // Legacy thinking support
                   const thinkingText = (data as any).data?.text || data.content as string;
                   console.log('🧠 Processing thinking:', thinkingText);
                   onThinking(thinkingText);
+                  break;
+                case 'thinking_start':
+                  const blockNumber = (data as any).data?.block_number || 1;
+                  console.log('🧠 Thinking block started:', blockNumber);
+                  break;
+                case 'thinking_content':
+                  const thinkingContent = (data as any).data?.text || '';
+                  const thinkingBlockNumber = (data as any).data?.block_number || 1;
+                  console.log('🧠 Processing thinking content:', thinkingContent, 'Block:', thinkingBlockNumber);
+                  onThinking(thinkingContent, thinkingBlockNumber);
+                  break;
+                case 'thinking_end':
+                  const endBlockNumber = (data as any).data?.block_number || 1;
+                  console.log('🧠 Thinking block ended:', endBlockNumber);
                   break;
                 case 'response':
                   // Backend sends data.data.text
