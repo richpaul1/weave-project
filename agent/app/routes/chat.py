@@ -631,8 +631,8 @@ async def stream_chat_with_tools(request: ChatRequest):
 
                 # Save messages to database if we have final data
                 if final_data:
-                    # Store the user message
-                    storage_service.create_chat_message(
+                    # Store the user message and capture the result
+                    user_message_result = storage_service.create_chat_message(
                         message_data={
                             "sessionId": request.session_id,
                             "sender": "user",
@@ -642,9 +642,11 @@ async def stream_chat_with_tools(request: ChatRequest):
                         session_id=request.session_id or "default"
                     )
 
-                    # Store the AI response with comprehensive tool metadata
-                    storage_service.create_chat_message(
-                        message_data={
+                    # Store the AI response using special AIResponse method for Weave trace capture
+                    # This includes the user message as input and user message result for traceability
+                    ai_response_text = storage_service.AIResponse(
+                        user_message=request.query,
+                        ai_message_data={
                             "sessionId": request.session_id,
                             "sender": "ai",
                             "message": final_data.get("final_response", ""),
@@ -660,8 +662,12 @@ async def stream_chat_with_tools(request: ChatRequest):
                                 "tool_calling_session": True,
                             }
                         },
-                        session_id=request.session_id or "default"
+                        session_id=request.session_id or "default",
+                        user_message_result=user_message_result
                     )
+
+                    print(f"✅ AI Response captured for Weave trace: {len(ai_response_text)} chars")
+                    print(f"✅ User message saved with ID: {user_message_result.get('id') if user_message_result else 'None'}")
 
                 # Send final completion event
                 yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"

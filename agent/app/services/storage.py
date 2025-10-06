@@ -13,6 +13,7 @@ import weave
 import os
 import aiofiles
 from pathlib import Path
+from app.utils.weave_utils import add_session_metadata
 from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DB_NAME
 
 
@@ -553,6 +554,51 @@ class StorageService:
 
             print(f"🧹 Deleted {deleted_count} orphaned messages with null sessionId")
             return deleted_count
+
+    @weave.op()
+    def AIResponse(self,
+                   user_message: str,
+                   ai_message_data: Dict[str, Any],
+                   session_id: Optional[str] = None,
+                   user_message_result: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Special method to save AI response and return the response text for Weave trace capture.
+
+        This method is specifically designed to capture the final AI response in Weave traces
+        by returning the response text as the method output, while also saving the message
+        to the database with full metadata.
+
+        Args:
+            user_message: The original user query/message
+            ai_message_data: Dictionary containing AI message data
+            session_id: Optional session ID for Weave tracking
+            user_message_result: Optional result from saving the user message
+
+        Returns:
+            The AI response text for Weave trace capture
+        """
+        # Save the AI message to database using the standard method
+        saved_ai_message = self.create_chat_message(ai_message_data, session_id)
+
+        # Return the AI response text for Weave trace capture
+        ai_response_text = ai_message_data.get("message", "")
+
+        # Add Weave metadata for this special capture method
+        add_session_metadata(
+            operation_type="ai_response_capture",
+            session_id=session_id,
+            user_message=user_message,
+            user_message_length=len(user_message),
+            ai_response_length=len(ai_response_text),
+            has_thinking=bool(ai_message_data.get("thinking")),
+            has_metadata=bool(ai_message_data.get("metadata")),
+            user_message_id=user_message_result.get("id") if user_message_result else None,
+            ai_message_id=saved_ai_message.get("id") if saved_ai_message else None,
+            capture_method="AIResponse",
+            weave_trace_capture=True
+        )
+
+        return ai_response_text
 
     @weave.op()
     def delete_all_chat_messages(self) -> int:
