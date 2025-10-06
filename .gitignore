@@ -27,6 +27,6 @@ build/
 Thumbs.db
 
 # Markdown files
-*.md
+//*.md
 
 
