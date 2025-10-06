@@ -96,14 +96,14 @@ class ToolCallingService:
             for tool_call in tool_calls:
                 tool_name = tool_call.get("function", {}).get("name")
                 tool_arguments = tool_call.get("function", {}).get("arguments", {})
-                
+
                 # Parse arguments if they're a string
                 if isinstance(tool_arguments, str):
                     try:
                         tool_arguments = json.loads(tool_arguments)
                     except json.JSONDecodeError:
                         tool_arguments = {}
-                
+
                 print(f"   Executing: {tool_name} with {tool_arguments}")
 
                 # Execute the tool with error handling

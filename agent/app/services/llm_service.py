@@ -219,7 +219,9 @@ class LLMService:
         ]
 
         if any(pattern in user_lower for pattern in course_search_patterns):
-            topic = self._extract_topic_from_query(user_message, course_search_patterns)
+            # For course search, use the full query to preserve context
+            # Remove question marks and clean up, but keep the full query
+            clean_query = user_message.replace("?", "").replace(".", "").strip()
             return {
                 "content": None,
                 "tool_calls": [{
@@ -227,7 +229,7 @@ class LLMService:
                     "type": "function",
                     "function": {
                         "name": "search_courses",
-                        "arguments": f'{{"query": "{topic}", "limit": 5}}'
+                        "arguments": f'{{"query": "{clean_query}", "limit": 5}}'
                     }
                 }]
             }
