@@ -1,0 +1,22 @@
+{
+  "name": "weave-evaluations-node",
+  "version": "1.0.0",
+  "description": "Node.js evaluation tests for Weave",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx node_eval.ts",
+    "test:rag": "tsx rag_eval_node.ts",
+    "build": "tsc",
+    "dev": "tsx --watch node_eval.ts"
+  },
+  "dependencies": {
+    "weave": "^0.9.3",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "type": "module"
+}
