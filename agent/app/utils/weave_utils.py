@@ -85,7 +85,7 @@ def get_prompt_version_metadata() -> Dict[str, Any]:
         Dictionary with prompt version information
     """
     try:
-        from app.config.prompts import PromptConfig
+        from app.prompts import PromptConfig
         return {
             "prompt_version": PromptConfig.get_current_version(),
             "prompt_version_date": PromptConfig.get_version_info().get("version_date"),

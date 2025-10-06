@@ -130,12 +130,13 @@ class TestToolCallingIntegration:
         # Test query that should trigger course search
         query = "What machine learning courses are available?"
         session_id = "test-integration-session"
-        
+
         # Process query with tool calling
         result = await tool_calling_service.process_query_with_tools(
             query=query,
             session_id=session_id,
-            max_tool_calls=3
+            max_tool_calls=3,
+            top_k=3
         )
         
         # Verify the result structure
@@ -167,16 +168,17 @@ class TestToolCallingIntegration:
         # Mock LLM to not call tools for general queries
         async def mock_no_tools(*args, **kwargs):
             return {"tool_calls": []}
-        
+
         tool_calling_service.llm_service.generate_completion_with_tools = mock_no_tools
-        
+
         query = "What is the weather today?"
         session_id = "test-general-session"
-        
+
         result = await tool_calling_service.process_query_with_tools(
             query=query,
             session_id=session_id,
-            max_tool_calls=3
+            max_tool_calls=3,
+            top_k=3
         )
         
         # Verify no tools were called
@@ -194,7 +196,8 @@ class TestToolCallingIntegration:
         async for event in tool_calling_service.process_query_with_tools_streaming(
             query=query,
             session_id=session_id,
-            max_tool_calls=3
+            max_tool_calls=3,
+            top_k=3
         ):
             events.append(event)
         
@@ -255,15 +258,16 @@ class TestToolCallingIntegration:
             }
         
         tool_calling_service.llm_service.generate_completion_with_tools = mock_always_call_tools
-        
+
         query = "Tell me about courses"
         session_id = "test-limit-session"
         max_calls = 2
-        
+
         result = await tool_calling_service.process_query_with_tools(
             query=query,
             session_id=session_id,
-            max_tool_calls=max_calls
+            max_tool_calls=max_calls,
+            top_k=3
         )
         
         # Should not exceed max_tool_calls
@@ -279,7 +283,8 @@ class TestToolCallingIntegration:
         result = await tool_calling_service.process_query_with_tools(
             query=query,
             session_id=session_id,
-            max_tool_calls=3
+            max_tool_calls=3,
+            top_k=3
         )
         
         metadata = result["metadata"]

@@ -40,7 +40,7 @@ def test_configuration_imports():
         
         # Test prompt config imports
         from app.config import PromptConfig
-        from app.config.prompts import PromptConfig as DirectPromptConfig
+        from app.prompts import PromptConfig as DirectPromptConfig
         print(f"✅ Prompt config: v{PromptConfig.get_current_version()}")
         
         return True
@@ -55,7 +55,7 @@ def test_prompt_versioning():
     print("=" * 50)
     
     try:
-        from app.config.prompts import PromptConfig
+        from app.prompts import PromptConfig
         
         # Test version info
         version_info = PromptConfig.get_version_info()
@@ -214,7 +214,7 @@ def test_service_integration():
         print("✅ All services import successfully")
         
         # Test that services can access prompt configuration
-        from app.config.prompts import PromptConfig
+        from app.prompts import PromptConfig
         
         # Verify prompt access
         general_prompt = PromptConfig.get_general_system_prompt()

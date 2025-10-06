@@ -23,7 +23,7 @@ from app.services.hallucination_service import HallucinationService
 from app.services.tool_calling_service import ToolCallingService
 from app.services.tool_strategy_service import ToolStrategyService
 from app.tools.tool_executor import ToolExecutor
-from app.utils.weave_utils import create_tool_trace_summary
+from app.utils.weave_utils import create_tool_trace_summary, add_session_metadata
 from app.tool_config_pkg.tool_config import ToolStrategy, DEFAULT_TOOL_STRATEGY_CONFIG
 from app import config
 
@@ -102,7 +102,8 @@ def init_services():
 
         tool_calling_service = ToolCallingService(
             llm_service=llm_service,
-            tool_executor=tool_executor
+            tool_executor=tool_executor,
+            storage_service=storage_service
         )
 
         # Initialize tool strategy service
@@ -580,6 +581,10 @@ async def chat_message_with_tools(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Tool calling failed: {str(e)}")
 
 
+
+
+
+
 @router.post("/stream-with-tools")
 async def stream_chat_with_tools(request: ChatRequest):
     """
@@ -607,54 +612,56 @@ async def stream_chat_with_tools(request: ChatRequest):
             with weave.thread(thread_id) as thread_ctx:
                 print(f"🧵 Processing streaming tool calling in thread: {thread_ctx.thread_id}")
 
-                full_response = ""
-                tool_calls_made = 0
-                tools_used = []
+                # Collect final data from the "done" event
+                final_data = None
 
                 # Stream tool calling process
                 async for event in tool_calling_service.process_query_with_tools_streaming(
                     query=request.query,
                     session_id=request.session_id,
-                    max_tool_calls=1
+                    max_tool_calls=1,
+                    top_k=request.top_k
                 ):
                     # Send event to client
                     yield f"data: {json.dumps(event)}\n\n"
 
-                    # Track response and tool usage
-                    if event["type"] == "response":
-                        full_response += event["data"]["text"]
-                    elif event["type"] == "tool_execution_result":
-                        tool_calls_made += 1
-                        tool_name = event["data"]["tool_name"]
-                        if tool_name not in tools_used:
-                            tools_used.append(tool_name)
+                    # Capture the final "done" event data for saving to database
+                    if event.get("type") == "done":
+                        final_data = event.get("data", {})
 
-                # Store the user message
-                storage_service.create_chat_message(
-                    message_data={
-                        "sessionId": request.session_id,
-                        "sender": "user",
-                        "message": request.query,
-                        "thinking": "",
-                    },
-                    session_id=request.session_id or "default"
-                )
+                # Save messages to database if we have final data
+                if final_data:
+                    # Store the user message
+                    storage_service.create_chat_message(
+                        message_data={
+                            "sessionId": request.session_id,
+                            "sender": "user",
+                            "message": request.query,
+                            "thinking": "",
+                        },
+                        session_id=request.session_id or "default"
+                    )
 
-                # Store the AI response
-                storage_service.create_chat_message(
-                    message_data={
-                        "sessionId": request.session_id,
-                        "sender": "ai",
-                        "message": full_response,
-                        "thinking": "",
-                        "metadata": {
-                            "tool_calls_made": tool_calls_made,
-                            "tools_used": tools_used,
-                            "streaming": True
-                        }
-                    },
-                    session_id=request.session_id or "default"
-                )
+                    # Store the AI response with comprehensive tool metadata
+                    storage_service.create_chat_message(
+                        message_data={
+                            "sessionId": request.session_id,
+                            "sender": "ai",
+                            "message": final_data.get("final_response", ""),
+                            "thinking": final_data.get("thinking_content", ""),
+                            "metadata": {
+                                "tool_calls_made": final_data.get("tool_calls_made", 0),
+                                "tools_used": final_data.get("tools_used", []),
+                                "response_length": final_data.get("response_length", 0),
+                                "thinking_blocks": final_data.get("thinking_blocks", 0),
+                                "tool_execution_summary": final_data.get("tool_execution_summary", {}),
+                                "output_metrics": final_data.get("output_metrics", {}),
+                                "streaming": True,
+                                "tool_calling_session": True,
+                            }
+                        },
+                        session_id=request.session_id or "default"
+                    )
 
                 # Send final completion event
                 yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"
@@ -667,6 +674,48 @@ async def stream_chat_with_tools(request: ChatRequest):
             }
             yield f"data: {json.dumps(error_event)}\n\n"
 
+    return StreamingResponse(
+        generate_tool_calling_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+    async def generate_tool_calling_stream():
+        """Generate streaming response with tool calling."""
+        try:
+            # Use session_id as thread_id to track conversation context
+            thread_id = request.session_id or "default_session"
+
+            with weave.thread(thread_id) as thread_ctx:
+                print(f"🧵 Streaming in thread: {thread_ctx.thread_id}")
+
+                # Stream tool calling process
+                async for event in tool_calling_service.process_query_with_tools_streaming(
+                    query=request.query,
+                    session_id=request.session_id,
+                    max_tool_calls=1,
+                    top_k=request.top_k
+                ):
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                # Send final completion event
+                yield f"data: {json.dumps({'type': 'complete', 'data': {'session_id': request.session_id, 'thread_id': thread_ctx.thread_id}})}\n\n"
+
+        except Exception as e:
+            print(f"❌ Chat API: Streaming failed: {str(e)}")
+            error_event = {
+                "type": "error",
+                "data": {"error": f"Streaming failed: {str(e)}"}
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    # Return the streaming response
+    # The Weave instrumentation runs in the background task
     return StreamingResponse(
         generate_tool_calling_stream(),
         media_type="text/plain",

@@ -263,10 +263,13 @@ def mock_llm_service(sample_embedding):
         "provider": "test"
     })
     
-    # Mock async methods
-    async def mock_generate_embedding(*args, **kwargs):
-        """Mock embedding generation"""
-        return sample_embedding
+    # Mock async methods with AsyncMock for proper assertion support
+    llm.generate_embedding = AsyncMock(return_value=sample_embedding)
+
+    # Mock tool calling method
+    llm.generate_completion_with_tools = AsyncMock(return_value={
+        "tool_calls": []  # No tool calls by default
+    })
 
     async def mock_generate(*args, **kwargs):
         """Mock text generation"""
@@ -276,8 +279,6 @@ def mock_llm_service(sample_embedding):
         """Mock streaming generator"""
         for chunk in ["This ", "is ", "a ", "test ", "response."]:
             yield chunk
-
-    llm.generate_embedding = mock_generate_embedding
     llm.generate = mock_generate
     llm.generate_streaming = mock_streaming
     

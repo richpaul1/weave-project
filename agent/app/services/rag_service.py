@@ -10,7 +10,7 @@ import weave
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
 from app.utils.weave_utils import add_session_metadata
-from app.config.prompts import PromptConfig
+from app.prompts import PromptConfig
 
 
 class RAGService:

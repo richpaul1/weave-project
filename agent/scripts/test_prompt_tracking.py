@@ -15,7 +15,7 @@ os.chdir(agent_dir)
 sys.path.append(agent_dir)
 
 from app.utils.weave_utils import get_prompt_version_metadata, track_prompt_usage
-from app.config.prompts import PromptConfig
+from app.prompts import PromptConfig
 
 
 def test_prompt_metadata():

@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from app.config.prompts import PromptConfig, PROMPT_VERSION, SUPPORTED_VERSIONS
+    from app.prompts import PromptConfig, PROMPT_VERSION, SUPPORTED_VERSIONS
 except ImportError as e:
     print(f"Error importing prompt config: {e}")
     print("Make sure you're running this from the agent directory")

@@ -344,6 +344,12 @@ class StorageService:
             message_id = str(uuid.uuid4())
             timestamp = datetime.utcnow()
 
+            # Prepare metadata as JSON string if present
+            metadata_json = None
+            if message_data.get("metadata"):
+                import json
+                metadata_json = json.dumps(message_data["metadata"])
+
             query = """
             CREATE (m:ChatMessage {
                 id: $id,
@@ -351,6 +357,7 @@ class StorageService:
                 sender: $sender,
                 message: $message,
                 thinking: $thinking,
+                metadata: $metadata,
                 timestamp: datetime($timestamp)
             })
             RETURN m
@@ -362,18 +369,30 @@ class StorageService:
                 "sender": message_data.get("sender"),
                 "message": message_data.get("message"),
                 "thinking": message_data.get("thinking", ""),
+                "metadata": metadata_json,
                 "timestamp": timestamp.isoformat()
             })
 
             record = result.single()
             if record:
                 props = record["m"]
+
+                # Parse metadata if present
+                metadata = None
+                if props.get("metadata"):
+                    import json
+                    try:
+                        metadata = json.loads(props["metadata"])
+                    except json.JSONDecodeError:
+                        metadata = None
+
                 return {
                     "id": props["id"],
                     "sessionId": props["sessionId"],
                     "sender": props["sender"],
                     "message": props["message"],
                     "thinking": props["thinking"],
+                    "metadata": metadata,
                     "timestamp": props["timestamp"]
                 }
 
@@ -402,12 +421,23 @@ class StorageService:
 
             for record in result:
                 props = record["m"]
+
+                # Parse metadata if present
+                metadata = None
+                if props.get("metadata"):
+                    import json
+                    try:
+                        metadata = json.loads(props["metadata"])
+                    except json.JSONDecodeError:
+                        metadata = None
+
                 messages.append({
                     "id": props["id"],
                     "sessionId": props["sessionId"],
                     "sender": props["sender"],
                     "message": props["message"],
                     "thinking": props.get("thinking", ""),
+                    "metadata": metadata,
                     "timestamp": self._convert_neo4j_datetime(props["timestamp"])
                 })
 

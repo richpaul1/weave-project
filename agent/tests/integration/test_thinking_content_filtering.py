@@ -81,7 +81,8 @@ class TestThinkingContentFiltering:
         async for event in tool_calling_service_with_thinking.process_query_with_tools_streaming(
             query=query,
             session_id=session_id,
-            max_tool_calls=1
+            max_tool_calls=1,
+            top_k=3
         ):
             events.append(event)
             if event["type"] == "response":
@@ -139,7 +140,8 @@ class TestThinkingContentFiltering:
         async for event in tool_calling_service_with_thinking.process_query_with_tools_streaming(
             query=query,
             session_id=session_id,
-            max_tool_calls=1
+            max_tool_calls=1,
+            top_k=3
         ):
             events.append(event)
             if event["type"] == "response":
@@ -181,7 +183,8 @@ class TestThinkingContentFiltering:
         async for event in tool_calling_service_with_thinking.process_query_with_tools_streaming(
             query=query,
             session_id=session_id,
-            max_tool_calls=1
+            max_tool_calls=1,
+            top_k=3
         ):
             events.append(event)
             if event["type"] == "response":
@@ -224,7 +227,8 @@ class TestThinkingContentFiltering:
         async for event in tool_calling_service_with_thinking.process_query_with_tools_streaming(
             query=query,
             session_id=session_id,
-            max_tool_calls=1
+            max_tool_calls=1,
+            top_k=3
         ):
             events.append(event)
             if event["type"] == "response":

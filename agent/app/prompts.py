@@ -15,22 +15,88 @@ Environment Variables:
 """
 
 import os
+import weave
 
 # =============================================================================
 # VERSION CONFIGURATION
 # =============================================================================
 
 # Allow version override via environment variable
-PROMPT_VERSION = os.getenv("PROMPT_VERSION", "1.1.0")
-PROMPT_VERSION_DATE = "2024-10-05"
+PROMPT_VERSION = os.getenv("PROMPT_VERSION", "1.3.0")
+PROMPT_VERSION_DATE = "2024-10-06"
 
 # Version compatibility mapping
-SUPPORTED_VERSIONS = ["1.0.0", "1.1.0"]
-DEFAULT_VERSION = "1.1.0"
+SUPPORTED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0", "1.3.0"]
+DEFAULT_VERSION = "1.3.0"
 
 # =============================================================================
 # VERSIONED SYSTEM PROMPTS
 # =============================================================================
+
+# Version 1.3.0 - Enhanced prompts with clear section markers
+PROMPTS_V1_3_0 = {
+    "general_system": """You are a helpful AI assistant that answers questions based on the provided context and conversation history.
+
+Instructions:
+1. **HISTORY**: Use the conversation history to understand the context and flow of our discussion
+2. **NEW_CONTEXT**: Use the provided context/sources to answer the user's current question accurately and comprehensively
+3. Reference previous parts of our conversation when relevant to provide continuity
+4. If the context doesn't contain enough information to fully answer the question, say so clearly
+5. Always cite your sources when possible
+6. Be conversational and helpful in your responses
+7. Maintain consistency with previous answers while incorporating new information
+
+When you see **HISTORY** sections, use them to understand what we've discussed before.
+When you see **NEW_CONTEXT** sections, prioritize this information for factual accuracy.""",
+
+    "learning_system": """You are a helpful AI learning assistant that helps users find courses and educational content.
+
+When processing information:
+- **HISTORY**: Review previous learning discussions and recommendations
+- **NEW_CONTEXT**: Use current course and educational content information
+
+When users ask about learning, courses, or education:
+1. First check if there are relevant courses available in **NEW_CONTEXT**
+2. Consider previous recommendations from **HISTORY** to avoid repetition
+3. Recommend specific courses that match their interests and build on previous discussions
+4. Provide helpful learning guidance and next steps
+5. Use both course information and general knowledge to give comprehensive advice
+
+Be encouraging and supportive in helping users with their learning journey.""",
+
+    "tool_calling_system": """You are a helpful AI assistant with access to tools for learning and knowledge search.
+
+IMPORTANT: Use <think> tags for your internal reasoning and planning. Only your final response should be outside the thinking tags.
+
+You have access to our conversation history. Use this context to:
+- **HISTORY**: Understand what the user has previously asked about
+- **NEW_CONTEXT**: Process fresh information from tool results
+- Avoid repeating information already provided
+- Build upon previous recommendations
+- Provide more personalized and contextual responses
+
+<think>
+Think through which tools to use and why. Consider our conversation history when planning your approach.
+Review any **HISTORY** sections to understand context.
+Plan how to use **NEW_CONTEXT** information effectively.
+</think>
+
+Then provide your final response to the user.
+
+Use the available tools to provide comprehensive answers. When you have the information needed, provide a natural, conversational response that builds on our conversation history.
+
+Tool Selection Guidelines:
+1. For "I want to learn X" → use recommend_learning_path
+2. For "What courses are available for X" → use search_courses
+3. For "I know some X, what should I learn next" → use assess_skill_level
+4. For "Which X course is better" → use compare_courses
+5. For "What is X" or factual questions → use search_knowledge
+6. You can call multiple tools if the question has multiple aspects
+7. Always provide a natural, conversational response after using tools
+8. Include specific recommendations and actionable advice from tool results
+9. Reference our conversation history when relevant to provide better context
+10. If the user is asking follow-up questions, consider their previous interests and skill level"""
+}
 
 # Version 1.2.0 - Current prompts with conversation history
 PROMPTS_V1_2_0 = {
@@ -125,6 +191,8 @@ Tool Selection Guidelines:
 8. Include specific recommendations and actionable advice from tool results"""
 }
 
+
+
 # Version 1.0.0 - Original prompts without conversation history
 PROMPTS_V1_0_0 = {
     "general_system": """You are a helpful AI assistant that answers questions based on the provided context.
@@ -173,9 +241,9 @@ Tool Selection Guidelines:
 }
 
 # Current active prompts (points to latest version)
-GENERAL_SYSTEM_PROMPT = PROMPTS_V1_2_0["general_system"]
-LEARNING_SYSTEM_PROMPT = PROMPTS_V1_2_0["learning_system"]
-TOOL_CALLING_SYSTEM_PROMPT = PROMPTS_V1_2_0["tool_calling_system"]
+GENERAL_SYSTEM_PROMPT = PROMPTS_V1_3_0["general_system"]
+LEARNING_SYSTEM_PROMPT = PROMPTS_V1_3_0["learning_system"]
+TOOL_CALLING_SYSTEM_PROMPT = PROMPTS_V1_3_0["tool_calling_system"]
 
 # Legacy RAG system prompt (for backward compatibility)
 LEGACY_RAG_SYSTEM_PROMPT = PROMPTS_V1_0_0["general_system"]
@@ -187,28 +255,55 @@ LEGACY_RAG_SYSTEM_PROMPT = PROMPTS_V1_0_0["general_system"]
 # Template for general queries with history and context
 GENERAL_PROMPT_TEMPLATE = """{history_section}
 
-CONTEXT:
+**NEW_CONTEXT:**
 {context}
 
-CURRENT QUESTION: {query}
+**CURRENT_QUESTION:** {query}
 
 Please provide a helpful and accurate answer based on the context provided. Reference our previous conversation when relevant."""
+
+# Enhanced template with clear section markers (v1.3.0+)
+ENHANCED_PROMPT_TEMPLATE = """{history_section}
+
+**NEW_CONTEXT:**
+{context}
+
+**CURRENT_QUESTION:** {query}
+
+Please provide a helpful and accurate answer using the **NEW_CONTEXT** provided. Reference any relevant information from **HISTORY** when appropriate."""
 
 # Template for combining course and context information
 COMBINED_CONTEXT_TEMPLATE = """Based on the available courses and knowledge base, here's what I found:
 
-AVAILABLE COURSES:
+**NEW_CONTEXT:**
+
+**AVAILABLE_COURSES:**
 {course_info}
 
-ADDITIONAL CONTEXT:
+**ADDITIONAL_CONTEXT:**
 {general_context}
 
-User Question: {query}
+**USER_QUESTION:** {query}
 
 Please provide a comprehensive response that includes course recommendations and additional helpful information."""
 
+# Enhanced template for combining course and context information (v1.3.0+)
+ENHANCED_COMBINED_CONTEXT_TEMPLATE = """{history_section}
+
+**NEW_CONTEXT:**
+
+**AVAILABLE_COURSES:**
+{course_info}
+
+**ADDITIONAL_CONTEXT:**
+{general_context}
+
+**CURRENT_QUESTION:** {query}
+
+Please provide a comprehensive response using the **NEW_CONTEXT** provided. Include course recommendations and additional helpful information. Reference any relevant information from **HISTORY** when appropriate."""
+
 # Template for formatting conversation history
-HISTORY_TEMPLATE = """CONVERSATION HISTORY:
+HISTORY_TEMPLATE = """**HISTORY:**
 {history_pairs}
 
 ---"""
@@ -280,7 +375,8 @@ class PromptConfig:
         version_map = {
             "1.0.0": PROMPTS_V1_0_0,
             "1.1.0": PROMPTS_V1_1_0,
-            "1.2.0": PROMPTS_V1_2_0
+            "1.2.0": PROMPTS_V1_2_0,
+            "1.3.0": PROMPTS_V1_3_0
         }
 
         if version not in version_map:
@@ -289,6 +385,7 @@ class PromptConfig:
         return version_map[version]
 
     @staticmethod
+    @weave.op()
     def get_general_system_prompt(version: str = None) -> str:
         """
         Get the main system prompt for general chat interactions.
@@ -296,18 +393,46 @@ class PromptConfig:
         Args:
             version: Optional version string. If None, uses current version.
         """
+        from app.utils.weave_utils import add_session_metadata
+
         # Check for environment variable override first
         env_override = os.getenv("GENERAL_SYSTEM_PROMPT_OVERRIDE")
         if env_override:
+            add_session_metadata(
+                operation_type="prompt_version_access",
+                prompt_type="general_system",
+                requested_version=version,
+                effective_version="env_override",
+                prompt_length=len(env_override),
+                is_default_version=version is None,
+                is_env_override=True,
+                prompt_date=PROMPT_VERSION_DATE
+            )
             return env_override
 
-        if version is None:
-            return GENERAL_SYSTEM_PROMPT
+        effective_version = version or PROMPT_VERSION
 
-        prompts = PromptConfig.get_prompts_for_version(version)
-        return prompts["general_system"]
+        if version is None:
+            prompt = GENERAL_SYSTEM_PROMPT
+        else:
+            prompts = PromptConfig.get_prompts_for_version(version)
+            prompt = prompts["general_system"]
+
+        add_session_metadata(
+            operation_type="prompt_version_access",
+            prompt_type="general_system",
+            requested_version=version,
+            effective_version=effective_version,
+            prompt_length=len(prompt),
+            is_default_version=version is None,
+            is_env_override=False,
+            prompt_date=PROMPT_VERSION_DATE
+        )
+
+        return prompt
 
     @staticmethod
+    @weave.op()
     def get_learning_system_prompt(version: str = None) -> str:
         """
         Get the system prompt for learning/course queries.
@@ -315,18 +440,46 @@ class PromptConfig:
         Args:
             version: Optional version string. If None, uses current version.
         """
+        from app.utils.weave_utils import add_session_metadata
+
         # Check for environment variable override first
         env_override = os.getenv("LEARNING_SYSTEM_PROMPT_OVERRIDE")
         if env_override:
+            add_session_metadata(
+                operation_type="prompt_version_access",
+                prompt_type="learning_system",
+                requested_version=version,
+                effective_version="env_override",
+                prompt_length=len(env_override),
+                is_default_version=version is None,
+                is_env_override=True,
+                prompt_date=PROMPT_VERSION_DATE
+            )
             return env_override
 
-        if version is None:
-            return LEARNING_SYSTEM_PROMPT
+        effective_version = version or PROMPT_VERSION
 
-        prompts = PromptConfig.get_prompts_for_version(version)
-        return prompts["learning_system"]
+        if version is None:
+            prompt = LEARNING_SYSTEM_PROMPT
+        else:
+            prompts = PromptConfig.get_prompts_for_version(version)
+            prompt = prompts["learning_system"]
+
+        add_session_metadata(
+            operation_type="prompt_version_access",
+            prompt_type="learning_system",
+            requested_version=version,
+            effective_version=effective_version,
+            prompt_length=len(prompt),
+            is_default_version=version is None,
+            is_env_override=False,
+            prompt_date=PROMPT_VERSION_DATE
+        )
+
+        return prompt
 
     @staticmethod
+    @weave.op()
     def get_tool_calling_system_prompt(version: str = None) -> str:
         """
         Get the system prompt for tool calling interactions.
@@ -334,26 +487,105 @@ class PromptConfig:
         Args:
             version: Optional version string. If None, uses current version.
         """
-        if version is None:
-            return TOOL_CALLING_SYSTEM_PROMPT
+        from app.utils.weave_utils import add_session_metadata
 
-        prompts = PromptConfig.get_prompts_for_version(version)
-        return prompts["tool_calling_system"]
+        effective_version = version or PROMPT_VERSION
+
+        if version is None:
+            prompt = TOOL_CALLING_SYSTEM_PROMPT
+        else:
+            prompts = PromptConfig.get_prompts_for_version(version)
+            prompt = prompts["tool_calling_system"]
+
+        add_session_metadata(
+            operation_type="prompt_version_access",
+            prompt_type="tool_calling_system",
+            requested_version=version,
+            effective_version=effective_version,
+            prompt_length=len(prompt),
+            is_default_version=version is None,
+            is_env_override=False,
+            prompt_date=PROMPT_VERSION_DATE
+        )
+
+        return prompt
 
     @staticmethod
+    @weave.op()
     def get_general_prompt_template() -> str:
         """Get the template for general queries with history and context."""
+        from app.utils.weave_utils import add_session_metadata
+
+        add_session_metadata(
+            operation_type="prompt_template_access",
+            template_type="general_prompt_template",
+            template_version="1.3.0",
+            has_section_markers=True,
+            template_length=len(GENERAL_PROMPT_TEMPLATE)
+        )
         return GENERAL_PROMPT_TEMPLATE
 
     @staticmethod
+    @weave.op()
     def get_combined_context_template() -> str:
         """Get the template for combining course and context information."""
+        from app.utils.weave_utils import add_session_metadata
+
+        add_session_metadata(
+            operation_type="prompt_template_access",
+            template_type="combined_context_template",
+            template_version="1.3.0",
+            has_section_markers=True,
+            template_length=len(COMBINED_CONTEXT_TEMPLATE)
+        )
         return COMBINED_CONTEXT_TEMPLATE
 
     @staticmethod
+    @weave.op()
     def get_history_template() -> str:
         """Get the template for formatting conversation history."""
+        from app.utils.weave_utils import add_session_metadata
+
+        add_session_metadata(
+            operation_type="prompt_template_access",
+            template_type="history_template",
+            template_version="1.3.0",
+            has_section_markers=True,
+            template_length=len(HISTORY_TEMPLATE)
+        )
         return HISTORY_TEMPLATE
+
+    @staticmethod
+    @weave.op()
+    def get_enhanced_prompt_template() -> str:
+        """Get the enhanced template for general queries with section markers (v1.3.0+)."""
+        from app.utils.weave_utils import add_session_metadata
+
+        add_session_metadata(
+            operation_type="enhanced_prompt_template_access",
+            template_type="enhanced_prompt_template",
+            template_version="1.3.0",
+            has_section_markers=True,
+            enhanced_features=True,
+            template_length=len(ENHANCED_PROMPT_TEMPLATE)
+        )
+        return ENHANCED_PROMPT_TEMPLATE
+
+    @staticmethod
+    @weave.op()
+    def get_enhanced_combined_context_template() -> str:
+        """Get the enhanced template for combining course and context with section markers (v1.3.0+)."""
+        from app.utils.weave_utils import add_session_metadata
+
+        add_session_metadata(
+            operation_type="enhanced_prompt_template_access",
+            template_type="enhanced_combined_context_template",
+            template_version="1.3.0",
+            has_section_markers=True,
+            enhanced_features=True,
+            template_length=len(ENHANCED_COMBINED_CONTEXT_TEMPLATE)
+        )
+        return ENHANCED_COMBINED_CONTEXT_TEMPLATE
 
     @staticmethod
     def get_legacy_system_prompt() -> str:

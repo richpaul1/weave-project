@@ -16,7 +16,7 @@ from app.services.llm_service import LLMService
 from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.utils.weave_utils import add_session_metadata
-from app.config.prompts import PromptConfig
+from app.prompts import PromptConfig
 
 
 class EnhancedRAGService:
@@ -641,14 +641,19 @@ Please provide a helpful and accurate answer based on the context provided."""
         Returns:
             Cleaned response without thinking tags
         """
-        # Remove thinking tags if they exist
-        if "<think>" in response and "</think>" in response:
-            think_start = response.find("<think>")
-            think_end = response.find("</think>") + 8
-            response = response[:think_start] + response[think_end:]
+        import re
+
+        # Remove thinking tags using regex to handle multiple blocks
+        response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+
+        # Remove "Answer:" prefix if present
+        if response.startswith("Answer:"):
+            response = response[7:].strip()
 
         # Remove leading/trailing whitespace
         response = response.strip()
+
+        return response
 
     async def _process_learning_query_streaming(
         self,

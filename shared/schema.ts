@@ -106,13 +106,9 @@ export interface GraphEdge {
  */
 export const CONTENT_NODE_TYPES: Record<string, { color: string }> = {
   page: { color: '#3B82F6' },        // Blue
-  video: { color: '#EF4444' },       // Red
-  transcript: { color: '#F59E0B' },  // Amber
   chunk: { color: '#6B7280' },       // Gray
-  entity: { color: '#8B5CF6' },      // Violet
-  topic: { color: '#EC4899' },       // Pink
+  coursechunk: { color: '#F97316' },  // Orange
   course: { color: '#06B6D4' },      // Cyan
-  coursechunk: { color: '#F97316' }, // Orange
   setting: { color: '#10B981' },     // Green
   chatmessage: { color: '#A855F7' }, // Purple
 };
@@ -127,16 +123,12 @@ export function normalizeToContentNodeType(type: string): ContentNodeType {
 
   // Direct matches
   if (lowerType === 'page') return 'page';
-  if (lowerType === 'video') return 'video';
-  if (lowerType === 'transcript' || lowerType === 'transcript_chunk') return 'transcript';
   if (lowerType === 'chunk' || lowerType === 'text_chunk') return 'chunk';
-  if (lowerType === 'entity') return 'entity';
-  if (lowerType === 'topic') return 'topic';
-  if (lowerType === 'course') return 'course';
   if (lowerType === 'coursechunk' || lowerType === 'course_chunk') return 'coursechunk';
+  if (lowerType === 'course') return 'course';
   if (lowerType === 'setting') return 'setting';
   if (lowerType === 'chatmessage' || lowerType === 'chat_message') return 'chatmessage';
 
-  // Default to entity for unknown types
-  return 'entity';
+  // Default to chunk for unknown types
+  return 'chunk';
 }
