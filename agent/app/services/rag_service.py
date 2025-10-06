@@ -101,6 +101,7 @@ class RAGService:
 
         result = {
             "response": response_text,
+            "context": context_result["context_text"],  # Add context for hallucination detection
             "sources": context_result["sources"],
             "metadata": {
                 "session_id": session_id,
@@ -108,7 +109,8 @@ class RAGService:
                 "num_sources": context_result["num_sources"],
                 "model": completion["model"],
                 "tokens": completion["tokens"],
-                "provider": completion["provider"]
+                "provider": completion["provider"],
+                "context": context_result["context_text"]  # Also add to metadata for backward compatibility
             }
         }
 
