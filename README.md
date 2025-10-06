@@ -78,6 +78,8 @@ project/
 │
 ├── evaluations/            # Evaluation Tests
 │
+├── rl/                    # Reinforcement Learning Experiments
+│
 ├── shared/                 # Shared types and schemas
 │   └── schema.ts
 │

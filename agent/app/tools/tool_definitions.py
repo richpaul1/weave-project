@@ -167,13 +167,39 @@ COURSE_COMPARISON_TOOL = ToolDefinition(
     ]
 )
 
+IMAGE_SEARCH_TOOL = ToolDefinition(
+    name="search_images",
+    description="Search for relevant images to accompany text responses. Use when the response would benefit from visual aids, diagrams, screenshots, or illustrations.",
+    parameters=[
+        ToolParameter(
+            name="query",
+            type="string",
+            description="Search query for finding relevant images (e.g., 'weave dashboard screenshot', 'machine learning diagram')"
+        ),
+        ToolParameter(
+            name="image_type",
+            type="string",
+            description="Type of image needed",
+            required=False,
+            enum=["screenshot", "diagram", "chart", "illustration", "photo", "icon"]
+        ),
+        ToolParameter(
+            name="context",
+            type="string",
+            description="Context of where the image will be used to ensure relevance",
+            required=False
+        )
+    ]
+)
+
 # Registry of all available tools
 AVAILABLE_TOOLS = {
     "search_courses": COURSE_SEARCH_TOOL,
     "search_knowledge": GENERAL_SEARCH_TOOL,
     "recommend_learning_path": COURSE_RECOMMENDATION_TOOL,
     "assess_skill_level": SKILL_ASSESSMENT_TOOL,
-    "compare_courses": COURSE_COMPARISON_TOOL
+    "compare_courses": COURSE_COMPARISON_TOOL,
+    "search_images": IMAGE_SEARCH_TOOL
 }
 
 
