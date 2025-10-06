@@ -4,12 +4,41 @@ Neo4j Storage Service for RAG Pipeline
 Handles reading content from Neo4j database populated by admin backend.
 All methods are decorated with @weave.op() for observability.
 """
+from __future__ import annotations
 from typing import List, Dict, Any, Optional
+from concurrent.futures import Future
 from neo4j import GraphDatabase, Driver, Session
 from neo4j.time import DateTime
 from datetime import datetime
 import uuid
 import weave
+import sys
+import importlib
+
+# Make Future available globally to resolve forward reference issues
+globals()['Future'] = Future
+import typing
+typing.Future = Future
+if hasattr(typing, '__dict__'):
+    typing.__dict__['Future'] = Future
+weave.Future = Future
+if hasattr(weave, '__dict__'):
+    weave.__dict__['Future'] = Future
+if 'typing' in sys.modules:
+    sys.modules['typing'].Future = Future
+
+from weave.scorers import WeaveContextRelevanceScorerV1
+
+# Patch the module where WeaveContextRelevanceScorerV1 is defined
+try:
+    scorer_module_name = WeaveContextRelevanceScorerV1.__module__
+    scorer_mod = sys.modules.get(scorer_module_name) or importlib.import_module(scorer_module_name)
+    setattr(scorer_mod, 'Future', Future)
+    if hasattr(scorer_mod, '__dict__'):
+        scorer_mod.__dict__['Future'] = Future
+except Exception as e:
+    print(f"⚠️ Could not patch WeaveContextRelevanceScorerV1 module: {e}")
+
 import os
 import aiofiles
 from pathlib import Path
@@ -28,6 +57,13 @@ class StorageService:
         """Initialize Neo4j connection"""
         self.driver: Optional[Driver] = None
         self.database = NEO4J_DB_NAME
+        # Initialize context relevance scorer for evaluating AI responses
+        # Rebuild the model to resolve forward references
+        try:
+            WeaveContextRelevanceScorerV1.model_rebuild()
+        except Exception as e:
+            print(f"⚠️ WeaveContextRelevanceScorerV1 rebuild warning: {e}")
+        self.context_relevance_scorer = WeaveContextRelevanceScorerV1()
 
     def _convert_neo4j_datetime(self, dt) -> str:
         """Convert Neo4j datetime object to ISO string"""
@@ -604,13 +640,53 @@ class StorageService:
     @weave.op()
     def finalAIResponse(self,
                    user_message: str,
-                   ai_response: str ) -> str:
+                   ai_response: str ) -> Dict[str, Any]:
         """
-        Special method to save AI response and return the response text for Weave trace capture.
+        Special method to evaluate AI response relevance and return the score for Weave trace capture.
 
-        This method is specifically designed to capture the final AI response in Weave traces
+        This method uses WeaveContextRelevanceScorerV1 to score whether the AI response
+        is relevant to the user's query.
+
+        Args:
+            user_message: The original user query
+            ai_response: The AI-generated response
+
+        Returns:
+            Dictionary containing relevance score and evaluation details
         """
-        return "ok"
+        print(f"🎯 Evaluating response relevance...")
+        print(f"   Query: '{user_message[:100]}...'")
+        print(f"   Response: '{ai_response[:100]}...'")
+
+        # Score the response relevance using Weave's context relevance scorer
+        scorer_result = self.context_relevance_scorer.score(
+            query=user_message,
+            output=ai_response
+        )
+
+        # Convert WeaveScorerResult to dict for easier access
+        # The result object has attributes like 'passed' and can be converted to dict
+        result_dict = dict(scorer_result) if hasattr(scorer_result, '__iter__') else {}
+        passed = getattr(scorer_result, 'passed', False)
+
+        print(f"✅ Relevance evaluation complete:")
+        print(f"   Passed: {passed}")
+        print(f"   Full result: {scorer_result}")
+
+        # Add relevance metadata for Weave tracking
+        add_session_metadata(
+            operation_type="response_relevance_scoring",
+            relevance_passed=passed,
+            query_length=len(user_message),
+            response_length=len(ai_response)
+        )
+
+        return {
+            "status": "ok",
+            "relevance_evaluation": result_dict,
+            "scorer_result": str(scorer_result),
+            "passed": passed
+        }
 
     @weave.op()
     def delete_all_chat_messages(self) -> int:
