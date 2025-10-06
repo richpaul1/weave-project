@@ -114,19 +114,20 @@ export class MultiRoundOptimizationService {
       globalTargetScore: config.globalTargetScore
     });
 
-    try {
-      const sessionId = `multi_round_${jobId}_${Date.now()}`;
-      const startTime = Date.now();
+    const sessionId = `multi_round_${jobId}_${Date.now()}`;
+    const startTime = Date.now();
 
-      const session: MultiRoundSession = {
-        sessionId,
-        jobId,
-        rounds: [],
-        globalBestScore: 0,
-        totalIterations: 0,
-        totalExecutionTime: 0,
-        status: 'running'
-      };
+    const session: MultiRoundSession = {
+      sessionId,
+      jobId,
+      rounds: [],
+      globalBestScore: 0,
+      totalIterations: 0,
+      totalExecutionTime: 0,
+      status: 'running'
+    };
+
+    try {
 
       await this.weave.logEvent('multi_round_session_started', {
         sessionId,

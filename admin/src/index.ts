@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import * as weave from 'weave';
 import { config } from './config.js';
 import { WeaveService } from './weave/weaveService.js';
 import { StorageService } from './services/storageService.js';
@@ -128,7 +129,16 @@ async function startServer() {
       console.log(`✅ Content storage directory exists: ${contentStoragePath}`);
     }
 
-    // Initialize WeaveService singleton and Weave
+    // Initialize official Weave SDK first
+    console.log('Initializing official Weave SDK...');
+    try {
+        await weave.init(config.weaveProjectName);
+        console.log('✅ Official Weave SDK initialized');
+    } catch (error) {
+        console.warn('⚠️ Official Weave SDK initialization failed:', error instanceof Error ? error.message : String(error));
+    }
+
+    // Initialize WeaveService singleton
     console.log('Initializing WeaveService...');
     const weaveService = new WeaveService();
     try {

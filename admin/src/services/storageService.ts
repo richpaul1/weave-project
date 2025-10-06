@@ -2,8 +2,9 @@ import neo4j, { Driver, Session } from 'neo4j-driver';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import * as weave from 'weave';
 import { config } from '../config.js';
-import { weaveOp, WeaveService } from '../weave/weaveService.js';
+import { WeaveService } from '../weave/weaveService.js';
 import { chunkMarkdown, type TextChunk } from '../utils/textChunking.js';
 import { llmService } from './llmService.js';
 
@@ -59,6 +60,11 @@ export class StorageService {
   private static driver: Driver | null = null;
   private driver: Driver;
 
+  // Weave-wrapped methods (will be set up in constructor)
+  public initializeSchema!: () => Promise<void>;
+  public saveCompletePage!: (url: string, title: string, markdown: string, crawlDepth: number) => Promise<PageMetadata>;
+  public getAllPages!: () => Promise<PageMetadata[]>;
+
   private constructor() {
     if (StorageService.driver) {
       this.driver = StorageService.driver;
@@ -82,6 +88,21 @@ export class StorageService {
       console.error('❌ Failed to initialize Neo4j driver:', error);
       throw error;
     }
+
+    // Set up weave operations with proper binding
+    const self = this;
+
+    this.initializeSchema = weave.op(async function initializeSchema() {
+      return await self._initializeSchemaImpl();
+    }, { name: 'StorageService.initializeSchema' });
+
+    this.saveCompletePage = weave.op(async function saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number) {
+      return await self._saveCompletePageImpl(url, title, markdown, crawlDepth);
+    }, { name: 'StorageService.saveCompletePage' });
+
+    this.getAllPages = weave.op(async function getAllPages() {
+      return await self._getAllPagesImpl();
+    }, { name: 'StorageService.getAllPages' });
   }
 
   /**
@@ -122,10 +143,9 @@ export class StorageService {
   }
 
   /**
-   * Initialize database schema
+   * Implementation of initializeSchema - Initialize database schema
    */
-  @weaveOp('StorageService.initializeSchema')
-  async initializeSchema(): Promise<void> {
+  async _initializeSchemaImpl(): Promise<void> {
     if (!this.driver) {
       throw new Error('Neo4j driver not initialized');
     }
@@ -424,10 +444,10 @@ export class StorageService {
   }
 
   /**
-   * Save complete page (Neo4j + file system) with chunks
+   * Implementation of saveCompletePage - Save complete page (Neo4j + file system) with chunks
    */
-  
-  async saveCompletePage(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
+
+  async _saveCompletePageImpl(url: string, title: string, markdown: string, crawlDepth: number): Promise<PageMetadata> {
     const session = this.getSession();
 
     try {
@@ -590,10 +610,9 @@ export class StorageService {
   }
 
   /**
-   * Get all pages
+   * Implementation of getAllPages - Get all pages
    */
-  @weaveOp('StorageService.getAllPages')
-  async getAllPages(): Promise<PageMetadata[]> {
+  async _getAllPagesImpl(): Promise<PageMetadata[]> {
     const session = this.getSession();
 
     try {

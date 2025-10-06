@@ -4,8 +4,8 @@ import { CONTENT_NODE_TYPES, normalizeToContentNodeType } from '../../../shared/
 describe('Graph Node Types', () => {
   describe('CONTENT_NODE_TYPES', () => {
     it('should include all expected node types', () => {
-      const expectedTypes = ['page', 'video', 'transcript', 'chunk', 'entity', 'topic', 'course'];
-      
+      const expectedTypes = ['page', 'video', 'transcript', 'chunk', 'entity', 'topic', 'course', 'coursechunk', 'setting', 'chatmessage'];
+
       for (const type of expectedTypes) {
         expect(CONTENT_NODE_TYPES).toHaveProperty(type);
         expect(CONTENT_NODE_TYPES[type]).toHaveProperty('color');
@@ -42,6 +42,9 @@ describe('Graph Node Types', () => {
       expect(normalizeToContentNodeType('entity')).toBe('entity');
       expect(normalizeToContentNodeType('topic')).toBe('topic');
       expect(normalizeToContentNodeType('course')).toBe('course');
+      expect(normalizeToContentNodeType('coursechunk')).toBe('coursechunk');
+      expect(normalizeToContentNodeType('setting')).toBe('setting');
+      expect(normalizeToContentNodeType('chatmessage')).toBe('chatmessage');
     });
 
     it('should handle case insensitive input', () => {
@@ -52,6 +55,9 @@ describe('Graph Node Types', () => {
       expect(normalizeToContentNodeType('ENTITY')).toBe('entity');
       expect(normalizeToContentNodeType('Topic')).toBe('topic');
       expect(normalizeToContentNodeType('COURSE')).toBe('course');
+      expect(normalizeToContentNodeType('CourseChunk')).toBe('coursechunk');
+      expect(normalizeToContentNodeType('SETTING')).toBe('setting');
+      expect(normalizeToContentNodeType('ChatMessage')).toBe('chatmessage');
     });
 
     it('should default to entity for unknown types', () => {

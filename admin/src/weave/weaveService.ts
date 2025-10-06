@@ -300,25 +300,47 @@ export class WeaveService {
     }
 
     /**
-     * Test W&B API connectivity
+     * Test W&B API connectivity using GraphQL
      */
     private async testApiConnectivity(): Promise<void> {
-        const testUrl = 'https://api.wandb.ai/api/v1/viewer';
+        const testUrl = 'https://api.wandb.ai/graphql';
+
+        // Use the correct authentication method (Basic Auth with api:key format)
+        const authHeader = `Basic ${Buffer.from(`api:${this.apiKey}`).toString('base64')}`;
+
+        const query = {
+            query: `
+                query {
+                    viewer {
+                        id
+                        username
+                        entity
+                    }
+                }
+            `
+        };
 
         try {
             const response = await fetch(testUrl, {
-                method: 'GET',
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Authorization': authHeader,
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify(query)
             });
 
             if (response.ok) {
-                const data = await response.json();
-                console.log(`🔗 W&B API connected successfully - User: ${data.entity || 'unknown'}`);
+                const data = await response.json() as any;
+                if (data.data && data.data.viewer) {
+                    const user = data.data.viewer;
+                    console.log(`🔗 W&B API connected successfully - User: ${user.username} (${user.entity})`);
+                } else {
+                    throw new Error(`GraphQL query failed: ${JSON.stringify(data)}`);
+                }
             } else {
-                throw new Error(`API test failed: ${response.status} ${response.statusText}`);
+                const errorText = await response.text();
+                throw new Error(`API test failed: ${response.status} ${response.statusText} - ${errorText}`);
             }
         } catch (error) {
             console.error('🔗 W&B API connectivity test failed:', error);

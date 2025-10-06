@@ -3,7 +3,8 @@
  * Handles embedding generation for pages and chunks
  */
 
-import { weaveOp, WeaveService } from '../weave/weaveService.js';
+import * as weave from 'weave';
+import { WeaveService } from '../weave/weaveService.js';
 import { config } from '../config.js';
 
 export interface EmbeddingResponse {
@@ -19,6 +20,11 @@ export class LLMService {
   private baseUrl: string;
   private embeddingModel: string;
 
+  // Weave-wrapped methods (will be set up in constructor)
+  public generateEmbedding!: (text: string) => Promise<number[]>;
+  public generateCompletion!: (prompt: string, systemPrompt?: string, model?: string, maxTokens?: number, temperature?: number) => Promise<string>;
+  public generateCompletionNoThinking!: (prompt: string, systemPrompt?: string, model?: string, maxTokens?: number, temperature?: number) => Promise<string>;
+
   constructor() {
     this.baseUrl = config.ollamaBaseUrl;
     this.embeddingModel = config.ollamaEmbeddingModel;
@@ -30,14 +36,36 @@ export class LLMService {
     } else if (!this.embeddingModel) {
       console.warn('Warning: OLLAMA_EMBEDDING_MODEL not configured. Embedding generation will fail.');
     }
+
+    // Set up weave operations with proper binding
+    const self = this;
+
+    this.generateEmbedding = weave.op(async function generateEmbedding(text: string) {
+      return await self._generateEmbeddingImpl(text);
+    }, { name: 'LLMService.generateEmbedding' });
+
+    this.generateCompletion = weave.op(async function generateCompletion(prompt: string, systemPrompt?: string, model?: string, maxTokens?: number, temperature?: number) {
+      return await self._generateCompletionImpl(prompt, systemPrompt, model, maxTokens, temperature);
+    }, { name: 'LLMService.generateCompletion' });
+
+    this.generateCompletionNoThinking = weave.op(async function generateCompletionNoThinking(prompt: string, systemPrompt?: string, model?: string, maxTokens?: number, temperature?: number) {
+      return await self._generateCompletionNoThinkingImpl(prompt, systemPrompt, model, maxTokens, temperature);
+    }, { name: 'LLMService.generateCompletionNoThinking' });
   }
 
   /**
-   * Generate embedding for text using Ollama
+   * Implementation of generateEmbedding - Generate embedding for text using Ollama
    */
-  @weaveOp('LLMService.generateEmbedding')
-  async generateEmbedding(text: string): Promise<number[]> {
-    if (!text || text.trim().length === 0) {
+  async _generateEmbeddingImpl(text: string): Promise<number[]> {
+    // Validate input type and convert to string if needed
+    if (text === null || text === undefined) {
+      throw new Error('Text cannot be empty');
+    }
+
+    // Ensure text is a string
+    const textStr = typeof text === 'string' ? text : String(text);
+
+    if (!textStr || textStr.trim().length === 0) {
       throw new Error('Text cannot be empty');
     }
 
@@ -61,7 +89,7 @@ export class LLMService {
         },
         body: JSON.stringify({
           model: this.embeddingModel,
-          prompt: text,
+          prompt: textStr,
         }),
       });
 
@@ -77,7 +105,7 @@ export class LLMService {
 
       WeaveService.getInstance()?.logEvent('embedding_generated', {
         model: this.embeddingModel,
-        textLength: text.length,
+        textLength: textStr.length,
         embeddingDimensions: data.embedding.length,
       });
 
@@ -95,7 +123,6 @@ export class LLMService {
   /**
    * Generate embeddings for multiple texts in batch
    */
-  @weaveOp('LLMService.generateEmbeddingsBatch')
   async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
     const embeddings: number[][] = [];
     
@@ -116,7 +143,6 @@ export class LLMService {
   /**
    * Test connection to Ollama service
    */
-  @weaveOp('LLMService.testConnection')
   async testConnection(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`);
@@ -129,7 +155,6 @@ export class LLMService {
   /**
    * Get available models from Ollama
    */
-  @weaveOp('LLMService.getAvailableModels')
   async getAvailableModels(): Promise<string[]> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`);
@@ -151,7 +176,6 @@ export class LLMService {
   /**
    * Validate that the configured embedding model is available
    */
-  @weaveOp('LLMService.validateEmbeddingModel')
   async validateEmbeddingModel(): Promise<boolean> {
     try {
       const models = await this.getAvailableModels();
@@ -174,17 +198,24 @@ export class LLMService {
   }
 
   /**
-   * Generate text completion using Ollama (with thinking enabled)
+   * Implementation of generateCompletion - Generate text completion using Ollama (with thinking enabled)
    */
-  @weaveOp('LLMService.generateCompletion')
-  async generateCompletion(
+  async _generateCompletionImpl(
     prompt: string,
     systemPrompt?: string,
     model: string = 'qwen3:0.6b',
     maxTokens: number = 1000,
     temperature: number = 0.1
   ): Promise<string> {
-    if (!prompt || prompt.trim().length === 0) {
+    // Validate input type and convert to string if needed
+    if (prompt === null || prompt === undefined) {
+      throw new Error('Prompt cannot be empty');
+    }
+
+    // Ensure prompt is a string
+    const promptStr = typeof prompt === 'string' ? prompt : String(prompt);
+
+    if (!promptStr || promptStr.trim().length === 0) {
       throw new Error('Prompt cannot be empty');
     }
 
@@ -201,7 +232,7 @@ export class LLMService {
         messages.push({ role: 'system', content: systemPrompt });
       }
 
-      messages.push({ role: 'user', content: prompt });
+      messages.push({ role: 'user', content: promptStr });
 
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
@@ -231,7 +262,7 @@ export class LLMService {
 
       WeaveService.getInstance()?.logEvent('completion_generated', {
         model,
-        promptLength: prompt.length,
+        promptLength: promptStr.length,
         responseLength: data.message.content.length,
         tokens: data.eval_count || 0,
       });
@@ -247,10 +278,9 @@ export class LLMService {
   }
 
   /**
-   * Generate text completion using Ollama (with thinking disabled)
+   * Implementation of generateCompletionNoThinking - Generate text completion using Ollama (with thinking disabled)
    */
-  @weaveOp('LLMService.generateCompletionNoThinking')
-  async generateCompletionNoThinking(
+  async _generateCompletionNoThinkingImpl(
     prompt: string,
     systemPrompt?: string,
     model: string = 'qwen3:0.6b',
@@ -308,7 +338,6 @@ export class LLMService {
   /**
    * Generate clean course markdown from raw content
    */
-  @weaveOp('LLMService.generateCourseMarkdown')
   async generateCourseMarkdown(rawMarkdown: string, courseUrl: string): Promise<string> {
     const prompt = `Create a clean markdown summary for this course. Extract the course title and write a 1-2 sentence description of what the course teaches. Keep it simple and focused.
 

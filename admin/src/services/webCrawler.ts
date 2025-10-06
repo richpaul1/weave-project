@@ -2,7 +2,8 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 import TurndownService from 'turndown';
-import { weaveOp, WeaveService } from '../weave/weaveService.js';
+import * as weave from 'weave';
+import { WeaveService } from '../weave/weaveService.js';
 import { llmService } from './llmService.js';
 import { config } from '../config.js';
 
@@ -75,12 +76,48 @@ export class WebCrawler {
   private progressCallback?: (progress: CrawlProgress) => void;
   private currentBaseUrl?: string;
 
+  // Weave-wrapped methods (will be set up in constructor)
+  public fetchPage!: (url: string) => Promise<{ html: string; $: cheerio.CheerioAPI }>;
+  public processPage!: (url: string, depth: number) => Promise<CrawlResult>;
+  public crawl!: (startUrl: string, maxDepth?: number) => Promise<CrawlResult[]>;
+  public extractMainContent!: ($: cheerio.CheerioAPI, url?: string) => Promise<string>;
+  public extractCourseContentWithLLM!: ($: cheerio.CheerioAPI, url: string) => Promise<string>;
+  public htmlToMarkdown!: (html: string, baseUrl?: string) => string;
+
   constructor() {
     this.turndownService = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
     });
     this.setupTurndownRules();
+
+    // Set up weave operations with proper binding
+    const self = this;
+
+    // ✅ CORRECT: Named wrapper functions following the tutorial pattern
+    this.fetchPage = weave.op(async function fetchPage(url: string) {
+      return await self._fetchPageImpl(url);
+    }, { name: 'WebCrawler.fetchPage' });
+
+    this.processPage = weave.op(async function processPage(url: string, depth: number) {
+      return await self._processPageImpl(url, depth);
+    }, { name: 'WebCrawler.processPage' });
+
+    this.crawl = weave.op(async function crawl(startUrl: string, maxDepth: number = 2) {
+      return await self._crawlImpl(startUrl, maxDepth);
+    }, { name: 'WebCrawler.crawl' });
+
+    this.extractMainContent = weave.op(async function extractMainContent($: cheerio.CheerioAPI, url?: string) {
+      return await self._extractMainContentImpl($, url);
+    }, { name: 'WebCrawler.extractMainContent' });
+
+    this.extractCourseContentWithLLM = weave.op(async function extractCourseContentWithLLM($: cheerio.CheerioAPI, url: string) {
+      return await self._extractCourseContentWithLLMImpl($, url);
+    }, { name: 'WebCrawler.extractCourseContentWithLLM' });
+
+    this.htmlToMarkdown = weave.op(function htmlToMarkdown(html: string, baseUrl?: string) {
+      return self._htmlToMarkdownImpl(html, baseUrl);
+    }, { name: 'WebCrawler.htmlToMarkdown' });
   }
 
   /**
@@ -129,10 +166,9 @@ export class WebCrawler {
   }
 
   /**
-   * Fetch and parse a single page
+   * Implementation of fetchPage - Fetch and parse a single page
    */
-  @weaveOp('WebCrawler.fetchPage')
-  async fetchPage(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
+  async _fetchPageImpl(url: string): Promise<{ html: string; $: cheerio.CheerioAPI }> {
     WeaveService.getInstance()?.logEvent('fetch_page_start', { url });
     const startTime = Date.now();
 
@@ -157,9 +193,9 @@ export class WebCrawler {
   }
 
   /**
-   * Extract main content from page
+   * Implementation of extractMainContent - Extract main content from page
    */
-  async extractMainContent($: cheerio.CheerioAPI, url?: string): Promise<string> {
+  async _extractMainContentImpl($: cheerio.CheerioAPI, url?: string): Promise<string> {
     // Special handling for W&B course pages
     if (url && url.includes('wandb.ai/site/courses/') && !url.endsWith('/courses/')) {
       if (config.useLLMForCourseExtraction) {
@@ -207,9 +243,9 @@ export class WebCrawler {
   }
 
   /**
-   * Extract course-specific content from W&B course pages using LLM for clean descriptions
+   * Implementation of extractCourseContentWithLLM - Extract course-specific content from W&B course pages using LLM for clean descriptions
    */
-  private async extractCourseContentWithLLM($: cheerio.CheerioAPI, url?: string): Promise<string> {
+  private async _extractCourseContentWithLLMImpl($: cheerio.CheerioAPI, url?: string): Promise<string> {
     const rawMarkdown = this.extractRawCourseContent($);
 
     if (url) {
@@ -411,9 +447,9 @@ export class WebCrawler {
   }
 
   /**
-   * Convert HTML to Markdown
+   * Implementation of htmlToMarkdown - Convert HTML to Markdown
    */
-  htmlToMarkdown(html: string, baseUrl?: string): string {
+  _htmlToMarkdownImpl(html: string, baseUrl?: string): string {
     // Set the base URL for use in TurndownService rules
     this.currentBaseUrl = baseUrl;
 
@@ -428,10 +464,9 @@ export class WebCrawler {
   }
 
   /**
-   * Process a single page
+   * Implementation of processPage - Process a single page
    */
-  @weaveOp('WebCrawler.processPage')
-  async processPage(url: string, depth: number): Promise<CrawlResult> {
+  async _processPageImpl(url: string, depth: number): Promise<CrawlResult> {
     WeaveService.getInstance()?.logEvent('process_page_start', { url, depth });
 
     const { html, $ } = await this.fetchPage(url);
@@ -442,13 +477,29 @@ export class WebCrawler {
     // Extract main content (pass URL for course-specific handling)
     const mainContent = await this.extractMainContent($, url);
 
+    // Ensure mainContent is always a string
+    const mainContentStr = typeof mainContent === 'string' ? mainContent : String(mainContent || '');
+
     // For course pages, the content is already markdown from LLM
     // For other pages, convert HTML to markdown
     let markdown: string;
     if (url && url.includes('wandb.ai/site/courses/') && !url.endsWith('/courses/')) {
-      markdown = mainContent; // Already markdown from LLM
+      markdown = mainContentStr; // Already markdown from LLM
     } else {
-      markdown = this.htmlToMarkdown(mainContent, url); // Convert HTML to markdown
+      const markdownResult = this.htmlToMarkdown(mainContentStr, url); // Convert HTML to markdown
+      // Handle case where weave.op might return a Promise
+      if (markdownResult && typeof (markdownResult as any).then === 'function') {
+        // If it's a Promise, await it
+        markdown = await (markdownResult as any);
+      } else {
+        markdown = markdownResult as string;
+      }
+    }
+
+    // Ensure markdown is always a string
+    if (typeof markdown !== 'string') {
+      console.warn(`[WebCrawler] markdown is not a string for ${url}, got:`, typeof markdown, markdown);
+      markdown = markdown ? String(markdown) : '';
     }
 
     // Extract links
@@ -472,10 +523,9 @@ export class WebCrawler {
   }
 
   /**
-   * Crawl website with breadth-first search
+   * Implementation of crawl - Crawl website with breadth-first search
    */
-  @weaveOp('WebCrawler.crawl')
-  async crawl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
+  async _crawlImpl(startUrl: string, maxDepth: number = 2): Promise<CrawlResult[]> {
     WeaveService.getInstance()?.logEvent('crawl_start', { startUrl, maxDepth });
     const startTime = Date.now();
 

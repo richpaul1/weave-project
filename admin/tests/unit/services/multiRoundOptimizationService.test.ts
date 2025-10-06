@@ -5,11 +5,24 @@ import type {
   MultiRoundConfig
 } from '../../../src/models/promptOptimizationEnhanced.js';
 
+// Mock Weave
+const mockWeave = {
+  op: vi.fn((fn: Function, name: string) => fn),
+  createChildTrace: vi.fn((name: string, fn: Function) => fn()),
+  logEvent: vi.fn(),
+  createTrace: vi.fn(),
+  startTrace: vi.fn().mockReturnValue('mock-trace-id'),
+  endTrace: vi.fn(),
+  logMetric: vi.fn(),
+  logMetrics: vi.fn()
+};
+
 describe('MultiRoundOptimizationService', () => {
   let service: MultiRoundOptimizationService;
 
   beforeEach(() => {
-    service = new MultiRoundOptimizationService();
+    vi.clearAllMocks();
+    service = new MultiRoundOptimizationService(mockWeave);
   });
 
   describe('createMultiRoundStrategy', () => {
