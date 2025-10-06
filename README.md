@@ -350,6 +350,27 @@ Once the basic test is working:
 
 ---
 
+## 🔍 RL Custom Model
+This project includes a complete reinforcement learning pipeline for training multimodal agents that can return both text and images when appropriate. The RL system uses OpenPipe for fine-tuning models and Weave for comprehensive tracking and evaluation.
+
+**Key Features:**
+- ✅ **Trained Model**: `openpipe:multimodal-agent-v1` (Qwen2.5-1.5B-Instruct)
+- ✅ **Training Data**: 103 high-quality text-image pairs extracted from documentation
+- ✅ **Evaluation Framework**: Automated scoring system with 86.7% accuracy
+- ✅ **Production Ready**: Complete testing suite with 6 test scripts
+- ✅ **Weave Integration**: Full observability and tracking at [wandb.ai/richpaul1-stealth/rl-demo](https://wandb.ai/richpaul1-stealth/rl-demo)
+
+The RL pipeline demonstrates how to:
+1. Extract training data from documentation
+2. Convert to OpenPipe format for fine-tuning
+3. Train custom models via OpenPipe web platform
+4. Evaluate model performance with automated metrics
+5. Track all experiments in Weave for reproducibility
+
+**For detailed instructions, training guides, and testing procedures, see [rl/README.md](rl/README.md)**
+
+
+---
 ## 🔍 Weave Instrumentation
 
 This project demonstrates comprehensive Weave instrumentation across both backends:
