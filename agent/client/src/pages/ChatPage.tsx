@@ -19,6 +19,7 @@ import { openWeaveUI, getWeaveConfig, type WeaveConfig } from "@/lib/weave";
 interface StreamingMessage extends ChatMessage {
   isStreaming?: boolean;
   isThinkingComplete?: boolean;
+  thinkingBlocks?: { [blockNumber: number]: string };
 }
 
 export default function ChatPage() {
@@ -36,24 +37,49 @@ export default function ChatPage() {
   const currentResponseRef = useRef<string>("");
   const currentThinkingRef = useRef<string>("");
 
-  // Fetch chat history
+  // Log component mount and session changes
+  useEffect(() => {
+    console.log('🏗️ [COMPONENT] ChatPage mounted/session changed');
+    console.log('🆔 [COMPONENT] Session ID:', sessionId);
+    console.log('📊 [COMPONENT] Initial state - streaming:', isStreaming, 'messages:', streamingMessages.length);
+
+    return () => {
+      console.log('🏗️ [COMPONENT] ChatPage unmounting or session changing');
+    };
+  }, [sessionId]);
+
+  // Log streaming state changes
+  useEffect(() => {
+    console.log('🌊 [STREAMING STATE] isStreaming changed to:', isStreaming);
+  }, [isStreaming]);
+
+  // Track if we've loaded initial chat history
+  const [hasLoadedInitialHistory, setHasLoadedInitialHistory] = useState(false);
+
+  // Fetch chat history ONLY on initial page load/refresh
   const { data: chatHistory = [], isLoading } = useQuery<ChatMessage[]>({
     queryKey: [`/api/chat/messages/${sessionId}`],
     queryFn: async () => {
       try {
-        console.log('🔍 Fetching chat history for session:', sessionId);
+        console.log('🔍 [CHAT HISTORY] Fetching initial chat history for session:', sessionId);
         const response = await apiRequest('GET', `/api/chat/messages/${sessionId}`);
-        console.log('📨 Chat history fetched:', response);
+        console.log('📨 [CHAT HISTORY] Initial chat history fetched:', response?.length, 'messages');
+        console.log('📊 [CHAT HISTORY] Full response:', response);
+
+        setHasLoadedInitialHistory(true);
         return response || [];
       } catch (error) {
-        console.error('❌ Error fetching chat history:', error);
+        console.error('❌ [CHAT HISTORY] Error fetching initial chat history:', error);
+        setHasLoadedInitialHistory(true);
         return [];
       }
     },
-    enabled: !!sessionId,
+    enabled: !!sessionId && !hasLoadedInitialHistory,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    refetchOnMount: false, // Only fetch once
     refetchOnReconnect: false,
+    refetchInterval: false, // Never automatically refetch
+    staleTime: Infinity, // Consider data always fresh
   });
 
   // Load Weave configuration on mount
@@ -93,12 +119,21 @@ export default function ChatPage() {
 
   // Log chat history changes
   useEffect(() => {
-    console.log('📚 Chat history loaded:', chatHistory);
+    console.log('📚 [CHAT HISTORY] Chat history loaded:', chatHistory.length, 'messages');
+    console.log('📚 [CHAT HISTORY] Full history:', chatHistory);
   }, [chatHistory]);
+
+  // Log streaming messages changes
+  useEffect(() => {
+    console.log('🌊 [STREAMING] Streaming messages changed:', streamingMessages.length, 'messages');
+    console.log('🌊 [STREAMING] Full streaming:', streamingMessages);
+  }, [streamingMessages]);
 
   // Log all messages combination
   useEffect(() => {
-    console.log('📋 All messages (history + streaming):', allMessages);
+    console.log('📋 [ALL MESSAGES] Combined messages (history + streaming):', allMessages.length, 'total');
+    console.log('📋 [ALL MESSAGES] History:', chatHistory.length, 'Streaming:', streamingMessages.length);
+    console.log('📋 [ALL MESSAGES] Full combined:', allMessages);
   }, [allMessages]);
 
   const handleSendMessage = async () => {
@@ -106,11 +141,19 @@ export default function ChatPage() {
 
     const timestamp = Date.now();
     const userMessage = message.trim();
+    console.log('🚀 [SEND MESSAGE] Starting message send process');
+    console.log('📝 [SEND MESSAGE] User message:', userMessage);
+    console.log('🆔 [SEND MESSAGE] Session ID:', sessionId);
+    console.log('📊 [SEND MESSAGE] Current streaming messages count:', streamingMessages.length);
+    console.log('📊 [SEND MESSAGE] Current chat history count:', chatHistory.length);
+
     setMessage("");
     setIsStreaming(true);
 
     // Add user message to UI immediately (will be replaced with server-confirmed version)
     const tempUserMessageId = uuidv4();
+    console.log('🆔 [SEND MESSAGE] Generated temp user message ID:', tempUserMessageId);
+
     const userMessageObj: StreamingMessage = {
       id: tempUserMessageId,
       role: "user",
@@ -122,7 +165,13 @@ export default function ChatPage() {
       sessionId: sessionId,
     };
 
-    setStreamingMessages((prev) => [...prev, userMessageObj]);
+    console.log('➕ [SEND MESSAGE] Adding user message to streaming state');
+    setStreamingMessages((prev) => {
+      console.log('📊 [SEND MESSAGE] Previous streaming messages:', prev.length);
+      const newMessages = [...prev, userMessageObj];
+      console.log('📊 [SEND MESSAGE] New streaming messages count:', newMessages.length);
+      return newMessages;
+    });
 
     const assistantId = uuidv4();
     const initialAssistantMessage: StreamingMessage = {
@@ -130,6 +179,7 @@ export default function ChatPage() {
       role: "ai",
       content: "",
       thinking: "",
+      thinkingBlocks: {},
       isStreaming: true,
       isThinkingComplete: false,
       createdAt: timestamp + 1000, // Show after user message
@@ -144,37 +194,59 @@ export default function ChatPage() {
 
     // Start streaming with new server-side storage flow
     try {
+      console.log('🌊 [STREAMING] Starting stream to /api/chat/stream-with-tools');
       await streamingClient.startStream(
-        "/api/chat/stream",
+        "/api/chat/stream-with-tools",
         { query: userMessage, session_id: sessionId },
-        (newThinking) => {
-          console.log('🧠 Thinking received:', newThinking);
-          currentThinkingRef.current = newThinking;
-          setStreamingMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantId ? { ...msg, thinking: newThinking } : msg
-            )
-          );
+        (newThinking, blockNumber = 1) => {
+          console.log('🧠 [STREAMING] Thinking received:', newThinking, 'Block:', blockNumber);
+          currentThinkingRef.current += newThinking;
+          setStreamingMessages((prev) => {
+            console.log('🔄 [STREAMING] Updating thinking for assistant ID:', assistantId, 'Block:', blockNumber);
+            return prev.map((msg) => {
+              if (msg.id === assistantId) {
+                const updatedBlocks = { ...msg.thinkingBlocks };
+                updatedBlocks[blockNumber] = (updatedBlocks[blockNumber] || '') + newThinking;
+
+                // Combine all thinking blocks for the legacy thinking field
+                const combinedThinking = Object.entries(updatedBlocks)
+                  .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                  .map(([blockNum, content]) => `--- Thinking Block ${blockNum} ---\n${content}`)
+                  .join('\n\n');
+
+                return {
+                  ...msg,
+                  thinking: combinedThinking,
+                  thinkingBlocks: updatedBlocks
+                };
+              }
+              return msg;
+            });
+          });
         },
         (newResponse) => {
-          console.log('💬 Response chunk received:', newResponse);
+          console.log('💬 [STREAMING] Response chunk received:', newResponse);
           currentResponseRef.current += newResponse;
-          setStreamingMessages((prev) =>
-            prev.map((msg) =>
+          console.log('📝 [STREAMING] Total response so far:', currentResponseRef.current.length, 'chars');
+          setStreamingMessages((prev) => {
+            console.log('🔄 [STREAMING] Updating response for assistant ID:', assistantId);
+            return prev.map((msg) =>
               msg.id === assistantId ? {
                 ...msg,
                 content: currentResponseRef.current,
                 isThinkingComplete: true // Stop thinking spinner when response starts
               } : msg
-            )
-          );
+            );
+          });
         },
         (completionData?: any) => {
-          console.log('✅ Streaming completed with server-side storage');
-          console.log('💾 Server saved messages:', completionData);
+          console.log('✅ [COMPLETION] Streaming completed with server-side storage');
+          console.log('💾 [COMPLETION] Server saved messages:', completionData);
+          console.log('📊 [COMPLETION] Current streaming messages before cleanup:', streamingMessages.length);
 
           // Update user message with server-confirmed ID if provided
           if (completionData?.user_message_id) {
+            console.log('🔄 [COMPLETION] Updating user message ID from', tempUserMessageId, 'to', completionData.user_message_id);
             setStreamingMessages((prev) =>
               prev.map((msg) =>
                 msg.id === tempUserMessageId ? { ...msg, id: completionData.user_message_id } : msg
@@ -184,6 +256,7 @@ export default function ChatPage() {
 
           // Update AI message with server-confirmed ID if provided
           if (completionData?.ai_message_id) {
+            console.log('🔄 [COMPLETION] Updating AI message ID from', assistantId, 'to', completionData.ai_message_id);
             setStreamingMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantId ? { ...msg, id: completionData.ai_message_id } : msg
@@ -191,19 +264,22 @@ export default function ChatPage() {
             );
           }
 
-          console.log('🧹 Clearing streaming state');
+          console.log('🧹 [COMPLETION] Clearing streaming state');
           setIsStreaming(false);
 
-          // Keep messages in UI - no need to refresh from server since we have the data
+          // Since we don't refetch chat history, just keep the streaming messages as permanent
           // Only invalidate sessions list to update "last message" info
-          console.log('🔄 Invalidating sessions query only');
+          console.log('🔄 [COMPLETION] Invalidating sessions query only');
           queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
 
-          // Move streaming messages to permanent state
-          setStreamingMessages([]);
+          // Mark streaming messages as complete (no longer streaming)
+          console.log('✅ [COMPLETION] Marking streaming messages as complete');
+          setStreamingMessages(prev => prev.map(msg => ({ ...msg, isStreaming: false })));
+          console.log('✅ [COMPLETION] Completion handler finished');
         },
         (error) => {
-          console.error('Streaming error:', error);
+          console.error('❌ [STREAMING ERROR] Streaming error:', error);
+          console.log('🧹 [STREAMING ERROR] Clearing streaming state due to error');
           toast.error("Failed to get response");
           setIsStreaming(false);
           setStreamingMessages([]);
@@ -240,14 +316,21 @@ export default function ChatPage() {
       });
     },
     onSuccess: (response) => {
-      console.log('✅ Chat history cleared successfully:', response);
+      console.log('✅ [CLEAR HISTORY] Chat history cleared successfully:', response);
 
       // Clear local state
+      console.log('🧹 [CLEAR HISTORY] Clearing local streaming messages and input');
       setStreamingMessages([]);
       setMessage("");
 
-      // Invalidate and refetch chat history
+      // Reset the initial history flag so we can refetch empty history
+      console.log('🔄 [CLEAR HISTORY] Resetting initial history flag');
+      setHasLoadedInitialHistory(false);
+
+      // Invalidate queries
+      console.log('🔄 [CLEAR HISTORY] Invalidating queries');
       queryClient.invalidateQueries({ queryKey: [`/api/chat/messages/${sessionId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
 
       toast.success("Chat history cleared successfully");
     },
@@ -257,9 +340,48 @@ export default function ChatPage() {
     },
   });
 
+  // Clear all history mutation (all sessions and orphaned messages)
+  const clearAllHistoryMutation = useMutation({
+    mutationFn: async () => {
+      console.log('🧹 Clearing ALL chat history from all sessions');
+
+      // Clear all sessions and messages from the database
+      return apiRequest("DELETE", `/api/chat/cleanup/all-sessions`);
+    },
+    onSuccess: (response) => {
+      console.log('✅ [CLEAR ALL HISTORY] All chat history cleared successfully:', response);
+
+      // Clear local state
+      console.log('🧹 [CLEAR ALL HISTORY] Clearing local streaming messages and input');
+      setStreamingMessages([]);
+      setMessage("");
+
+      // Reset the initial history flag so we can refetch empty history
+      console.log('🔄 [CLEAR ALL HISTORY] Resetting initial history flag');
+      setHasLoadedInitialHistory(false);
+
+      // Invalidate queries
+      console.log('🔄 [CLEAR ALL HISTORY] Invalidating queries');
+      queryClient.invalidateQueries({ queryKey: [`/api/chat/messages/${sessionId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+
+      toast.success("All chat history cleared successfully");
+    },
+    onError: (error) => {
+      console.error('❌ Error clearing all chat history:', error);
+      toast.error("Failed to clear all chat history");
+    },
+  });
+
   const handleClearHistory = () => {
-    if (window.confirm("Are you sure you want to clear all chat history for this session? This action cannot be undone.")) {
+    if (window.confirm("Are you sure you want to clear chat history for this session? This action cannot be undone.")) {
       clearHistoryMutation.mutate();
+    }
+  };
+
+  const handleClearAllHistory = () => {
+    if (window.confirm("Are you sure you want to clear ALL chat history from ALL sessions? This will delete everything and cannot be undone.")) {
+      clearAllHistoryMutation.mutate();
     }
   };
 
@@ -275,12 +397,23 @@ export default function ChatPage() {
               variant="outline"
               size="sm"
               onClick={handleClearHistory}
-              disabled={clearHistoryMutation.isPending || isStreaming}
+              disabled={clearHistoryMutation.isPending || clearAllHistoryMutation.isPending || isStreaming}
               className="flex items-center gap-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               title="Clear chat history for this session"
             >
               <Trash2 className="h-4 w-4" />
-              Clear History
+              Clear Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearAllHistory}
+              disabled={clearHistoryMutation.isPending || clearAllHistoryMutation.isPending || isStreaming}
+              className="flex items-center gap-2 text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+              title="Clear ALL chat history from ALL sessions (complete database wipe)"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear All
             </Button>
             <Button
               variant="ghost"

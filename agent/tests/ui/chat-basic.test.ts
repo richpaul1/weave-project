@@ -44,7 +44,7 @@ describe('Agent Chat Basic UI Tests', () => {
     await expect(page).toHaveTitle(/IzzyDocs/);
     
     // Check that main elements are present
-    await expect(page.locator('h2')).toContainText('RAG Chat Interface');
+    await expect(page.locator('h2')).toContainText('Chat Session:');
     await expect(page.locator('textarea')).toBeVisible();
     await expect(page.locator('button', { hasText: 'Send' })).toBeVisible();
   });

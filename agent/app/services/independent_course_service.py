@@ -79,21 +79,32 @@ class IndependentCourseService:
                 search_method = "text"
             
             result = {
-                "searchMethod": search_method,
-                "total": len(courses),
-                "results": courses
+                "success": True,
+                "data": {
+                    "searchMethod": search_method,
+                    "total": len(courses),
+                    "results": courses
+                }
             }
-            
+
             print(f"📊 Independent Course Service: Search results:")
             print(f"   Search method: {search_method}")
             print(f"   Total results: {len(courses)}")
             print(f"   Courses found: {len(courses)}")
-            
+
             return result
             
         except Exception as e:
             print(f"❌ Independent Course Service: Search failed: {str(e)}")
-            raise Exception(f"Failed to search courses: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "data": {
+                    "searchMethod": "error",
+                    "total": 0,
+                    "results": []
+                }
+            }
         finally:
             self.storage.close()
     

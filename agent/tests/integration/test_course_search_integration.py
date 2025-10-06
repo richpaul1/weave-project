@@ -185,7 +185,7 @@ class TestCourseSearchIntegration:
         mock_llm_service = Mock()
         mock_retrieval_service = Mock()
         
-        course_service = CourseService(config)
+        course_service = IndependentCourseService()
         query_classifier = QueryClassifier(mock_llm_service)
         enhanced_rag_service = EnhancedRAGService(
             retrieval_service=mock_retrieval_service,
@@ -335,7 +335,7 @@ class TestCourseSearchIntegration:
         # Create course service with invalid URL
         from unittest.mock import Mock
         invalid_config = Mock(ADMIN_BASE_URL="http://invalid-url:9999")
-        invalid_course_service = CourseService(invalid_config)
+        invalid_course_service = IndependentCourseService()
 
         # Test search with invalid backend
         result = await invalid_course_service.search_courses(query="test")

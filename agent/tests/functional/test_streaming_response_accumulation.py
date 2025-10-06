@@ -133,11 +133,11 @@ class TestStreamingResponseAccumulation:
             return message
         
         # Apply mocks
-        with patch('app.routes.chat.rag_service') as mock_rag_service, \
+        with patch('app.routes.chat.enhanced_rag_service') as mock_enhanced_rag_service, \
              patch('app.routes.chat.storage_service') as mock_storage_service:
-            
+
             # Configure mocks
-            mock_rag_service.process_query_streaming = mock_process_query_streaming
+            mock_enhanced_rag_service.process_query_streaming = mock_process_query_streaming
             mock_storage_service.create_chat_message = mock_create_chat_message
             
             # Send streaming request
@@ -232,10 +232,10 @@ class TestStreamingResponseAccumulation:
             saved_messages.append(message)
             return message
         
-        with patch('app.routes.chat.rag_service') as mock_rag_service, \
+        with patch('app.routes.chat.enhanced_rag_service') as mock_enhanced_rag_service, \
              patch('app.routes.chat.storage_service') as mock_storage_service:
-            
-            mock_rag_service.process_query_streaming = mock_process_query_streaming
+
+            mock_enhanced_rag_service.process_query_streaming = mock_process_query_streaming
             mock_storage_service.create_chat_message = mock_create_chat_message
             
             request_data = {
@@ -286,10 +286,10 @@ class TestStreamingResponseAccumulation:
             saved_messages.append(message)
             return message
         
-        with patch('app.routes.chat.rag_service') as mock_rag_service, \
+        with patch('app.routes.chat.enhanced_rag_service') as mock_enhanced_rag_service, \
              patch('app.routes.chat.storage_service') as mock_storage_service:
-            
-            mock_rag_service.process_query_streaming = mock_process_query_streaming
+
+            mock_enhanced_rag_service.process_query_streaming = mock_process_query_streaming
             mock_storage_service.create_chat_message = mock_create_chat_message
             
             request_data = {

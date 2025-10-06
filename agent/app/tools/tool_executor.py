@@ -133,7 +133,8 @@ class ToolExecutor:
             )
             
             # Format the result for the LLM
-            courses = result.get("results", [])
+            data = result.get("data", {})
+            courses = data.get("results", [])
             formatted_courses = []
             
             for course in courses:
@@ -151,8 +152,8 @@ class ToolExecutor:
             # Enhanced result with detailed tool output for Weave tracing
             tool_output = {
                 "query": query,
-                "total_found": result.get("total", 0),
-                "search_method": result.get("searchMethod", "unknown"),
+                "total_found": data.get("total", 0),
+                "search_method": data.get("searchMethod", "unknown"),
                 "courses": formatted_courses,
                 "course_titles": [course.get("title", "Unknown") for course in formatted_courses],
                 "course_difficulties": [course.get("difficulty", "Unknown") for course in formatted_courses],
@@ -381,7 +382,7 @@ class ToolExecutor:
                 use_vector=True
             )
 
-            courses = course_result.get("results", [])
+            courses = course_result.get("data", {}).get("results", [])
 
             # Create a structured learning path
             learning_path = self._create_learning_path(
@@ -474,7 +475,7 @@ class ToolExecutor:
                 use_vector=True
             )
 
-            courses = course_result.get("results", [])
+            courses = course_result.get("data", {}).get("results", [])
 
             if len(courses) < 2:
                 return {
@@ -603,7 +604,7 @@ class ToolExecutor:
             use_vector=True
         )
 
-        courses = course_result.get("results", [])
+        courses = course_result.get("data", {}).get("results", [])
 
         return {
             "immediate_goals": self._get_immediate_goals(level, topic),

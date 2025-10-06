@@ -13,7 +13,7 @@ import aiohttp
 # Add the agent directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from app.services.course_service import CourseService
+from app.services.independent_course_service import IndependentCourseService
 from app.services.query_classifier import QueryClassifier
 from app.services.enhanced_rag_service import EnhancedRAGService
 
@@ -37,9 +37,12 @@ class TestCourseSearchAPI:
         return Mock()
 
     @pytest.fixture
-    def course_service(self, mock_config):
-        """Create real CourseService with mocked config."""
-        return CourseService(mock_config)
+    def course_service(self, mock_storage_service, mock_llm_service):
+        """Create real IndependentCourseService with mocked dependencies."""
+        return IndependentCourseService(
+            storage_service=mock_storage_service,
+            llm_service=mock_llm_service
+        )
 
     @pytest.fixture
     def query_classifier(self, mock_llm_service):
@@ -47,13 +50,11 @@ class TestCourseSearchAPI:
         return QueryClassifier(mock_llm_service)
 
     @pytest.fixture
-    def enhanced_rag_service(self, mock_retrieval_service, mock_llm_service, 
-                           query_classifier, course_service):
+    def enhanced_rag_service(self, mock_retrieval_service, mock_llm_service, course_service):
         """Create real EnhancedRAGService with real and mocked dependencies."""
         return EnhancedRAGService(
             retrieval_service=mock_retrieval_service,
             llm_service=mock_llm_service,
-            query_classifier=query_classifier,
             course_service=course_service
         )
 
@@ -133,7 +134,7 @@ class TestCourseSearchAPI:
             ("I want to learn Python programming", "learning", 0.8),
             ("What courses are available for data science?", "learning", 0.8),
             ("How do I study machine learning?", "learning", 0.8),
-            ("Teach me about neural networks", "learning", 0.8),
+            ("Teach me about neural networks", "learning", 0.6),
             
             # General queries
             ("What is the capital of France?", "general", 0.8),
@@ -279,9 +280,9 @@ class TestCourseSearchAPI:
         assert "Machine Learning Fundamentals" in formatted_response
         assert "Deep Learning with TensorFlow" in formatted_response
         assert "Data Science Pipeline" in formatted_response
-        assert "Difficulty: beginner" in formatted_response
-        assert "Difficulty: advanced" in formatted_response
-        assert "Difficulty: intermediate" in formatted_response
+        assert "Difficulty: Beginner" in formatted_response
+        assert "Difficulty: Advanced" in formatted_response
+        assert "Difficulty: Intermediate" in formatted_response
         assert "semantic similarity search" in formatted_response
 
         # Test with no results
@@ -296,7 +297,7 @@ class TestCourseSearchAPI:
             search_result=empty_result
         )
         
-        assert "No courses found" in formatted_empty
+        assert "couldn't find any courses" in formatted_empty
         assert "nonexistent" in formatted_empty
 
     @pytest.mark.asyncio

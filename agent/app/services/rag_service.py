@@ -10,33 +10,14 @@ import weave
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
 from app.utils.weave_utils import add_session_metadata
+from app.config.prompts import PromptConfig
 
 
 class RAGService:
     """
     RAG service that orchestrates retrieval and generation.
+    Uses versioned prompts from the centralized configuration.
     """
-    
-    # System prompt for RAG
-    SYSTEM_PROMPT = """You are a helpful AI assistant that answers questions based on the provided context.
-
-Instructions:
-1. Answer the question using ONLY the information from the provided context
-2. If the context doesn't contain enough information to answer the question, say so
-3. Cite your sources by referencing [Source N] numbers from the context
-4. Be concise and accurate
-5. Do not make up information that is not in the context"""
-
-    # Context template
-    CONTEXT_TEMPLATE = """Context:
-
-{context}
-
----
-
-Question: {query}
-
-Answer:"""
     
     def __init__(
         self,
@@ -107,7 +88,7 @@ Answer:"""
         print(f"🤖 RAG Service: Generating LLM response...")
         completion = await self.llm_service.generate_completion(
             prompt=prompt,
-            system_prompt=self.SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_legacy_system_prompt()
         )
 
         print(f"✅ RAG Service: LLM response generated:")
@@ -210,7 +191,7 @@ Answer:"""
 
         async for chunk in self.llm_service.generate_streaming(
             prompt=prompt,
-            system_prompt=self.SYSTEM_PROMPT
+            system_prompt=PromptConfig.get_legacy_system_prompt()
         ):
             full_response += chunk
 
@@ -310,10 +291,14 @@ Answer:"""
             operation_type="prompt_building",
             query_length=len(query),
             context_length=len(context),
-            context_chunks=context.count("---") + 1 if context else 0
+            context_chunks=context.count("---") + 1 if context else 0,
+            # Track legacy prompt usage
+            legacy_rag_service=True,
+            legacy_prompt_version="1.0.0",  # Legacy service uses v1.0.0 prompts
+            prompt_template_type="legacy_context_template"
         )
 
-        return self.CONTEXT_TEMPLATE.format(
+        return PromptConfig.get_legacy_context_template().format(
             context=context,
             query=query
         )

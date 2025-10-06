@@ -43,7 +43,7 @@ class ToolConfig:
 class ToolStrategyConfig:
     """Configuration for the overall tool strategy."""
     strategy: ToolStrategy = ToolStrategy.LLM_DRIVEN
-    max_tool_calls_per_query: int = 3
+    max_tool_calls_per_query: int = 1
     max_tool_iterations: int = 5
     enable_tool_chaining: bool = True
     enable_parallel_tools: bool = False
