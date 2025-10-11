@@ -20,13 +20,89 @@ load_dotenv('../../.env.local')
 OPENPIPE_API_KEY = os.getenv('OPEN_PIPE_API_KEY')
 WANDB_API_KEY = os.getenv('WANDB_API_KEY')
 
-# Initialize Weave
+# Initialize Weave without any autopatch to avoid conflicts
 weave.init('rl-demo')
 
-from openpipe import OpenAI
+# Import httpx for direct API calls to avoid Weave instrumentation conflicts
+import httpx
+import json
 
-# Initialize OpenPipe client
-client = OpenAI(openpipe={"api_key": OPENPIPE_API_KEY})
+# Manual OpenPipe API client to avoid Weave instrumentation issues
+class ManualOpenPipeClient:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://app.openpipe.ai/api/v1"
+
+    def chat_completion(self, model: str, messages: list, temperature: float, max_tokens: int) -> dict:
+        """Make a direct API call to OpenPipe without Weave instrumentation"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=60.0
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+# Initialize manual OpenPipe client
+openpipe_client = ManualOpenPipeClient(OPENPIPE_API_KEY)
+
+# Create a wrapper function to handle OpenPipe API calls safely
+@weave.op()
+def safe_openpipe_call(model: str, messages: list, temperature: float, max_tokens: int) -> dict:
+    """
+    Wrapper for OpenPipe API calls that avoids Weave instrumentation conflicts.
+    """
+    try:
+        result = openpipe_client.chat_completion(model, messages, temperature, max_tokens)
+
+        if "error" in result:
+            return {
+                "response": f"Error: {result['error']}",
+                "usage": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
+                "error": result['error']
+            }
+
+        response_text = result["choices"][0]["message"]["content"]
+
+        # Extract token usage safely
+        usage_info = {"input_tokens": None, "output_tokens": None, "total_tokens": None}
+        if "usage" in result and result["usage"]:
+            usage = result["usage"]
+            usage_info = {
+                "input_tokens": usage.get("prompt_tokens"),
+                "output_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens")
+            }
+
+        return {
+            "response": response_text,
+            "usage": usage_info,
+            "error": None
+        }
+
+    except Exception as e:
+        return {
+            "response": f"Error: {str(e)}",
+            "usage": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
+            "error": str(e)
+        }
 
 # Define the two prompts to compare
 SIMPLE_PROMPT = "You are a helpful AI assistant that provides information about Weave, W&B's LLM observability framework. When appropriate, include relevant images in your responses using markdown format: ![alt text](image_url)"
@@ -106,7 +182,8 @@ class SimplePromptModel(Model):
         Query the model with simple prompt.
         Returns the response and metadata.
         """
-        completion = client.chat.completions.create(
+        # Use the safe wrapper to avoid token usage conflicts
+        result = safe_openpipe_call(
             model="openpipe:multimodal-agent-v1",
             messages=[
                 {"role": "system", "content": self.system_prompt},
@@ -116,7 +193,7 @@ class SimplePromptModel(Model):
             max_tokens=800
         )
 
-        response = completion.choices[0].message.content
+        response = result["response"]
 
         # Extract metrics
         images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response)
@@ -130,7 +207,8 @@ class SimplePromptModel(Model):
             "image_count": len(images),
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response.split()),
-            "char_count": len(response)
+            "char_count": len(response),
+            "error": "Error:" in response
         }
 
 
@@ -148,7 +226,8 @@ class ComplexPromptModel(Model):
         Query the model with complex prompt.
         Returns the response and metadata.
         """
-        completion = client.chat.completions.create(
+        # Use the safe wrapper to avoid token usage conflicts
+        result = safe_openpipe_call(
             model="openpipe:multimodal-agent-v1",
             messages=[
                 {"role": "system", "content": self.system_prompt},
@@ -158,7 +237,7 @@ class ComplexPromptModel(Model):
             max_tokens=800
         )
 
-        response = completion.choices[0].message.content
+        response = result["response"]
 
         # Extract metrics
         images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response)
@@ -172,7 +251,8 @@ class ComplexPromptModel(Model):
             "image_count": len(images),
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response.split()),
-            "char_count": len(response)
+            "char_count": len(response),
+            "error": "Error:" in response
         }
 
 
