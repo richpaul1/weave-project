@@ -1,0 +1,5 @@
+weave==0.52.8
+openai==1.6.0
+openpipe-ai
+python-dotenv==1.0.0
+httpx==0.25.2
