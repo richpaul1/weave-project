@@ -1,0 +1,14 @@
+{
+  "model_name": "qwen3-weave:0.6b",
+  "base_model": "qwen3:0.6b",
+  "created_at": "2025-10-11T15:19:31.505697",
+  "training_data_source": "../training_data.json",
+  "modelfile": "WeaveModelfile",
+  "purpose": "Weave LLM observability framework specialist",
+  "expected_improvements": [
+    "Better Weave-specific responses",
+    "Improved code examples",
+    "Enhanced multimodal capabilities",
+    "Domain-specific knowledge"
+  ]
+}

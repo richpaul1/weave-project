@@ -1,0 +1,178 @@
+
+
+================================================================================USER: Based on this Weave documentation context: Now after calling `.invoke` you can see the trace in Weave **now tracks the model parameters as well as the code** for the model functions that have been decorated with `weave.op()`. You can see the model is also versioned, "v21" in this case, and if you click on the model **you can see all of the calls** that have used that version of the model
+ASSISTANT: **A note on using `weave.Model`:**
+
+![Re-using a weave model](https://weave-docs.wandb.ai/assets/images/tutorial-model_invoke3-d2f2bd6987f1091da5c331b256c02cb6.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-weave_models.md*
+
+USER: Based on this Weave documentation context: Here you can now see the name Model version (v21) was used with the new input:
+ASSISTANT: ## What's next?[​](https://weave-docs.wandb.ai/tutorial-weave_models#whats-next "Direct link to What's next?")
+
+![Re-using a weave model](https://weave-docs.wandb.ai/assets/images/tutorial-model_re-use-c7cc5a250358920a1e9879e5ef4e2802.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-weave_models.md*
+
+USER: Based on this Weave documentation context: ![The Evals tab](https://weave-docs.wandb.ai/assets/images/evals_tab-e85ef01bd5b336297841ab5c75111df8.png)
+ASSISTANT: ## Usage tips[​](https://weave-docs.wandb.ai/guides/evaluation/evaluation_logger#usage-tips "Direct link to Usage tips")
+
+![The Comparison view](https://weave-docs.wandb.ai/assets/images/comparison-021c1fe6a86205704d5e698c3555d78a.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-evaluation_logger.md*
+
+USER: Based on this Weave documentation context: In this example, we'll show how W&B Weave can track a RAG application that has a retrieval step to get documents. By tracking this, you can debug your app and see what documents were pulled into the LLM context. We'll also show how to evaluate it using an LLM judge.
+ASSISTANT: Check out the [RAG++ course](https://www.wandb.courses/courses/rag-in-production?utm_source=wandb_docs&utm_medium=code&utm_campaign=weave_docs) for a more advanced dive into practical RAG techniques for engineers, where you'll learn production-ready solutions from Weights & Biases, Cohere and Weaviate to optimize performance, cut costs, and enhance the accuracy and relevance of your applications.
+
+![Evals hero](https://weave-docs.wandb.ai/assets/images/evals-hero-7ed42db8eb69f209007fd20342924b7d.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-rag.md*
+
+USER: Based on this Weave documentation context: To compare each object side-by-side in separate columns, select **Side-by-side**.
+ASSISTANT: ### Display in a unified view[​](https://weave-docs.wandb.ai/guides/tools/comparison#display-in-a-unified-view "Direct link to Display in a unified view")
+
+![Side-by-side Comparison view of two objects](https://weave-docs.wandb.ai/assets/images/comparison-2objs-sidebyside-7bd8bc4705e53bf6d4524e9fa0c5a1af.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: To compare each object in a unified view, select **Unified**.
+ASSISTANT: ### Set a baseline[​](https://weave-docs.wandb.ai/guides/tools/comparison#set-a-baseline "Direct link to Set a baseline")
+
+![Unified Comparison view of two objects](https://weave-docs.wandb.ai/assets/images/comparison-2objs-unified-7b431be9e1c9c4c21fa64727e0b0052a.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the object that you want to set as the baseline.
+ASSISTANT: 3.  In the dropdown, select **Make baseline**. The UI refreshes so that the baseline object is furthest left in the topbar, and `Baseline` displays next to the ID. ![Baseline set.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png)
+
+![Make baseline option displayed.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-84efe6e7848b437339291580139c02d7.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the object that you want to set as the baseline.
+2.  Click the three dots to the right of the ID. ![Make baseline option displayed.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-84efe6e7848b437339291580139c02d7.png)
+ASSISTANT: ### Remove a baseline[​](https://weave-docs.wandb.ai/guides/tools/comparison#remove-a-baseline "Direct link to Remove a baseline")
+
+![Baseline set.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the ID that you want to reorder.
+ASSISTANT: 3.  Drag the ID to the left or the right, depending on which object was selected.
+4.  Place the ID in the desired ordering. The UI refreshes with an updated comparison ordering.
+
+![Setting the order.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-reorder-e261f53b1ef7fee76da193e15fb02585.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: For numeric values such as `completion_tokens` and `total_tokens`, you can view the diff as either an integer or a percentage. Additionally, positive numeric values can be viewed as a multiplier. To change a numeric diff's display format, do the following:
+ASSISTANT: 2.  Click the diff value. The format automatically updates to either an integer or a percentage. ![A numeric value updated to a percentage.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-updated-0a27bede143a14a4ceb80104ee506a16.png)
+
+![A numeric value displayed as an integer.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-871b3d91e7301c760efaf2fa16926500.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: 1.  In the Comparison table, find the numeric value that you want to update the diff display format for. ![A numeric value displayed as an integer.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-871b3d91e7301c760efaf2fa16926500.png)
+ASSISTANT: ### Compare with baseline or previous[​](https://weave-docs.wandb.ai/guides/tools/comparison#compare-with-baseline-or-previous "Direct link to Compare with baseline or previous")
+
+![A numeric value updated to a percentage.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-updated-0a27bede143a14a4ceb80104ee506a16.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: 1.  In the Comparison view topbar, find the ID that you want to compare to previous or baseline.
+ASSISTANT: To reset the view so that the first 6 objects selected for comparison are displayed in the table, click the ID again.
+
+![Comparing a pair from a multi-object comparison.](https://weave-docs.wandb.ai/assets/images/comparsion-7objs-diffonly-subset-c6cb61140d027149c4c6e3ca2bce610b.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*
+
+USER: Based on this Weave documentation context: *   _Right panel_: Detailed view for a selected op (Call, Code, Feedback, Scores, Summary, Use).
+ASSISTANT: ## Trace view navigation[​](https://weave-docs.wandb.ai/guides/tracking/trace-tree#trace-view-navigation "Direct link to Trace view navigation")
+
+![Trace page panels](https://weave-docs.wandb.ai/assets/images/trace-tree-full-3a956679cffff508d967737c6eff1377.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tracking-trace-tree.md*
+
+USER: Based on this Weave documentation context: *   _Filter persistence_: Selecting ops across traces retains the sub-path context for easier comparison.
+ASSISTANT: ### Scrubbers and contextual navigation[​](https://weave-docs.wandb.ai/guides/tracking/trace-tree#scrubbers-and-contextual-navigation "Direct link to Scrubbers and contextual navigation")
+
+![Filter an op by name](https://weave-docs.wandb.ai/assets/images/trace-tree-filter-8207deb2d9d36ccfef8ebb26811fa3ef.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tracking-trace-tree.md*
+
+USER: Based on this Weave documentation context: Each scrubber has a slider and **\>** jump buttons to move step-by-step.
+ASSISTANT: ### Alternate trace tree views[​](https://weave-docs.wandb.ai/guides/tracking/trace-tree#alternate-trace-tree-views "Direct link to Alternate trace tree views")
+
+![Trace panel scrubbers](https://weave-docs.wandb.ai/assets/images/trace-tree-scrubbers-8de7a2b1f966172dfd452dd58db48bd8.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tracking-trace-tree.md*
+
+USER: Based on this Weave documentation context: In the code view, boxes represent ops and their nested calls. This is helpful for visualizing flow of function calls. In this view, you can click on a box to drill into that op and filter the call path.
+ASSISTANT: #### Flame graph[​](https://weave-docs.wandb.ai/guides/tracking/trace-tree#flame-graph "Direct link to Flame graph")
+
+![Trace panel code view](https://weave-docs.wandb.ai/assets/images/trace-tree-code-view-231d3593173e2d2a43af0418ef04a6f3.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tracking-trace-tree.md*
+
+USER: Based on this Weave documentation context: The flame graph view provides a timeline-based visualization of execution depth and duration. This is helpful for when trying to understand performance diagnostics over time. You can click into frames to isolate sub-traces.
+ASSISTANT: #### Graph view[​](https://weave-docs.wandb.ai/guides/tracking/trace-tree#graph-view "Direct link to Graph view")
+
+![Trace panel flame graph](https://weave-docs.wandb.ai/assets/images/trace-tree-flame-view-a10e792113c0267d487d82faa06d866e.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tracking-trace-tree.md*
+
+USER: Based on this Weave documentation context: This image is logged to Weave and automatically displayed in the UI.
+ASSISTANT: ### Resize large images before logging[​](https://weave-docs.wandb.ai/guides/core-types/media#resize-large-images-before-logging "Direct link to Resize large images before logging")
+
+![Screenshot of pumpkin cat trace view](https://weave-docs.wandb.ai/assets/images/cat-pumpkin-trace-45be86ef6857c9700e274d3bb75a71fe.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-core-types-media.md*
+
+USER: Based on this Weave documentation context: This HTML is logged to Weave and automatically displayed in the UI. Clicking the `file_name.html` cell in the table opens it in full screen. You can also download the raw `.html` file.
+ASSISTANT: ## Using the Contents API[​](https://weave-docs.wandb.ai/guides/core-types/media#using-the-contents-api "Direct link to Using the Contents API")
+
+![HTML logging in Weave](https://weave-docs.wandb.ai/assets/images/html-14923192290bd0baa0e4be823b914bb1.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-core-types-media.md*
+
+USER: Based on this Weave documentation context: #### Single Call UI[​](https://weave-docs.wandb.ai/guides/evaluation/scorers#single-call-ui "Direct link to Single Call UI")
+ASSISTANT: Scores for an individual call are displayed in the call details page under the "Scores" tab.
+
+![Call Scores Tab](https://weave-docs.wandb.ai/assets/images/call_scores_tab-4ef9a6754a65bf3b564d90b09adb4ac5.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-scorers.md*
+
+USER: Based on this Weave documentation context: #### Multiple Calls UI[​](https://weave-docs.wandb.ai/guides/evaluation/scorers#multiple-calls-ui "Direct link to Multiple Calls UI")
+ASSISTANT: Scores for multiple calls are displayed in the traces table under the "Scores" column.
+
+![Multiple Calls Tab](https://weave-docs.wandb.ai/assets/images/traces_table_scores-8aebf2380a1f7da3471a8a119c5096dd.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-scorers.md*
+
+USER: Based on this Weave documentation context: Finally, if you would like to see all the calls scored by a Scorer, navigate to the Scorers Tab in the UI and select "Programmatic Scorer" tab. Click your Scorer to open the Scorer details page.
+ASSISTANT: Next, click the `View Traces` button under `Scores` to view all the calls scored by your Scorer.
+
+![Scorer Details Page](https://weave-docs.wandb.ai/assets/images/scorer_detail_page-9ed683ee0bd3f9b1a4f05d248324a224.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-scorers.md*
+
+USER: Based on this Weave documentation context: Next, click the `View Traces` button under `Scores` to view all the calls scored by your Scorer.
+ASSISTANT: This will default to the selected version of the Scorer. You can remove the version filter to see all the calls scored by any version of the Scorer.
+
+![Filtered Calls to Scorer Version](https://weave-docs.wandb.ai/assets/images/filtered_calls_to_scorer_version-7dae59fe6a5b45a4ffe7d15270ea29ea.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-scorers.md*
+
+USER: Based on this Weave documentation context: This will default to the selected version of the Scorer. You can remove the version filter to see all the calls scored by any version of the Scorer.
+ASSISTANT: [Edit this page](https://github.com/wandb/weave/blob/master/docs/docs/guides/evaluation/scorers.md)
+
+![Filtered Calls to Scorer Name](https://weave-docs.wandb.ai/assets/images/filtered_calls_scorer_name-2d90964520c281d947366259b3554117.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-scorers.md*
+
+USER: Based on this Weave documentation context: # Online Evaluation: Guardrails and Monitors
+ASSISTANT: ## Introduction[​](https://weave-docs.wandb.ai/guides/evaluation/guardrails_and_monitors#introduction "Direct link to Introduction")
+
+![Feedback](https://weave-docs.wandb.ai/assets/images/guardrails_scorers-6158fa3f5a8dc7cd376a37cdb9f58794.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-guardrails_and_monitors.md*

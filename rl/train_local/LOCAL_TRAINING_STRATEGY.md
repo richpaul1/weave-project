@@ -190,27 +190,39 @@ python ../evaluate_models/model_comparison_eval.py
 # Navigate to training directory
 cd rl/train_local
 
-# Run setup script (to be created)
+# 1. Setup environment and check prerequisites
 python setup_local_training.py
 
-# Create first model version
+# 2. Convert training data to Ollama format
+python convert_training_data.py
+
+# 3. Create qwen3-weave:0.6b model
 python create_weave_model.py
 
-# Test the model
+# 4. Test the new model
 python test_local_model.py
+
+# 5. Use your model
+ollama run qwen3-weave:0.6b "How do I trace LLM calls with Weave?"
 ```
 
 ## 📁 **File Structure**
 ```
 rl/train_local/
-├── LOCAL_TRAINING_STRATEGY.md     # This file
-├── setup_local_training.py        # Environment setup
+├── LOCAL_TRAINING_STRATEGY.md     # This strategy document
+├── setup_local_training.py        # Environment setup & prerequisites
 ├── convert_training_data.py       # Data format conversion
-├── create_weave_model.py          # Model creation
-├── test_local_model.py            # Testing and validation
-├── WeaveModelfile                 # Ollama model definition
-├── ollama_training_format.json    # Converted training data
-└── results/                       # Training results and logs
+├── create_weave_model.py          # Creates qwen3-weave:0.6b model
+├── test_local_model.py            # Comprehensive testing & validation
+├── WeaveModelfile                 # Ollama model definition (generated)
+├── data/
+│   ├── ollama_training_format.json    # Converted training data
+│   ├── training_examples.txt          # Example conversations
+│   └── conversion_stats.json          # Conversion statistics
+├── logs/
+│   └── model_creation_log.json        # Model creation metadata
+└── results/
+    └── qwen3_weave_test_*.json         # Test results & comparisons
 ```
 
 ## 🔗 **Related Documentation**

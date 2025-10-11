@@ -1,0 +1,208 @@
+{
+  "model_name": "qwen3-weave:0.6b",
+  "test_timestamp": "2025-10-11T15:20:50.997482",
+  "comprehensive_test": [
+    {
+      "test_id": "basic",
+      "query": "What is Weave?",
+      "response": "<think>\nOkay, the user asked, \"What is Weave?\" I need to explain what Weave is. Let me start by recalling the previous context. They mentioned a comparison tool in Weave, so maybe they're working on a project that uses this tool.\n\nFirst, I should define Weave as a data visualization tool. Then, mention its main features like sorting and comparing objects. It's important to highlight how it helps users organize information effectively. Also, include examples like numeric values being displayed as integers or percentages. Make sure the explanation is clear and covers all key points without getting too technical.\n</think>\n\nWeave is a **data visualization tool** designed to help users sort, compare, and organize information in a structured way. It allows you to:\n\n1. **Sort objects**: Drag and drop items into specific positions in the topbar to reorder them.\n2. **Compare values**: View numeric diffs (like `completion_tokens` or `total_tokens`) as integers or percentages, and format them dynamically.\n3. **Organize information**: Help users understand relationships between different elements by visualizing their order.\n\nIt\u2019s ideal for projects where clarity and ease of use are key to data organization.",
+      "latency": 4.5410521030426025,
+      "analysis": {
+        "word_count": 186,
+        "char_count": 1214,
+        "weave_keywords": [
+          "weave"
+        ],
+        "keyword_count": 1,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 0,
+        "inline_code": 2,
+        "has_code": true,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": true,
+      "success": true
+    },
+    {
+      "test_id": "tracing",
+      "query": "How do I trace my LLM calls with Weave?",
+      "response": "<think>\nOkay, the user is asking how to trace their LLM calls using Weave. Let me start by recalling what Weave does. From the previous interactions, they've been working with comparison views in a tool that allows sorting and setting baselines for object comparisons. So maybe they're using a similar tool here.\n\nFirst, I need to explain the process step-by-step. They mentioned tracing LLM calls, so perhaps they are looking at their model's performance or logs. In previous answers, they've covered things like ordering objects, selecting baselines, and changing display formats for numeric values. So maybe they're using a tool that tracks similar operations.\n\nWait, but the user is asking about LLM calls specifically. I should connect this to how Weave handles tracing. Maybe they are tracking their model's execution steps or performance metrics. In the previous examples, they had options like making a baseline and reordering objects. So perhaps in this context, there's an option to track specific LLM operations.\n\nI need to make sure that the answer is clear and guides them through each step of tracing. Also, check if there are any specific tools or environments they're using, but since the user hasn't mentioned it, I'll assume a general approach. Let me structure the answer with steps similar to previous ones: selecting an object, clicking to reorder, changing display formats, and then explaining how this helps trace LLM calls.\n\nWait, but in the previous answers, they had specific instructions like making a baseline and reordering. So maybe the user is using a tool that allows tracking of model execution paths. I should mention that tracing LLM calls can help understand performance or debugging by showing the order in which operations were performed.\n\nAlso, ensure that the answer is concise and covers all necessary steps without getting too technical. Make sure to highlight how each action contributes to tracing LLM calls.\n</think>\n\nTo trace your **LLM (Large Language Model) calls** using Weave, follow these steps:\n\n1. **Select an object** in the Comparison view topbar where you want to set a baseline or reorder objects.  \n2. **Click the three dots** to the right of the ID to open options like:  \n   - **Make baseline**: Set a specific object as the reference for comparison.  \n   - **Drag and drop** to reorder objects left/right based on their position.  \n3. **Adjust numeric diff formats** (e.g., integer, percentage) as needed.  \n\nThis allows you to visualize how your LLM operations were executed or compared, helping trace performance metrics or debugging workflows.",
+      "latency": 8.455329895019531,
+      "analysis": {
+        "word_count": 415,
+        "char_count": 2607,
+        "weave_keywords": [
+          "weave",
+          "tracing"
+        ],
+        "keyword_count": 2,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 0,
+        "inline_code": 0,
+        "has_code": false,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": false,
+      "success": true
+    },
+    {
+      "test_id": "dataset",
+      "query": "What is a Weave Dataset and how do I create one?",
+      "response": "<think>\nOkay, the user is asking about what a Weave Dataset is and how to create one. Let me start by recalling what I know about Weave. From earlier interactions, I remember that Weave is a tool for managing data pipelines, similar to Apache Airflow or Kafka. So, a Weave Dataset would be a structured way to store and manage data in these pipelines.\n\nFirst, I should explain the definition clearly. Maybe mention it's like a database where you can organize your data into tables, columns, and other structures. Then, how to create one. The user might not know that datasets can be created using different tools or methods. In Weave, creating a dataset involves defining its structure.\n\nI need to outline the steps. First, define the dataset in Weave. That's probably through the UI where you set up tables and columns. Then, maybe mention adding data sources or other elements. Also, including how to save the dataset so it can be used later. Oh, right, they might also need to connect to external systems or databases.\n\nWait, but I should make sure the explanation is straightforward. Maybe use examples like creating a \"Data Source\" table where fields are defined with data types and values. Also, note that datasets can be shared or stored in specific locations within Weave. Oh, and maybe mention that once created, they can be used to run pipelines or process data.\n\nI should check if there's any confusion between datasets and other components like tables. Make sure the answer is clear and covers all necessary steps without getting too technical.\n</think>\n\nA **Weave Dataset** is a structured way to organize and manage data in a **data pipeline**, similar to a database table with fields, values, and relationships. It allows you to define how your data should be stored, used, or processed within workflows.\n\n### How to Create a Weave Dataset:\n1. **Define the Dataset Structure**:  \n   - In the Weave UI, create a new dataset by defining tables (like `Data Source`, `Field`, `Value`) with fields and values. Each field represents a data point, and values define its content.\n\n2. **Add Data Sources or Elements**:  \n   - Connect to external systems (e.g., databases, APIs) or other Weave components (e.g., pipelines, log sources). This allows your dataset to be used in workflows or processed by other tools.\n\n3. **Save the Dataset**:  \n   - Once your structure is defined, save the dataset for later use. You can also share it with others or store it within a specific location in Weave for easy access.\n\n### Example:\n- Create a table `Data Source` to define fields like `ID`, `Name`, and `Value`.\n- Add a field `Source` to connect to an external database.\n- Save the dataset so you can run pipelines or process data later.\n\nBy organizing your data this way, you enable efficient management and reuse of information within workflows.",
+      "latency": 9.522593021392822,
+      "analysis": {
+        "word_count": 479,
+        "char_count": 2845,
+        "weave_keywords": [
+          "weave"
+        ],
+        "keyword_count": 1,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 0,
+        "inline_code": 8,
+        "has_code": true,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": false,
+      "success": true
+    },
+    {
+      "test_id": "model",
+      "query": "Show me how to use weave.Model to track my models",
+      "response": "<think>\nOkay, the user wants to know how to use weave.Model to track their models. Let me start by recalling what I know about weave.Model.\n\nFirst, weave.Model is a tool for tracking model performance, right? So the user probably needs an example or steps on how to set up and use it with their models. They might be new to this, so I should explain each step clearly.\n\nI remember that weave.Model allows users to track metrics like accuracy, loss, etc., in a structured way. Maybe start by explaining what they need to do. Then, provide an example using a simple model, like a neural network. That would make it practical for them.\n\nWait, the user might not know how to set up their models with weave.Model. So I should mention that they need to create a model and then use weave.Model to track its performance. Also, include steps on how to view metrics, which is important for debugging or analysis.\n\nI should check if there are any specific details about the format or data structures they need to consider. For instance, maybe they need to store their model in a file or database, so explaining that would be helpful too.\n\nAlso, make sure to mention that weave.Model can be integrated with other tools like PyTorch or TensorFlow for better performance tracking. That could help them understand how to use it across different frameworks.\n\nFinally, wrap up by summarizing the steps and offering further assistance if they have more questions.\n</think>\n\nTo track your models using **weave.Model**, follow these steps:\n\n---\n\n### 1. **Create a Model (e.g., with PyTorch or TensorFlow)**\n- Use tools like `torch` or `tensorflow` to define your model:\n```python\nimport torch\nmodel = torch.nn.Sequential(\n    ...your neural network layers...\n)\n```\n\n---\n\n### 2. **Track Model Performance**\nWeave.Model allows you to track key performance metrics:\n\n#### a. **Set Baseline (for comparison)**\n- In the Comparison view, select an object to set as your baseline:\n  - Mouse over the ID.\n  - Click \u2192 \"Make baseline\" \u2192 the baseline object is now furthest left.\n\n#### b. **Track Metrics**\n- View metrics like `accuracy`, `loss`, or `completion_tokens`.\n- For numeric values (e.g., `total_tokens`), you can display them as:\n  - Integer\n  - Percentage\n  - Multiplier\n\n---\n\n### Example: Track Accuracy in a Neural Network\n\n1. Define your model:\n```python\nimport torch\nmodel = torch.nn.Sequential(\n    ...your layers...\n)\n```\n\n2. Use weave.Model to track accuracy:\n- In the Comparison view, select an object (e.g., your model).\n- Click \u2192 \"Make baseline\" to set it as the reference.\n\n3. View metrics:\n- The UI will show your model's performance relative to the baseline.\n\n---\n\n### How to View Metrics\n- **Integer**: Displays as `100%`.\n- **Percentage**: Shows as a percentage.\n- **Multiplier**: Shows as a multiplier (e.g., `2x`).\n\n---\n\n### Integration with Other Tools\nWeave.Model can be used in conjunction with frameworks like PyTorch or TensorFlow to track model performance across different environments.\n\nLet me know if you'd like help setting up your models! \ud83d\ude80",
+      "latency": 10.649799346923828,
+      "analysis": {
+        "word_count": 502,
+        "char_count": 3049,
+        "weave_keywords": [
+          "weave",
+          "weave.Model"
+        ],
+        "keyword_count": 2,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 2,
+        "inline_code": 2,
+        "has_code": true,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": false,
+      "success": true
+    },
+    {
+      "test_id": "evaluation",
+      "query": "Explain Weave evaluation framework and show me an example",
+      "response": "<think>\nOkay, the user wants to understand the Weave evaluation framework and provide an example. Let me start by recalling what I know about Weave.\n\nFirst, Weave is a tool for evaluating machine learning models, right? It's used in the context of model training pipelines. The user mentioned \"evaluation framework,\" so I should explain that part clearly. They probably want to know how to set up and use evaluation metrics, maybe with an example.\n\nI remember from previous interactions that there are different ways to display numeric values like completion_tokens or total_tokens. So, in the example, showing both integer and percentage formats would be helpful. Also, mentioning the diff format update after clicking on a value makes sense because it's a practical step for users who want to see their results formatted.\n\nWait, should I include steps related to setting up the evaluation? Like defining metrics or using specific functions? The user might need guidance on how to apply these in their workflow. Maybe suggest using Weave's API or command-line tools for setup and then applying the example values.\n\nAlso, ensuring that the example is straightforward so the user can follow along without confusion. Including code snippets would be good, like using `weave.metrics` or similar functions. Let me structure this step by step: explain the framework, mention display formats, provide an example with both integer and percentage formats, and maybe a setup example.\n</think>\n\nThe **Weave evaluation framework** is a tool used to evaluate machine learning models during training pipelines, particularly for metrics like **completion tokens (tokens used in generation)** or **total tokens**. It provides customizable ways to display numeric values, such as integers or percentages, depending on the context.\n\n---\n\n### \ud83e\udde0 Weave Evaluation Framework Overview\n\nWeave allows users to:\n\n1. Define evaluation metrics (e.g., `loss`, `accuracy`, `precision`).\n2. Set up a baseline for comparison.\n3. Display numeric values in formats like:\n   - **Integer** (for exact counts)\n   - **Percentage** (for relative values)\n   - **Multiplier** (for large numbers)\n\n---\n\n### \ud83e\udde0 Example: Displaying Numeric Values\n\n#### 1. Define Metrics\n- In Weave, define a metric like this:\n\n```python\nmetrics = {\n    \"loss\": 0.0,\n    \"accuracy\": 0.95,\n    \"precision\": 0.82\n}\n```\n\n#### 2. Set Up Baseline\n- Click the **Baseline** button in the topbar.\n- Select an object to set as the baseline.\n\n#### 3. Display Numeric Values\n\nAfter setting a baseline, you can display values like:\n\n- **Integer**: `loss = 0.0` \u2192 shows exact values.\n- **Percentage**: `accuracy = 95%` \u2192 shows relative performance.\n- **Multiplier**: `precision = 82\u00d7` \u2192 for large numbers.\n\n#### Example Output:\n```\nBaseline: accuracy = 95%\nLoss: 0.0\nPrecision: 82\u00d7\n```\n\n---\n\n### \ud83e\uddea How to Use Weave\n\n1. **Define Metrics** in the evaluation setup.\n2. **Set a Baseline Object** (e.g., an object with known values).\n3. **Apply Values** using the UI or API to display results.\n\nThis framework is ideal for tracking progress and comparing model performance across different stages of training. Let me know if you'd like help setting up the evaluation in a specific workflow!",
+      "latency": 11.138366222381592,
+      "analysis": {
+        "word_count": 502,
+        "char_count": 3211,
+        "weave_keywords": [
+          "weave"
+        ],
+        "keyword_count": 1,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 2,
+        "inline_code": 1,
+        "has_code": true,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": false,
+      "success": true
+    },
+    {
+      "test_id": "operations",
+      "query": "What are Weave operations and how do I create them?",
+      "response": "<think>\nOkay, the user is asking about what Weave operations are and how to create them. Let me start by recalling what I know about Weave.\n\nFirst, I remember that Weave is a tool for creating and managing data pipelines. It's similar to Apache Airflow but with more features like integration with other systems. So, operations in Weave would be the steps or tasks you perform within your pipeline.\n\nThe user might not be familiar with the terms, so I should explain what an operation is in simple terms. An operation could be a step in a pipeline that processes data, transforms it, or performs some action. They might need examples to understand better.\n\nNext, how to create them? I think operations can be created via the UI or through code. Since the user hasn't specified a language, maybe they're using an interface like Weave's web app. So, steps would include navigating to the operation creation page and filling in details such as name, description, parameters, etc.\n\nI should also mention that creating an operation involves setting up the necessary parameters and defining the action it performs. Including examples of common operations could help them visualize what they're doing. For instance, a data transformation step or a logging operation.\n\nWait, maybe I should check if there are any specific steps mentioned in the documentation provided earlier. The user's previous questions were about creating baselines and ordering objects, so perhaps they're building pipelines similar to those. Including that context might help them see how operations relate to their own pipeline structure.\n\nAlso, making sure to explain that operations can be created using either the UI or code, depending on the setup. If they're using an interface, steps would be straightforward, but if they need to write code, then there's a coding aspect.\n\nI should also note that operations have dependencies, like inputs and outputs, so users need to define those as well. Maybe include a simple example with placeholders for parameters.\n\nFinally, wrap it up by summarizing the process: creating an operation involves setting up the name, description, parameters, and action, all through the Weave interface or code.\n</think>\n\nWeave operations are the **steps or tasks** you perform within your data pipelines. They define how data is processed, transformed, or acted upon in a sequence of steps.\n\n---\n\n### What Are Weave Operations?\n\n- An operation defines:\n  - A **name** (e.g., \"Data Transformation\")\n  - A **description**\n  - Inputs and outputs\n  - The action it performs\n\n---\n\n### How to Create an Operation\n\n#### **1. Using the Web App Interface**\n\n- Open your Weave interface.\n- Navigate to the **\"Operations\"** section (usually in a dashboard or pipeline editor).\n- Click on the **\"Create Operation\"** button.\n- Fill out the following details:\n  - **Name**: Describe what the operation does (e.g., \"Data Transformation\").\n  - **Description**: Briefly explain the purpose.\n  - **Inputs/Outputs**:\n    - List any required inputs and their types (e.g., numeric, string).\n    - Define outputs or dependencies.\n- Click **\"Create Operation\"**.\n\n#### **2. Using Code (Optional)**\n\nIf you're using an integrated system like Airflow, you can define operations in your code:\n\n```python\nfrom weave import operation\n\n# Create a data transformation operation\nop = operation(\n    name=\"Data Transformation\",\n    description=\"Transforms input data into output format.\",\n    inputs=[\n        {\"name\": \"input_data\", \"type\": \"string\"},\n        {\"name\": \"timestamp\", \"type\": \"datetime\"}\n    ],\n    outputs=[\n        {\"name\": \"output_result\", \"type\": \"string\"}\n    ]\n)\n```\n\nOnce created, you can assign it to a pipeline step.\n\n---\n\n### Example: Common Operations\n\n- **Data Transformation**: Converts raw data into structured formats.\n- **Logging**: Records events in the system.\n- **Input/Output Handling**: Ensures data flows correctly between steps.\n\nLet me know if you'd like examples of how to define specific operations!",
+      "latency": 12.811347961425781,
+      "analysis": {
+        "word_count": 610,
+        "char_count": 4003,
+        "weave_keywords": [
+          "weave"
+        ],
+        "keyword_count": 1,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 1,
+        "inline_code": -3,
+        "has_code": true,
+        "error": false
+      },
+      "keyword_match": true,
+      "image_match": false,
+      "success": true
+    }
+  ],
+  "comparison": {
+    "baseline": {
+      "result": {
+        "success": true,
+        "response": "<think>\nOkay, the user is asking how to trace their LLM calls with Weave. Let me start by recalling what Weave does. Weave is a tool that allows users to run and debug their own code, right? So tracing calls would mean figuring out the execution path of the code, maybe to find out where the LLM is being called from.\n\nFirst, I need to explain that Weave's trace feature is designed for debugging. Users can use the trace button to see the execution steps. That's straightforward. But maybe they're not familiar with that feature. I should mention that by default, trace doesn't show all the steps, just the main function. So the user can toggle it on or off to see a detailed breakdown.\n\nThen, I should think about the tools involved. They might be using Jupyter or VS Code. If they're using a code editor, the trace would show the code execution path. But if they're using a different environment, like a local server, they might need to set up the trace in that environment first. Also, maybe mention that the trace is only for the current session, not for other sessions.\n\nI should also check if there are any specific steps they need to take. For example, if they're running the code in a Jupyter notebook, they need to click the trace button. If they're using a local server, they need to set up the trace in that environment. Also, maybe mention that the trace is only available in certain environments, like when the code is run in a Jupyter notebook or a VS Code extension.\n\nWait, but the user asked how to trace with Weave. So the answer should be pretty straightforward. Make sure to structure it step by step: first, explain that trace is for debugging, then provide the steps, and maybe add examples like using Jupyter or VS Code. Also, check if there are any other considerations, like setting the trace in the code editor's settings or in the environment configuration. But I think that's covered in the steps mentioned.\n</think>\n\nTo trace your LLM calls with **Weave**, you can use the built-in **Trace** feature in the Weave environment. Here's how:\n\n1. **Open Weave**: Start the Weave environment (e.g., via Jupyter notebook or VS Code extension).\n2. **Click Trace**: Go to the **Trace** button in the editor. This will show you the execution path of the code.\n3. **Toggle Trace**: If you want a detailed breakdown, toggle the **Trace** flag on or off to reveal more steps.\n\n### Example:\n- If you're using a Jupyter notebook:\n  - Click the **Trace** button to see the execution path.\n- If you're using VS Code:\n  - Use the **Trace** button in the editor to view the code flow.\n\n**Note**: The trace is only available in specific environments (e.g., Jupyter notebooks or VS Code extensions). Make sure your environment supports this feature.",
+        "latency": 5.829371929168701,
+        "error": null
+      },
+      "analysis": {
+        "word_count": 484,
+        "char_count": 2757,
+        "weave_keywords": [
+          "weave",
+          "tracing"
+        ],
+        "keyword_count": 2,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 0,
+        "inline_code": 0,
+        "has_code": false,
+        "error": false
+      }
+    },
+    "weave_model": {
+      "result": {
+        "success": true,
+        "response": "<think>\nOkay, the user is asking how to trace their LLM calls using Weave. Let me start by recalling what Weave does. From previous interactions, I know that we can set baselines and reorder objects in a comparison view to track orderings. So maybe they want to see an example of these steps.\n\nFirst, I should explain the process step-by-step as per the documentation provided. The user mentioned \"LLM calls,\" so perhaps they're looking for a way to visualize or track specific model interactions. They might be using Weave in a project where they need to monitor or debug their LLM performance.\n\nI need to make sure each step is clear and that the example given in the documentation applies. For instance, clicking on the ID to update the format and dragging to reorder objects would be key points. Also, mentioning the numeric diff formats like integer or percentage could help them understand how to display specific metrics.\n\nWait, but the user might not know exactly what each step does. Maybe I should structure it in a way that's easy to follow, using bullet points for clarity. Also, check if there are any other steps mentioned in the documentation that need to be included. The previous answers covered setting baselines and reordering, so combining those into one answer would make sense.\n\nI should also consider if they're looking for a visual interface or if they need code examples. Since the user hasn't specified, I'll stick to the guided approach as per the provided context.\n</think>\n\nTo trace your LLM calls with Weave, follow these steps:\n\n1. **Set a Baseline**:  \n   - In the Comparison view topbar, mouse over an object (e.g., a model or task) and click to set it as the baseline. This ensures the UI reflects the order of objects being compared.\n\n2. **Drag and Reorder**:  \n   - Click the three dots (menu icon) to the right of the ID.  \n   - Drag the ID to the left or right to reorder the comparison. The UI refreshes with an updated ordering.\n\n3. **Display Numeric Diff Formats**:  \n   - After reordering, click on the diff value to update its format (integer, percentage, or multiplier). This helps visualize metrics like `completion_tokens` or `total_tokens`.\n\nThis allows you to track and analyze orderings of LLM calls for better performance or debugging.",
+        "latency": 7.9427220821380615,
+        "error": null
+      },
+      "analysis": {
+        "word_count": 385,
+        "char_count": 2285,
+        "weave_keywords": [
+          "weave"
+        ],
+        "keyword_count": 1,
+        "has_images": false,
+        "image_count": 0,
+        "images": [],
+        "code_blocks": 0,
+        "inline_code": 2,
+        "has_code": true,
+        "error": false
+      }
+    }
+  },
+  "summary": {
+    "total_tests": 6,
+    "successful_tests": 6,
+    "average_latency": 9.519748091697693,
+    "total_weave_keywords": 8,
+    "responses_with_images": 0
+  }
+}

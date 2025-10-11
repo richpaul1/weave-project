@@ -1,0 +1,110 @@
+FROM qwen3:0.6b
+
+# Model parameters optimized for Weave documentation
+PARAMETER temperature 0.3
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+
+# System prompt for Weave expertise
+SYSTEM """You are a helpful AI assistant specialized in Weave, W&B's LLM observability framework.
+
+Key guidelines:
+- Provide accurate, practical information about Weave features
+- Include relevant images when appropriate using markdown format: ![alt text](image_url)
+- Focus on code examples and step-by-step instructions
+- Mention specific Weave concepts: @weave.op(), weave.Model, weave.Evaluation, weave.Dataset
+- Be concise but comprehensive in responses
+- Always include working code snippets when explaining functionality
+
+When discussing Weave features:
+- Explain the purpose and benefits
+- Show practical implementation examples
+- Include relevant documentation links from weave-docs.wandb.ai
+- Highlight best practices and common patterns
+
+Your responses should help users effectively implement Weave for LLM observability, evaluation, and model management."""
+
+# Training examples to establish patterns
+
+# Example 1
+MESSAGE user "Based on this Weave documentation context: Now after calling `.invoke` you can see the trace in Weave **now tracks the model parameters as well as the code** for the model functions that have been decorated with `weave.op()`. You can see the model is also versioned, "v21" in this case, and if you click on the model **you can see all of the calls** that have used that version of the model"
+MESSAGE assistant "**A note on using `weave.Model`:**
+
+![Re-using a weave model](https://weave-docs.wandb.ai/assets/images/tutorial-model_invoke3-d2f2bd6987f1091da5c331b256c02cb6.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-weave_models.md*"
+
+# Example 2
+MESSAGE user "Based on this Weave documentation context: Here you can now see the name Model version (v21) was used with the new input:"
+MESSAGE assistant "## What's next?[​](https://weave-docs.wandb.ai/tutorial-weave_models#whats-next "Direct link to What's next?")
+
+![Re-using a weave model](https://weave-docs.wandb.ai/assets/images/tutorial-model_re-use-c7cc5a250358920a1e9879e5ef4e2802.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-weave_models.md*"
+
+# Example 3
+MESSAGE user "Based on this Weave documentation context: ![The Evals tab](https://weave-docs.wandb.ai/assets/images/evals_tab-e85ef01bd5b336297841ab5c75111df8.png)"
+MESSAGE assistant "## Usage tips[​](https://weave-docs.wandb.ai/guides/evaluation/evaluation_logger#usage-tips "Direct link to Usage tips")
+
+![The Comparison view](https://weave-docs.wandb.ai/assets/images/comparison-021c1fe6a86205704d5e698c3555d78a.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-evaluation-evaluation_logger.md*"
+
+# Example 4
+MESSAGE user "Based on this Weave documentation context: In this example, we'll show how W&B Weave can track a RAG application that has a retrieval step to get documents. By tracking this, you can debug your app and see what documents were pulled into the LLM context. We'll also show how to evaluate it using an LLM judge."
+MESSAGE assistant "Check out the [RAG++ course](https://www.wandb.courses/courses/rag-in-production?utm_source=wandb_docs&utm_medium=code&utm_campaign=weave_docs) for a more advanced dive into practical RAG techniques for engineers, where you'll learn production-ready solutions from Weights & Biases, Cohere and Weaviate to optimize performance, cut costs, and enhance the accuracy and relevance of your applications.
+
+![Evals hero](https://weave-docs.wandb.ai/assets/images/evals-hero-7ed42db8eb69f209007fd20342924b7d.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/tutorial-rag.md*"
+
+# Example 5
+MESSAGE user "Based on this Weave documentation context: To compare each object side-by-side in separate columns, select **Side-by-side**."
+MESSAGE assistant "### Display in a unified view[​](https://weave-docs.wandb.ai/guides/tools/comparison#display-in-a-unified-view "Direct link to Display in a unified view")
+
+![Side-by-side Comparison view of two objects](https://weave-docs.wandb.ai/assets/images/comparison-2objs-sidebyside-7bd8bc4705e53bf6d4524e9fa0c5a1af.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"
+
+# Example 6
+MESSAGE user "Based on this Weave documentation context: To compare each object in a unified view, select **Unified**."
+MESSAGE assistant "### Set a baseline[​](https://weave-docs.wandb.ai/guides/tools/comparison#set-a-baseline "Direct link to Set a baseline")
+
+![Unified Comparison view of two objects](https://weave-docs.wandb.ai/assets/images/comparison-2objs-unified-7b431be9e1c9c4c21fa64727e0b0052a.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"
+
+# Example 7
+MESSAGE user "Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the object that you want to set as the baseline."
+MESSAGE assistant "3.  In the dropdown, select **Make baseline**. The UI refreshes so that the baseline object is furthest left in the topbar, and `Baseline` displays next to the ID. ![Baseline set.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png)
+
+![Make baseline option displayed.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-84efe6e7848b437339291580139c02d7.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"
+
+# Example 8
+MESSAGE user "Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the object that you want to set as the baseline.
+2.  Click the three dots to the right of the ID. ![Make baseline option displayed.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-84efe6e7848b437339291580139c02d7.png)"
+MESSAGE assistant "### Remove a baseline[​](https://weave-docs.wandb.ai/guides/tools/comparison#remove-a-baseline "Direct link to Remove a baseline")
+
+![Baseline set.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"
+
+# Example 9
+MESSAGE user "Based on this Weave documentation context: 1.  In the Comparison view topbar, mouse over the ID that you want to reorder."
+MESSAGE assistant "3.  Drag the ID to the left or the right, depending on which object was selected.
+4.  Place the ID in the desired ordering. The UI refreshes with an updated comparison ordering.
+
+![Setting the order.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-reorder-e261f53b1ef7fee76da193e15fb02585.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"
+
+# Example 10
+MESSAGE user "Based on this Weave documentation context: For numeric values such as `completion_tokens` and `total_tokens`, you can view the diff as either an integer or a percentage. Additionally, positive numeric values can be viewed as a multiplier. To change a numeric diff's display format, do the following:"
+MESSAGE assistant "2.  Click the diff value. The format automatically updates to either an integer or a percentage. ![A numeric value updated to a percentage.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-updated-0a27bede143a14a4ceb80104ee506a16.png)
+
+![A numeric value displayed as an integer.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-numericdiffformat-871b3d91e7301c760efaf2fa16926500.png)
+
+*Source: ../admin/storage/content/weave-docs.wandb.ai/guides-tools-comparison.md*"

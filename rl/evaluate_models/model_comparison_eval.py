@@ -162,9 +162,9 @@ SYSTEM_PROMPT = """You are a helpful AI assistant that provides information abou
 
 
 class OllamaModel(Model):
-    """Model using local Ollama"""
+    """Model using local Ollama (baseline)"""
 
-    model_name: str = "ollama_qwen3"
+    model_name: str = "ollama_qwen3_baseline"
     base_url: str = "http://localhost:11434"
     model: str = "qwen3:0.6b"
     temperature: float = 0.3
@@ -206,6 +206,53 @@ class OllamaModel(Model):
         return {
             "response": response_text,
             "model": f"ollama:{model}",
+            "prompt": prompt,
+            "category": category,
+            "has_image": len(images) > 0,
+            "image_count": len(images),
+            "images": [{"alt": alt, "url": url} for alt, url in images],
+            "word_count": len(response_text.split()),
+            "char_count": len(response_text),
+            "error": "Error:" in response_text
+        }
+
+class WeaveTrainedModel(Model):
+    """Model using our Weave-trained qwen3-weave:0.6b"""
+
+    model_name: str = "qwen3_weave_trained"
+    base_url: str = "http://localhost:11434"
+    model: str = "qwen3-weave:0.6b"
+    temperature: float = 0.3
+
+    @weave.op()
+    async def predict(self, prompt: str, category: str = None, **kwargs) -> Dict[str, Any]:
+        """Query Weave-trained local model"""
+        try:
+            response = httpx.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": self.temperature
+                    }
+                },
+                timeout=60.0
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "")
+
+        except Exception as e:
+            response_text = f"Error: {str(e)}"
+
+        # Extract metrics
+        images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response_text)
+
+        return {
+            "response": response_text,
+            "model": self.model,
             "prompt": prompt,
             "category": category,
             "has_image": len(images) > 0,
@@ -389,12 +436,14 @@ async def run_model_comparison():
 
     # Create models
     print("\n📝 Creating models...")
-    ollama_model = OllamaModel(name="ollama_model")
+    ollama_model = OllamaModel(name="ollama_baseline_model")
+    weave_model = WeaveTrainedModel(name="weave_trained_model")
     openai_model = OpenAIModel(name="openai_model")
     openpipe_model = OpenPipeModel(name="openpipe_model")
 
     models = [
-        ("Ollama (Local)", ollama_model),
+        ("Ollama Baseline (qwen3:0.6b)", ollama_model),
+        ("Weave Trained (qwen3-weave:0.6b)", weave_model),
         ("OpenAI (GPT-4)", openai_model),
         ("OpenPipe (Custom)", openpipe_model)
     ]
