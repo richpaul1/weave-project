@@ -1,0 +1,119 @@
+{
+  "evaluation_name": "2025-10-11-2248-single-prompt",
+  "timestamp": "2025-10-11T22:50:21.287206",
+  "prompt": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+  "models_tested": [
+    "qwen3:0.6b",
+    "qwen3-weave:0.6b",
+    "gpt-4",
+    "openpipe:multimodal-agent-v1"
+  ],
+  "results": [
+    {
+      "response": "<think>\nOkay, the user is asking how to trace their LLM calls with Weave. Let me start by recalling what Weave is. It's a tool for tracing and analyzing blockchain transactions. So, the user wants to know how to track their LLM interactions with Weave.\n\nFirst, I need to explain the process. Maybe start by explaining that Weave can trace transactions, but LLMs are used in the blockchain, so they might be part of a larger system. Then, provide examples of how to do this. For instance, using a blockchain explorer like Etherscan or Chainalysis. They should see images of these explorers.\n\nWait, but how do I trace LLMs? Oh right, they might be part of a decentralized network, so tracing them would involve looking at their IP addresses or transaction logs. Maybe mention that tracing requires checking the blockchain logs. Also, include an example like a specific LLM, like GPT-4, and show how to find its IP or transaction details.\n\nI should make sure to mention that tracing LLMs is not straightforward and might require additional tools or knowledge. Also, highlight that the user needs to check the blockchain explorer for their IP or transaction details. Maybe include an image of Etherscan with a specific IP or a transaction log. Also, explain that tracing LLMs is part of a larger decentralized network and that the user should look into the blockchain logs for clues.\n\nWait, but the user is asking specifically about Weave. So maybe they want to use Weave's features to trace their own calls. But I'm not sure. Let me check the original question again. The user says \"trace my LLM calls with Weave.\" So perhaps they want to use Weave's capabilities to track their own LLMs. Maybe they are using Weave to analyze their own blockchain calls, so tracing those would be part of their process.\n\nIn that case, the answer should guide them through using Weave's tools. For example, using a blockchain explorer to find their IP or transaction details. Also, provide an example like a specific LLM, such as GPT-4, and show how to find its IP. Maybe include an image of Etherscan with the IP or a transaction log.\n\nI need to make sure the explanation is clear and that the examples are relevant. Also, mention that tracing LLMs might require additional tools or knowledge, and that the user should check the blockchain explorer for clues. Finally, wrap it up by summarizing the steps and offering further assistance.\n</think>\n\nTo trace your **LLM calls** with **Weave**, you can use its built-in tools to analyze blockchain transactions, which may be linked to your LLM interactions. Here's how:\n\n---\n\n### **1. Use Weave to Trace LLM Calls**\nWeave is designed to trace blockchain transactions, so you can use it to trace your LLM calls if they involve blockchain-based interactions.\n\n#### **Example: Tracing GPT-4 (LLM)**\n- **Step 1**: Use Weave to analyze your LLM calls. Look for transactions or logs that involve your model.\n- **Step 2**: Check the blockchain explorer (e.g., **Etherscan** or **Chainalysis**) for clues. For example, if your GPT-4 is part of a decentralized network, look for its IP address or transaction details.\n- **Step 3**: If the LLM is part of a larger decentralized network, trace its IP or transaction to understand its role.\n\n---\n\n### **2. Tools to Use**\n- **Blockchain Explorers**: \n  - **Etherscan**: Shows IP addresses, transaction hashes, or logs.\n  - **Chainalysis**: Provides detailed transaction data.\n- **Weave's Features**:\n  - Weave allows you to trace transactions, including those linked to your LLMs.\n\n---\n\n### **3. Example: Finding a LLM\u2019s IP or Transaction**\n- **If your LLM is part of a blockchain network**:\n  - Look for its IP address or transaction hash in the blockchain explorer.\n  - Example: If your GPT-4 is used in a decentralized network, check its IP or transaction in Etherscan.\n\n- **If your LLM is a standalone model**:\n  - Use Weave to analyze its logs or transaction history.\n\n---\n\n### **4. Important Notes**\n- Tracing LLMs is not straightforward and may require additional tools or knowledge.\n- Always verify the blockchain explorer for clues, as LLMs can be part of a decentralized network.\n\n---\n\n### **5. Example Image**\n- **Etherscan**:  \n  ![Etherscan IP](https://example.com/etherscan-ip.png)  \n  (A placeholder image showing an IP or transaction hash.)\n\n- **Chainalysis**:  \n  ![Chainalysis Transaction](https://example.com/chainalysis-transaction.png)  \n  (A placeholder image showing a transaction log.)\n\n---\n\n### **Summary**\nBy using Weave to trace your LLM calls, you can analyze blockchain transactions linked to your model. This helps understand where your LLM is used and how it interacts with the decentralized network. Always verify with blockchain explorers for accurate results. Let me know if you need further assistance!",
+      "model": "qwen3:0.6b",
+      "prompt": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+      "error": false,
+      "word_count": 777,
+      "char_count": 4802,
+      "image_count": 2,
+      "images": [
+        {
+          "alt": "Etherscan IP",
+          "url": "https://example.com/etherscan-ip.png"
+        },
+        {
+          "alt": "Chainalysis Transaction",
+          "url": "https://example.com/chainalysis-transaction.png"
+        }
+      ],
+      "has_images": true,
+      "weave_keywords": [
+        "weave",
+        "tracing"
+      ],
+      "keyword_count": 2,
+      "code_blocks": 0,
+      "inline_code": 0,
+      "has_code": false,
+      "model_name": "qwen3:0.6b"
+    },
+    {
+      "response": "<think>\nOkay, the user is asking how to trace their LLM calls using Weave. Let me start by recalling what Weave offers. From previous interactions, I know that users can set up baselines and reorder objects in a comparison view. So, the main steps should be explaining these features.\n\nFirst, they need to set up a baseline. The user mentioned clicking on the ID and then using the three dots to reorder. Also, there's a numeric diff format option. I should include an image for each step. Then, when they reorder, the UI refreshes with the new order. That's part of the process.\n\nWait, the user might not know how to set up the baseline. So, maybe explain that by selecting the object and clicking on it, then using the three dots. Also, mention that after reordering, the diff format changes. Including images would make it clearer.\n\nI should check if there are any other features related to LLM tracing. Maybe mention that after setting up, they can view detailed information about each call. But since the user is asking specifically for tracing, maybe focus on the comparison tools and their setup steps.\n\nAlso, ensure that examples are included with images. For instance, showing how to set a baseline and reorder an object. Make sure the answer is clear and step-by-step, using bullet points or numbered lists as requested.\n</think>\n\nTo trace your LLM calls with Weave, follow these steps:\n\n### 1. **Set Up a Baseline**\n- In the **Comparison view**, click on the ID you want to set as the baseline.\n- Click the **three dots** (or use the menu icon) to reorder the object.\n- Select the desired order (left or right), and the UI refreshes with an updated comparison.\n\n### 2. **View Numeric Diff Format**\n- After reordering, click on the diff value to update it to either:\n  - **Integer format** or\n  - **Percentage**, or\n  - **Multiplier** for positive values.\n- This allows you to view token counts (e.g., `completion_tokens` or `total_tokens`) in a readable way.\n\n### Example Image:\n- ![Baseline set.](https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png)\n\n### 3. **Trace LLM Calls**\n- With the baseline set, you can view detailed information about each LLM call (e.g., input, output, or token usage) in the comparison view.\n\nThis setup helps you track and analyze your model's performance efficiently! \ud83d\ude80",
+      "model": "qwen3-weave:0.6b",
+      "prompt": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+      "error": false,
+      "word_count": 386,
+      "char_count": 2367,
+      "image_count": 1,
+      "images": [
+        {
+          "alt": "Baseline set.",
+          "url": "https://weave-docs.wandb.ai/assets/images/comparison-2objs-baseline-set-65ad9564e7d5c2cba6ec164ed9945bd0.png"
+        }
+      ],
+      "has_images": true,
+      "weave_keywords": [
+        "weave",
+        "tracing",
+        "wandb"
+      ],
+      "keyword_count": 3,
+      "code_blocks": 0,
+      "inline_code": 2,
+      "has_code": true,
+      "model_name": "qwen3-weave:0.6b"
+    },
+    {
+      "response": "Weave is a powerful tool that allows developers to trace their LLM (Low-Level Memory) calls, helping them to debug and optimize their code. Here's a step-by-step guide on how to do it:\n\n1. Install Weave: First, you need to install Weave. You can do this by downloading it from the official website or by using a package manager like npm (Node Package Manager).\n\n2. Run Weave: Once installed, you can run Weave by opening a terminal window and typing `weave run`.\n\n3. Trace LLM Calls: To trace LLM calls, you need to use the `weave trace` command followed by the name of the function you want to trace. For example, if you want to trace a function called `myFunction`, you would type `weave trace myFunction`.\n\n4. View Trace: After running the trace command, Weave will output a trace of all the LLM calls made by `myFunction`. This trace will include information about the function call stack, the arguments passed to each function, and the return values of each function.\n\n5. Analyze Trace: You can analyze the trace to understand the behavior of your code. For example, you might notice that a certain function is called more often than you expected, indicating a potential performance issue.\n\nUnfortunately, I can't provide images or examples as I'm an AI text-based model. However, you can find more detailed instructions and examples in the Weave documentation or online tutorials.",
+      "model": "gpt-4",
+      "prompt": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+      "error": false,
+      "word_count": 234,
+      "char_count": 1386,
+      "image_count": 0,
+      "images": [],
+      "has_images": false,
+      "weave_keywords": [
+        "weave"
+      ],
+      "keyword_count": 1,
+      "code_blocks": 0,
+      "inline_code": 5,
+      "has_code": true,
+      "model_name": "gpt-4"
+    },
+    {
+      "response": "To trace your LLM calls with Weave, you can follow these steps:\n\n  1. First, you need to enable Weave tracing in your Weave configuration. You can do this by adding the following configuration to your Weave configuration file:\n\n```yaml\nweave:\n  tracing:\n    enabled: true\n```\n\nThis will enable Weave tracing for all LLM calls.\n  2. Next, you need to install the Weave tracing agent on your Weave cluster. You can do this by running the following command:\n\n```\nweave install tracing\n```\n\nThis will install the Weave tracing agent on all nodes in your Weave cluster.\n  3. Once the Weave tracing agent is installed, you can start tracing LLM calls by running the following command:\n\n```\nweave start tracing\n```\n\nThis will start tracing LLM calls and will generate a trace file in the `weave-trace` directory on each node in your Weave cluster.\n  4. You can then use the Weave trace viewer to view the trace file and see the details of each LLM call. You can do this by running the following command:\n\n```\nweave trace viewer\n```\n\nThis will open the Weave trace viewer and you can use it to view the trace file and see the details of each LLM call.\n\nHere is an example of a Weave trace file:\n\n```\n[2022-01-01T00:00:00.000Z] INFO [weave-trace] Starting Weave tracing\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-01T00:00:01.000Z] INFO [weave-trace] Starting Weave tracing agent\n[2022-01-",
+      "model": "openpipe:multimodal-agent-v1",
+      "prompt": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+      "error": false,
+      "usage": {
+        "input_tokens": 38,
+        "output_tokens": 1000,
+        "total_tokens": 1038
+      },
+      "word_count": 339,
+      "char_count": 2545,
+      "image_count": 0,
+      "images": [],
+      "has_images": false,
+      "weave_keywords": [
+        "weave",
+        "tracing"
+      ],
+      "keyword_count": 2,
+      "code_blocks": 4,
+      "inline_code": 2,
+      "has_code": true,
+      "model_name": "openpipe:multimodal-agent-v1"
+    }
+  ],
+  "summary": {
+    "total_models": 4,
+    "successful_models": 4,
+    "total_images": 3,
+    "avg_words": 434.0,
+    "total_keywords": 8
+  }
+}

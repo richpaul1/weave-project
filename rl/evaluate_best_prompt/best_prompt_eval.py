@@ -66,14 +66,42 @@ class ManualOpenPipeClient:
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        with httpx.Client() as client:
-            response = client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=60.0
-            )
-            return response.json()
+        try:
+            with httpx.Client(timeout=120.0) as client:  # Increased timeout
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+
+                # Check for HTTP errors
+                if response.status_code != 200:
+                    return {
+                        "error": f"HTTP {response.status_code}: {response.text}",
+                        "choices": [],
+                        "usage": {}
+                    }
+
+                try:
+                    return response.json()
+                except Exception as e:
+                    return {
+                        "error": f"JSON decode error: {str(e)}",
+                        "choices": [],
+                        "usage": {}
+                    }
+        except httpx.TimeoutException:
+            return {
+                "error": "Request timed out after 120 seconds",
+                "choices": [],
+                "usage": {}
+            }
+        except Exception as e:
+            return {
+                "error": f"Network error: {str(e)}",
+                "choices": [],
+                "usage": {}
+            }
 
 # Initialize clients
 load_environment()
@@ -122,35 +150,35 @@ class BaseModel(weave.Model):
 
 class OllamaBaselineModel(BaseModel):
     """Baseline qwen3:0.6b model"""
-    
-    model_name: str = "ollama_baseline"
+
+    model_name: str = "qwen3:0.6b"
     base_url: str = "http://localhost:11434"
     model: str = "qwen3:0.6b"
     temperature: float = 0.3
-    
-    @weave.op(name="qwen3_0_6b")
+
+    @weave.op()
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query baseline Ollama model"""
         try:
-            response = httpx.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": self.temperature}
-                },
-                timeout=60.0
-            )
-            response.raise_for_status()
-            result = response.json()
-            response_text = result.get("response", "")
-            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": self.temperature}
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+                response_text = result.get("response", "")
+
         except Exception as e:
             response_text = f"Error: {str(e)}"
-        
+
         analysis = self.analyze_response(response_text)
-        
+
         return {
             "response": response_text,
             "model": self.model,
@@ -161,35 +189,35 @@ class OllamaBaselineModel(BaseModel):
 
 class WeaveTrainedModel(BaseModel):
     """Weave-trained qwen3-weave:0.6b model"""
-    
-    model_name: str = "weave_trained"
+
+    model_name: str = "qwen3-weave:0.6b"
     base_url: str = "http://localhost:11434"
     model: str = "qwen3-weave:0.6b"
     temperature: float = 0.3
-    
-    @weave.op(name="qwen3_weave_0_6b")
+
+    @weave.op()
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query Weave-trained model"""
         try:
-            response = httpx.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": self.temperature}
-                },
-                timeout=60.0
-            )
-            response.raise_for_status()
-            result = response.json()
-            response_text = result.get("response", "")
-            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": self.temperature}
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+                response_text = result.get("response", "")
+
         except Exception as e:
             response_text = f"Error: {str(e)}"
-        
+
         analysis = self.analyze_response(response_text)
-        
+
         return {
             "response": response_text,
             "model": self.model,
@@ -205,7 +233,7 @@ class OpenAIModel(BaseModel):
     model: str = "gpt-4"
     temperature: float = 0.3
     
-    @weave.op(name="gpt_4")
+    @weave.op()
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query OpenAI model"""
         try:
@@ -216,12 +244,12 @@ class OpenAIModel(BaseModel):
                 max_tokens=1000
             )
             response_text = response.choices[0].message.content
-            
+
         except Exception as e:
             response_text = f"Error: {str(e)}"
-        
+
         analysis = self.analyze_response(response_text)
-        
+
         return {
             "response": response_text,
             "model": self.model,
@@ -230,7 +258,6 @@ class OpenAIModel(BaseModel):
             **analysis
         }
 
-@weave.op(name="openpipe_multimodal_agent_v1")
 def safe_openpipe_call(prompt: str) -> Dict[str, Any]:
     """Safe OpenPipe call with manual HTTP client"""
     try:
@@ -241,12 +268,28 @@ def safe_openpipe_call(prompt: str) -> Dict[str, Any]:
             temperature=0.3,
             max_tokens=1000
         )
-        
+
+        print(f"🔍 OpenPipe raw result: {result}")
+
+        # Check if there's an error in the result
+        if "error" in result and result["error"]:
+            return {
+                "response": f"OpenPipe API Error: {result['error']}",
+                "usage": {},
+                "error": result["error"]
+            }
+
         if "choices" in result and len(result["choices"]) > 0:
             response_text = result["choices"][0]["message"]["content"]
         else:
-            response_text = f"Error: Unexpected response format: {result}"
-            
+            error_msg = f"Unexpected response format: {result}"
+            print(f"❌ OpenPipe error: {error_msg}")
+            return {
+                "response": error_msg,
+                "usage": {},
+                "error": error_msg
+            }
+
         # Extract usage info safely
         usage_info = {}
         if "usage" in result:
@@ -257,34 +300,38 @@ def safe_openpipe_call(prompt: str) -> Dict[str, Any]:
                     "output_tokens": usage.get("completion_tokens", 0),
                     "total_tokens": usage.get("total_tokens", 0)
                 }
-        
+
+        print(f"✅ OpenPipe success: {len(response_text)} chars, usage: {usage_info}")
+
         return {
             "response": response_text,
             "usage": usage_info,
             "error": None
         }
-        
+
     except Exception as e:
+        error_msg = f"Exception in OpenPipe call: {str(e)}"
+        print(f"❌ OpenPipe exception: {error_msg}")
         return {
-            "response": f"Error: {str(e)}",
+            "response": error_msg,
             "usage": {},
             "error": str(e)
         }
 
 class OpenPipeModel(BaseModel):
     """OpenPipe custom model"""
-    
-    model_name: str = "openpipe_custom"
+
+    model_name: str = "openpipe:multimodal-agent-v1"
     model: str = "openpipe:multimodal-agent-v1"
-    
-    @weave.op(name="openpipe_predict")
+
+    @weave.op()
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query OpenPipe model"""
         result = safe_openpipe_call(prompt)
         response_text = result["response"]
-        
+
         analysis = self.analyze_response(response_text)
-        
+
         return {
             "response": response_text,
             "model": self.model,
@@ -333,18 +380,15 @@ async def main():
         sys.exit(1)
 
     # Initialize Weave
-    weave.init(
-        project_name=f"{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}",
-        autopatch_settings={"openai": False}  # Disable to avoid token validation issues
-    )
+    weave.init(f"{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}")
     
     # Create models
     print("\n📝 Creating models...")
     models = [
-        ("qwen3:0.6b", OllamaBaselineModel(name="ollama_baseline")),
-        ("qwen3-weave:0.6b", WeaveTrainedModel(name="weave_trained")),
-        ("gpt-4", OpenAIModel(name="openai_gpt4")),
-        ("openpipe:multimodal-agent-v1", OpenPipeModel(name="openpipe_custom"))
+        ("qwen3:0.6b", OllamaBaselineModel()),
+        ("qwen3-weave:0.6b", WeaveTrainedModel()),
+        ("gpt-4", OpenAIModel()),
+        ("openpipe:multimodal-agent-v1", OpenPipeModel())
     ]
     print("✅ All models created successfully")
     
@@ -355,7 +399,12 @@ async def main():
     @weave.op()
     def evaluate_model_response(model_output: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate model response quality"""
+        # Capture the actual response text for visibility in Weave
+        response_text = model_output.get("response", "")
+
         return {
+            "response_text": response_text,  # Include actual response text
+            "response_preview": response_text[:200] + "..." if len(response_text) > 200 else response_text,
             "image_count": model_output.get("image_count", 0),
             "word_count": model_output.get("word_count", 0),
             "keyword_count": model_output.get("keyword_count", 0),
