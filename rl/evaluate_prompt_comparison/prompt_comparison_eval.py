@@ -26,6 +26,7 @@ weave.init('rl-demo')
 # Import httpx for direct API calls to avoid Weave instrumentation conflicts
 import httpx
 import json
+from leaderboard import create_prompts_leaderboard, print_leaderboard_info
 
 # Manual OpenPipe API client to avoid Weave instrumentation issues
 class ManualOpenPipeClient:
@@ -442,6 +443,19 @@ async def run_evaluation():
 
     print(f"📁 Results saved to: {output_file}")
     print(f"🔗 View in Weave: https://wandb.ai/richpaul1-stealth/rl-demo")
+
+    # Create leaderboard
+    evaluations = [simple_evaluation, complex_evaluation]
+    try:
+        print("\n🏆 Creating Prompt_Comparison Leaderboard...")
+
+        # Create leaderboard
+        leaderboard_uri = create_prompts_leaderboard(evaluations, "rl-demo")
+        print_leaderboard_info(leaderboard_uri, "Prompt_Comparison")
+
+    except Exception as e:
+        print(f"⚠️ Failed to create leaderboard: {e}")
+        print("Evaluation results are still available in Weave")
 
     return results_data
 
