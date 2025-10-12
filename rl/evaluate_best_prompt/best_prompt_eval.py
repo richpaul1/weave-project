@@ -378,7 +378,7 @@ async def main():
     print("="*60)
 
     # Initialize Weave
-    weave.init(f"{WANDB_ENTITY}/{WANDB_PROJECT}")
+    client = weave.init(f"{WANDB_ENTITY}/{WANDB_PROJECT}",settings={"client_parallelism": 100})
     
     # Create models
     print("\n📝 Creating models...")
@@ -448,6 +448,7 @@ async def main():
 
             # Run the evaluation
             await evaluation.evaluate(model)
+            client.flush()
 
         except Exception as e:
             print(f"❌ Failed: {str(e)}")
