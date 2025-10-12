@@ -370,7 +370,7 @@ async def run_evaluation():
     print("-"*80)
 
     simple_evaluation = Evaluation(
-        name="simple_prompt_evaluation",
+        evaluation_name="simple_prompt_evaluation",
         dataset=TEST_QUERIES,
         scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
     )
@@ -381,7 +381,7 @@ async def run_evaluation():
     print("-"*80)
 
     complex_evaluation = Evaluation(
-        name="complex_prompt_evaluation",
+        evaluation_name="complex_prompt_evaluation",
         dataset=TEST_QUERIES,
         scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
     )
