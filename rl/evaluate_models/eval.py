@@ -54,17 +54,40 @@ class ManualOpenPipeClient:
         }
 
         try:
-            with httpx.Client() as client:
+            with httpx.Client(timeout=120.0) as client:  # Increased timeout for OpenPipe
                 response = client.post(
                     f"{self.base_url}/chat/completions",
                     headers=headers,
-                    json=payload,
-                    timeout=60.0
+                    json=payload
                 )
-                response.raise_for_status()
-                return response.json()
+
+                if response.status_code != 200:
+                    return {
+                        "error": f"HTTP {response.status_code}: {response.text}",
+                        "choices": [],
+                        "usage": {}
+                    }
+
+                try:
+                    return response.json()
+                except Exception as e:
+                    return {
+                        "error": f"JSON decode error: {str(e)}",
+                        "choices": [],
+                        "usage": {}
+                    }
+        except httpx.TimeoutException:
+            return {
+                "error": "Request timed out after 120 seconds",
+                "choices": [],
+                "usage": {}
+            }
         except Exception as e:
-            return {"error": str(e)}
+            return {
+                "error": f"Network error: {str(e)}",
+                "choices": [],
+                "usage": {}
+            }
 
 # Initialize manual OpenPipe client
 openpipe_client = ManualOpenPipeClient(OPENPIPE_API_KEY)
