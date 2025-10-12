@@ -20,6 +20,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 import weave
 from openai import OpenAI
 from dotenv import load_dotenv
+from leaderboard import create_active_prompt_leaderboard, print_leaderboard_info
 
 # Load environment variables
 load_dotenv('../../.env.local')
@@ -421,6 +422,7 @@ async def main():
 
     # Run evaluation
     results = []
+    evaluations = []  # Store evaluation objects for leaderboard
 
     for model_name, model in models:
         print(f"\n🧪 Testing {model_name}...")
@@ -448,6 +450,7 @@ async def main():
 
             # Run the evaluation
             await evaluation.evaluate(model)
+            evaluations.append(evaluation)  # Store for leaderboard
             client.flush()
 
         except Exception as e:
@@ -489,6 +492,19 @@ async def main():
     
     print(f"\n📁 Results saved to: {filename}")
     print(f"🔗 View in Weave: https://wandb.ai/{WANDB_ENTITY}/{WANDB_PROJECT}/weave")
+
+    # Create leaderboard if we have evaluations
+    if evaluations:
+        try:
+            print("\n🏆 Creating Active_Prompt Leaderboard...")
+
+            # Create leaderboard
+            leaderboard_uri = create_active_prompt_leaderboard(evaluations, "rl-demo")
+            print_leaderboard_info(leaderboard_uri, "Active_Prompt")
+
+        except Exception as e:
+            print(f"⚠️ Failed to create leaderboard: {e}")
+            print("Evaluation results are still available in Weave")
 
 if __name__ == "__main__":
     asyncio.run(main())
