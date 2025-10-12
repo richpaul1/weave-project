@@ -585,6 +585,69 @@ async def chat_message_with_tools(request: ChatRequest):
 
 
 
+@router.post("/retrieve-context")
+async def retrieve_context_for_evaluation(request: ChatRequest):
+    """
+    Retrieve context for a query without generating a response.
+    This endpoint is designed for evaluation purposes to get the same context
+    that would be used in the RAG pipeline.
+
+    Args:
+        request: Chat request with query and options
+
+    Returns:
+        Context data including chunks, sources, and formatted context text
+    """
+    print(f"🔍 Chat API: Received context retrieval request for evaluation")
+    print(f"   Query: '{request.query}'")
+    print(f"   Session ID: {request.session_id}")
+
+    init_services()
+
+    try:
+        # Use the same retrieval service as the main chat pipeline
+        context_result = await enhanced_rag_service.retrieval_service.retrieve_context(
+            query=request.query,
+            top_k=request.top_k or 5,
+            min_score=0.7,  # Use same threshold as main pipeline
+            expand_context=True
+        )
+
+        # Build the same prompt format as the agent would use
+        from app.prompts import PromptConfig
+
+        # Use the general prompt template (same as main pipeline)
+        formatted_prompt = PromptConfig.get_general_prompt_template().format(
+            history_section="",  # No history for evaluation
+            context=context_result["context_text"],
+            query=request.query
+        )
+
+        return {
+            "success": True,
+            "query": request.query,
+            "context_data": {
+                "chunks": context_result["chunks"],
+                "sources": context_result["sources"],
+                "context_text": context_result["context_text"],
+                "num_chunks": context_result["num_chunks"],
+                "num_sources": context_result["num_sources"]
+            },
+            "formatted_prompt": formatted_prompt,
+            "prompt_template": "general_prompt_template",
+            "metadata": {
+                "top_k": request.top_k or 5,
+                "min_score": 0.7,
+                "expand_context": True,
+                "prompt_version": PromptConfig.get_current_version()
+            }
+        }
+
+    except Exception as e:
+        print(f"❌ Chat API: Context retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Context retrieval failed: {str(e)}")
+
+
 @router.post("/stream-with-tools")
 async def stream_chat_with_tools(request: ChatRequest):
     """

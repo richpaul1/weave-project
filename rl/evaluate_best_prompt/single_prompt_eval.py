@@ -128,7 +128,7 @@ class OllamaBaselineModel(BaseModel):
     model: str = "qwen3:0.6b"
     temperature: float = 0.3
     
-    @weave.op()
+    @weave.op(name="qwen3_0_6b")
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query baseline Ollama model"""
         try:
@@ -167,7 +167,7 @@ class WeaveTrainedModel(BaseModel):
     model: str = "qwen3-weave:0.6b"
     temperature: float = 0.3
     
-    @weave.op()
+    @weave.op(name="qwen3_weave_0_6b")
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query Weave-trained model"""
         try:
@@ -205,7 +205,7 @@ class OpenAIModel(BaseModel):
     model: str = "gpt-4"
     temperature: float = 0.3
     
-    @weave.op()
+    @weave.op(name="gpt_4")
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query OpenAI model"""
         try:
@@ -230,7 +230,7 @@ class OpenAIModel(BaseModel):
             **analysis
         }
 
-@weave.op()
+@weave.op(name="openpipe_multimodal_agent_v1")
 def safe_openpipe_call(prompt: str) -> Dict[str, Any]:
     """Safe OpenPipe call with manual HTTP client"""
     try:
@@ -277,7 +277,7 @@ class OpenPipeModel(BaseModel):
     model_name: str = "openpipe_custom"
     model: str = "openpipe:multimodal-agent-v1"
     
-    @weave.op()
+    @weave.op(name="openpipe_predict")
     async def predict(self, prompt: str) -> Dict[str, Any]:
         """Query OpenPipe model"""
         result = safe_openpipe_call(prompt)
@@ -319,13 +319,19 @@ def print_comparison_table(results: List[Dict[str, Any]]):
 
 async def main():
     """Main evaluation function"""
+
+    # Create descriptive evaluation name
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
+    evaluation_name = f"{timestamp}-single-prompt"
+
+    print(f"🏷️ Evaluation Name: {evaluation_name}")
     print("🔍 Starting Single Prompt Evaluation")
     print("="*60)
-    
+
     # Check environment
     if not check_environment():
         sys.exit(1)
-    
+
     # Initialize Weave
     weave.init(
         project_name=f"{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}",
@@ -335,32 +341,61 @@ async def main():
     # Create models
     print("\n📝 Creating models...")
     models = [
-        ("Ollama Baseline (qwen3:0.6b)", OllamaBaselineModel(name="ollama_baseline")),
-        ("Weave Trained (qwen3-weave:0.6b)", WeaveTrainedModel(name="weave_trained")),
-        ("OpenAI (GPT-4)", OpenAIModel(name="openai_gpt4")),
-        ("OpenPipe (Custom)", OpenPipeModel(name="openpipe_custom"))
+        ("qwen3:0.6b", OllamaBaselineModel(name="ollama_baseline")),
+        ("qwen3-weave:0.6b", WeaveTrainedModel(name="weave_trained")),
+        ("gpt-4", OpenAIModel(name="openai_gpt4")),
+        ("openpipe:multimodal-agent-v1", OpenPipeModel(name="openpipe_custom"))
     ]
     print("✅ All models created successfully")
     
+    # Create evaluation dataset
+    dataset = [{"prompt": BEST_PROMPT}]
+
+    # Create evaluation function
+    @weave.op()
+    def evaluate_model_response(model_output: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate model response quality"""
+        return {
+            "image_count": model_output.get("image_count", 0),
+            "word_count": model_output.get("word_count", 0),
+            "keyword_count": model_output.get("keyword_count", 0),
+            "code_blocks": model_output.get("code_blocks", 0),
+            "error": model_output.get("error", False),
+            "has_images": model_output.get("image_count", 0) > 0,
+            "has_keywords": model_output.get("keyword_count", 0) > 0,
+            "response_quality": "good" if not model_output.get("error", False) and model_output.get("word_count", 0) > 50 else "poor"
+        }
+
     # Run evaluation
     results = []
-    
+
     for model_name, model in models:
         print(f"\n🧪 Testing {model_name}...")
         print("-" * 60)
-        
+
         try:
             result = await model.predict(BEST_PROMPT)
             result['model_name'] = model_name
             results.append(result)
-            
+
             # Print immediate results
             print(f"✅ Success")
             print(f"   Images: {result.get('image_count', 0)}")
             print(f"   Words: {result.get('word_count', 0)}")
             print(f"   Keywords: {result.get('keyword_count', 0)}")
             print(f"   Code blocks: {result.get('code_blocks', 0)}")
-            
+
+            # Run Weave evaluation for this model
+            model_eval_name = f"{evaluation_name}-{model_name.lower().replace(':', '_').replace('-', '_')}"
+            evaluation = weave.Evaluation(
+                dataset=dataset,
+                scorers=[evaluate_model_response],
+                evaluation_name=model_eval_name
+            )
+
+            # Run the evaluation
+            await evaluation.evaluate(model)
+
         except Exception as e:
             print(f"❌ Failed: {str(e)}")
             results.append({
@@ -381,6 +416,7 @@ async def main():
     filename = f"single_prompt_results_{timestamp}.json"
     
     output_data = {
+        "evaluation_name": evaluation_name,
         "timestamp": datetime.now().isoformat(),
         "prompt": BEST_PROMPT,
         "models_tested": [r['model_name'] for r in results],

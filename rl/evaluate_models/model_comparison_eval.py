@@ -442,10 +442,10 @@ async def run_model_comparison():
     openpipe_model = OpenPipeModel(name="openpipe_model")
 
     models = [
-        ("Ollama Baseline (qwen3:0.6b)", ollama_model),
-        ("Weave Trained (qwen3-weave:0.6b)", weave_model),
-        ("OpenAI (GPT-4)", openai_model),
-        ("OpenPipe (Custom)", openpipe_model)
+        ("local-qwen3:0.6b", ollama_model),
+        ("local-qwen3-weave:0.6b", weave_model),
+        ("gpt-4", openai_model),
+        ("openpipe:multimodal-agent-v1", openpipe_model)
     ]
 
     print("✅ All models created successfully")
@@ -457,10 +457,12 @@ async def run_model_comparison():
         print(f"\n🧪 Testing {model_name}...")
         print("-"*60)
 
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
+        evaluation_name = f"{timestamp}-models-{model_name.lower()}"
         evaluation = Evaluation(
-            name=f"{model_name.lower().replace(' ', '_')}_evaluation",
             dataset=TEST_QUERIES,
-            scorers=[response_quality_scorer, weave_relevance_scorer, image_inclusion_scorer]
+            scorers=[response_quality_scorer, weave_relevance_scorer, image_inclusion_scorer],
+            evaluation_name=evaluation_name
         )
 
         try:
