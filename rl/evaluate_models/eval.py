@@ -15,6 +15,7 @@ import asyncio
 import re
 import httpx
 from openai import OpenAI
+from leaderboard import create_models_leaderboard, print_leaderboard_info
 
 # Load environment variables
 load_dotenv('../../.env.local')
@@ -236,6 +237,7 @@ class OllamaModel(Model):
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response_text.split()),
             "char_count": len(response_text),
+            "temperature": self.temperature,
             "error": "Error:" in response_text
         }
 
@@ -283,6 +285,7 @@ class WeaveTrainedModel(Model):
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response_text.split()),
             "char_count": len(response_text),
+            "temperature": self.temperature,
             "error": "Error:" in response_text
         }
 
@@ -326,6 +329,7 @@ class OpenAIModel(Model):
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response_text.split()),
             "char_count": len(response_text),
+            "temperature": self.temperature,
             "error": "Error:" in response_text
         }
 
@@ -366,11 +370,24 @@ class OpenPipeModel(Model):
             "images": [{"alt": alt, "url": url} for alt, url in images],
             "word_count": len(response_text.split()),
             "char_count": len(response_text),
+            "temperature": self.temperature,
             "error": "Error:" in response_text
         }
 
 
 # Scorers for evaluation
+@weave.op()
+def temperature_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
+    """Score based on temperature setting"""
+    temperature = output.get("temperature", 0.0)
+
+    return {
+        "temperature": temperature,
+        "temperature_category": "low" if temperature < 0.5 else "medium" if temperature < 1.0 else "high",
+        "is_deterministic": temperature == 0.0,
+        "is_creative": temperature >= 0.7
+    }
+
 @weave.op()
 def response_quality_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
     """Score response quality based on length and content"""
@@ -474,6 +491,7 @@ async def run_model_comparison():
     print("✅ All models created successfully")
 
     results = {}
+    evaluations = []  # Store evaluation objects for leaderboard
 
     # Run evaluation for each model
     for model_name, model in models:
@@ -484,13 +502,14 @@ async def run_model_comparison():
         evaluation_name = f"{timestamp}-models-{model_name.lower()}"
         evaluation = Evaluation(
             dataset=TEST_QUERIES,
-            scorers=[response_quality_scorer, weave_relevance_scorer, image_inclusion_scorer],
+            scorers=[response_quality_scorer, weave_relevance_scorer, image_inclusion_scorer, temperature_scorer],
             evaluation_name=evaluation_name
         )
 
         try:
             model_results = await evaluation.evaluate(model)
             results[model_name] = model_results
+            evaluations.append(evaluation)  # Store for leaderboard
             print(f"✅ {model_name} evaluation completed")
         except Exception as e:
             print(f"❌ {model_name} evaluation failed: {e}")
@@ -501,12 +520,12 @@ async def run_model_comparison():
     print("📊 MODEL COMPARISON SUMMARY")
     print("="*80)
 
-    print(f"\n{'Model':<20} {'Quality':<12} {'Relevance':<12} {'Images':<12} {'Overall':<12}")
-    print("-"*80)
+    print(f"\n{'Model':<20} {'Quality':<12} {'Relevance':<12} {'Images':<12} {'Temp':<8} {'Overall':<12}")
+    print("-"*88)
 
     for model_name in results:
         if "error" in results[model_name]:
-            print(f"{model_name:<20} {'ERROR':<12} {'ERROR':<12} {'ERROR':<12} {'ERROR':<12}")
+            print(f"{model_name:<20} {'ERROR':<12} {'ERROR':<12} {'ERROR':<12} {'ERROR':<8} {'ERROR':<12}")
             continue
 
         result = results[model_name]
@@ -515,9 +534,10 @@ async def run_model_comparison():
         quality_score = result.get("response_quality_scorer", {}).get("score", {}).get("mean", 0) * 100
         relevance_score = result.get("weave_relevance_scorer", {}).get("score", {}).get("mean", 0) * 100
         image_score = result.get("image_inclusion_scorer", {}).get("score", {}).get("mean", 0) * 100
+        temperature = result.get("temperature_scorer", {}).get("temperature", {}).get("mean", 0.0)
         overall_score = (quality_score + relevance_score + image_score) / 3
 
-        print(f"{model_name:<20} {quality_score:>10.1f}% {relevance_score:>10.1f}% {image_score:>10.1f}% {overall_score:>10.1f}%")
+        print(f"{model_name:<20} {quality_score:>10.1f}% {relevance_score:>10.1f}% {image_score:>10.1f}% {temperature:>6.1f} {overall_score:>10.1f}%")
 
     # Detailed analysis
     print("\n" + "="*80)
@@ -569,6 +589,19 @@ async def run_model_comparison():
 
     print(f"\n📁 Results saved to: {output_file}")
     print(f"🔗 View in Weave: https://wandb.ai/richpaul1-stealth/rl-demo")
+
+    # Create leaderboard if we have evaluations
+    if evaluations:
+        try:
+            print("\n🏆 Creating Models Leaderboard...")
+
+            # Create leaderboard
+            leaderboard_uri = create_models_leaderboard(evaluations, "rl-demo")
+            print_leaderboard_info(leaderboard_uri, "Models")
+
+        except Exception as e:
+            print(f"⚠️ Failed to create leaderboard: {e}")
+            print("Evaluation results are still available in Weave")
 
     return results_data
 
