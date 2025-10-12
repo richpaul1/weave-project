@@ -19,35 +19,38 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 import weave
 from openai import OpenAI
+from dotenv import load_dotenv
 
-# Environment setup
-def load_environment():
-    """Load environment variables from .env.local"""
-    env_path = Path(__file__).parent.parent.parent / ".env.local"
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    os.environ[key] = value.strip('"')
+# Load environment variables
+load_dotenv('../../.env.local')
+OPEN_API_KEY = os.getenv('OPEN_API_KEY')
+OPEN_PIPE_API_KEY = os.getenv('OPEN_PIPE_API_KEY')
+WANDB_API_KEY = os.getenv('WANDB_API_KEY')
+WANDB_PROJECT = os.getenv('WANDB_PROJECT')
+WANDB_ENTITY = os.getenv('WANDB_ENTITY')
 
-def check_environment():
-    """Check if all required environment variables are set"""
-    required_vars = [
-        'OPEN_API_KEY', 'OPEN_PIPE_API_KEY', 
-        'WANDB_API_KEY', 'WANDB_PROJECT', 'WANDB_ENTITY'
-    ]
-    
-    missing = [var for var in required_vars if not os.getenv(var)]
-    if missing:
-        print(f"❌ Missing environment variables: {missing}")
-        return False
-    
-    print("✅ All environment variables found")
-    return True
+
 
 # The best prompt that generated the most images
-BEST_PROMPT = "How do I trace my LLM calls with Weave? Please include relevant images and examples."
+BEST_PROMPT = """You are a helpful AI assistant that provides information about Weave, W&B's LLM observability framework.
+
+IMPORTANT: Always include relevant screenshots and diagrams in your responses using markdown format: ![alt text](image_url)
+
+When answering questions:
+1. Provide clear text explanations
+2. Include at least one relevant image/screenshot from the Weave documentation
+3. Use the format: ![description](https://weave-docs.wandb.ai/assets/images/...)
+4. Explain why the image is relevant
+
+Example response format:
+"Here's how to use Weave tracing:
+
+[Your explanation here]
+
+![Weave Trace UI](https://weave-docs.wandb.ai/assets/images/trace-example.png)
+
+This screenshot shows the trace interface where you can see..."
+"""
 
 # Manual OpenPipe client to avoid Weave instrumentation issues
 class ManualOpenPipeClient:
@@ -104,9 +107,8 @@ class ManualOpenPipeClient:
             }
 
 # Initialize clients
-load_environment()
-openai_client = OpenAI(api_key=os.getenv('OPEN_API_KEY'))
-openpipe_client = ManualOpenPipeClient(os.getenv('OPEN_PIPE_API_KEY'))
+openai_client = OpenAI(api_key=OPEN_API_KEY)
+openpipe_client = ManualOpenPipeClient(OPEN_PIPE_API_KEY)
 
 # Model implementations
 class BaseModel(weave.Model):
@@ -375,12 +377,8 @@ async def main():
     print("🔍 Starting Single Prompt Evaluation")
     print("="*60)
 
-    # Check environment
-    if not check_environment():
-        sys.exit(1)
-
     # Initialize Weave
-    weave.init(f"{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}")
+    weave.init(f"{WANDB_ENTITY}/{WANDB_PROJECT}")
     
     # Create models
     print("\n📝 Creating models...")
@@ -402,9 +400,15 @@ async def main():
         # Capture the actual response text for visibility in Weave
         response_text = model_output.get("response", "")
 
+        # Throw exception if response is blank
+        if not response_text or response_text.strip() == "":
+            raise ValueError(f"Model response is blank or empty. Model output: {model_output}")
+
         return {
             "response_text": response_text,  # Include actual response text
             "response_preview": response_text[:200] + "..." if len(response_text) > 200 else response_text,
+            "response_length": len(response_text),  # Aggregatable metric
+            "response_has_content": len(response_text.strip()) > 0,  # Boolean metric
             "image_count": model_output.get("image_count", 0),
             "word_count": model_output.get("word_count", 0),
             "keyword_count": model_output.get("keyword_count", 0),
@@ -483,7 +487,7 @@ async def main():
         json.dump(output_data, f, indent=2)
     
     print(f"\n📁 Results saved to: {filename}")
-    print(f"🔗 View in Weave: https://wandb.ai/{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}/weave")
+    print(f"🔗 View in Weave: https://wandb.ai/{WANDB_ENTITY}/{WANDB_PROJECT}/weave")
 
 if __name__ == "__main__":
     asyncio.run(main())
