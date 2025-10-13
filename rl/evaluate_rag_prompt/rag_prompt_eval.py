@@ -23,6 +23,7 @@ import httpx
 from openai import OpenAI
 
 from rag_context_retriever import RAGContextRetriever
+from leaderboard import create_rag_comparison_leaderboard, print_leaderboard_info
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -315,6 +316,7 @@ async def evaluate_models_with_rag_context():
 
         # Test each model and run evaluations
         results = []
+        evaluations = []  # Store evaluation objects for leaderboard
 
         for model_name, model in models.items():
             print(f"\n🧪 Testing {model_name}...")
@@ -349,6 +351,7 @@ async def evaluate_models_with_rag_context():
             
             # Run the evaluation
             await evaluation.evaluate(model)
+            evaluations.append(evaluation)  # Store for leaderboard
 
             results.append(result)
         
@@ -391,6 +394,19 @@ async def evaluate_models_with_rag_context():
         
         print(f"\n📁 Results saved to: {filename}")
         print(f"🔗 View in Weave: https://wandb.ai/{os.getenv('WANDB_ENTITY')}/{os.getenv('WANDB_PROJECT')}/weave")
+
+        # Create leaderboard if we have evaluations
+        if evaluations:
+            try:
+                print("\n🏆 Creating RAG_Comparison Leaderboard...")
+
+                # Create leaderboard
+                leaderboard_uri = create_rag_comparison_leaderboard(evaluations, "rl-demo")
+                print_leaderboard_info(leaderboard_uri, "RAG_Comparison")
+
+            except Exception as e:
+                print(f"⚠️ Failed to create leaderboard: {e}")
+                print("Evaluation results are still available in Weave")
         
     finally:
         await retriever.close()

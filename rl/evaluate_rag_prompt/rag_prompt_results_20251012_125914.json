@@ -1,0 +1,176 @@
+{
+  "evaluation_name": "2025-10-12-1256-prompt-rag",
+  "timestamp": "2025-10-12T12:59:14.099392",
+  "original_query": "How do I trace my LLM calls with Weave? Please include relevant images and examples.",
+  "rag_context_info": {
+    "success": true,
+    "num_chunks": 8,
+    "num_sources": 4,
+    "context_length": 4399,
+    "prompt_length": 4654,
+    "sources": [
+      {
+        "title": "Learn Weave with W&B Inference | W&B Weave",
+        "url": "https://weave-docs.wandb.ai/quickstart-inference",
+        "domain": "weave-docs.wandb.ai"
+      },
+      {
+        "title": "Track LLM inputs & outputs | W&B Weave",
+        "url": "https://weave-docs.wandb.ai/quickstart",
+        "domain": "weave-docs.wandb.ai"
+      },
+      {
+        "title": "Tracing Basics | W&B Weave",
+        "url": "https://weave-docs.wandb.ai/guides/tracking/tracing",
+        "domain": "weave-docs.wandb.ai"
+      },
+      {
+        "title": "Model Context Protocol (MCP) and Weave | W&B Weave",
+        "url": "https://weave-docs.wandb.ai/guides/integrations/mcp",
+        "domain": "weave-docs.wandb.ai"
+      }
+    ],
+    "chunk_scores": [
+      0.9333747625350952,
+      0.9129970669746399,
+      0.8998193740844727,
+      0.8974295854568481,
+      0.8944517970085144,
+      0.7466998100280762,
+      0.7466998100280762,
+      0.7466998100280762
+    ],
+    "avg_chunk_score": 0.8472715020179749,
+    "min_chunk_score": 0.7466998100280762,
+    "max_chunk_score": 0.9333747625350952,
+    "prompt_template": "general_prompt_template",
+    "metadata": {
+      "top_k": 5,
+      "min_score": 0.7,
+      "expand_context": true,
+      "prompt_version": "1.3.0"
+    }
+  },
+  "rag_prompt": "\n\n**NEW_CONTEXT:**\n[Source 1] Learn Weave with W&B Inference | W&B Weave (https://weave-docs.wandb.ai/quickstart-inference)\nRelevance: 0.93\n## Step 1: Trace your first LLM call[\u200b](https://weave-docs.wandb.ai/quickstart-inference#step-1-trace-your-first-llm-call \"Direct link to Step 1: Trace your first LLM call\")\n\nStart with a basic example that uses Llama 3.1-8B through W&B Inference.\n\nWhen you run this code, Weave:\n\n*   Traces your LLM call automatically\n*   Logs inputs, outputs, latency, and token usage\n*   Provides a link to view your trace in the Weave UI\n\n---\n\n[Source 2] Track LLM inputs & outputs | W&B Weave (https://weave-docs.wandb.ai/quickstart)\nRelevance: 0.91\n*   [](https://weave-docs.wandb.ai/)\n*   \ud83d\udc4b Introduction\n*   Quickstart: Track LLM Calls\n\nOn this page\n\n---\n\n[Source 3] Track LLM inputs & outputs | W&B Weave (https://weave-docs.wandb.ai/quickstart)\nRelevance: 0.90\n# Track LLM inputs & outputs\n\ntip\n\nTry our [W&B Inference quickstart](https://weave-docs.wandb.ai/quickstart-inference) to get started without external API keys.\n\nW&B Weave makes it easy to track and evaluate your LLM applications. Follow these steps to track your first call or [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](http://wandb.me/weave_colab)\n\n---\n\n[Source 4] Tracing Basics | W&B Weave (https://weave-docs.wandb.ai/guides/tracking/tracing)\nRelevance: 0.90\n# Tracing Basics\n\n![Screenshot of Weave Calls 1](https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png)\n\n![Screenshot of Weave Calls 2](https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png)\n\n![Screenshot of Weave Calls 3](https://weave-docs.wandb.ai/assets/images/calls_filter-764602b7a2706e7c1a4d917b8d3014ca.png)\n\nCalls\n\nCalls are the fundamental building block in Weave. They represent a single execution of a function, including:\n\n*   Inputs (arguments)\n*   Outputs (return value)\n*   Metadata (duration, exceptions, LLM usage, etc.)\n\nCalls are similar to spans in the [OpenTelemetry](https://opentelemetry.io) data model. A Call can:\n\n*   Belong to a Trace (a collection of calls in the same execution context)\n*   Have parent and child Calls, forming a tree structure\n\n---\n\n[Source 5] Model Context Protocol (MCP) and Weave | W&B Weave (https://weave-docs.wandb.ai/guides/integrations/mcp)\nRelevance: 0.89\nWeave traces all client-side calls to provide a complete view of interactions between the client and server.\n\n---\n\n[Source 6] Learn Weave with W&B Inference | W&B Weave (https://weave-docs.wandb.ai/quickstart-inference)\nRelevance: 0.75\n# Learn Weave with W&B Inference\n\nThis guide shows you how to use W&B Weave with [W&B Inference](https://docs.wandb.ai/guides/inference/). Using W&B Inference, you can build and trace LLM applications using live open-source models without setting up your own infrastructure or managing API keys from multiple providers. Just obtain your W&B API key and use it to interact with [all models hosted by W&B Inference](https://docs.wandb.ai/guides/inference/models/).\n\n---\n\n[Source 7] Learn Weave with W&B Inference | W&B Weave (https://weave-docs.wandb.ai/quickstart-inference)\nRelevance: 0.75\n## What you'll learn[\u200b](https://weave-docs.wandb.ai/quickstart-inference#what-youll-learn \"Direct link to What you'll learn\")\n\nIn this guide, you'll:\n\n*   Set up Weave and W&B Inference\n*   Build a basic LLM application with automatic tracing\n*   Compare multiple models\n*   Evaluate model performance on a dataset\n*   View your results in the Weave UI\n\n---\n\n[Source 8] Learn Weave with W&B Inference | W&B Weave (https://weave-docs.wandb.ai/quickstart-inference)\nRelevance: 0.75\n## Prerequisites[\u200b](https://weave-docs.wandb.ai/quickstart-inference#prerequisites \"Direct link to Prerequisites\")\n\nBefore you begin, you need a [W&B account](https://app.wandb.ai/login?signup=true) and an API key from [https://wandb.ai/authorize](https://wandb.ai/authorize).\n\nThen, in a Python environment running version 3.9 or later, install the required libraries:\n\n```\npip install weave openai\n```\n\nThe `openai` library is installed because you use the standard `openai` client to interact with W&B Inference, regardless of which hosted model you're actually calling. This allows you to swap between supported models by only changing the slug, and make use of any existing code you have that was written to use the OpenAI API.\n\n\n**CURRENT_QUESTION:** How do I trace my LLM calls with Weave? Please include relevant images and examples.\n\nPlease provide a helpful and accurate answer based on the context provided. Reference our previous conversation when relevant.",
+  "results": [
+    {
+      "response": "<think>\nOkay, the user is asking how to trace their LLM calls with Weave. Let me check the context provided.\n\nFrom the sources, we know that Weave allows tracing of LLM calls automatically. The user mentioned including relevant images and examples. The sources mention that when they run the code, Weave traces the call, logs inputs, outputs, latency, token usage, and provides a link to view the trace in the Weave UI.\n\nSo, the answer should guide the user through the process of setting up Weave and W&B Inference, then using the trace functionality. They need to install necessary libraries like weave and openai. Also, mention the steps in the quickstart guide. Include the images from the Weave Calls 1, 2, and 3. Maybe provide an example of the trace link. Make sure to reference the prerequisites mentioned earlier, like the W&B account and API key.\n\nWait, the user's question is how to trace, so the answer should walk them through the steps, maybe with an example of the trace link. Also, check if there are any specific images needed. The sources mention those images, so the answer should include them as examples. Make sure to mention the necessary libraries and installation steps as well.\n</think>\n\nTo trace your LLM calls with Weave, follow these steps:\n\n### Step-by-Step Guide:\n1. **Set Up Weave and W&B Inference**:\n   - Access the [W&B Weave quickstart](https://weave-docs.wandb.ai/quickstart-inference) to create an account and obtain your W&B API key.\n   - Install required libraries:  \n     ```bash\n     pip install weave openai\n     ```\n\n2. **Initiate a LLM Call**:\n   - Use a Python script that calls your LLM (e.g., using the `openai` library) to run a function. For example:\n     ```python\n     import weave\n     # Example code to run a LLM call\n     model = weave.openai.Model(\"llama-3-8b-instruct\")\n     response = model.generate(\"Your query here\")\n     print(\"Response:\", response)\n     ```\n\n3. **Observe Tracing**:\n   - Weave will automatically trace your LLM call, logging:\n     - Inputs\n     - Outputs\n     - Latency\n     - Token usage\n     - Metadata (e.g., execution context, exceptions)\n\n4. **View the Trace**:\n   - Access the Weave UI to view your trace, which includes:\n     - **Calls** (parent-child relationships in a trace)\n     - **Metadata** (duration, exceptions, LLM usage, etc.)\n     - Example:  \n       ![Call Trace](https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png)  \n       ![Basic Call](https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png)  \n       ![Calls Filter](https://weave-docs.wandb.ai/assets/images/calls_filter-764602b7a2706e7c889829b86886d6d5.png)\n\n5. **Compare Models**:\n   - Use the Weave UI to compare multiple LLM models by filtering calls or examining performance metrics.\n\n### Example:\n```python\nimport weave\n\n# Initialize W&B Inference API\napi_key = \"your_api_key_here\"\nmodel = weave.openai.Model(\"llama-3-8b-instruct\")\n\n# Run a simple LLM call\nresponse = model.generate(\"What is the capital of France?\")\n\n# Print results\nprint(\"LLM Response:\", response)\n```\n\nEnsure you have the W&B account and API key set up before proceeding.",
+      "word_count": 433,
+      "char_count": 3174,
+      "image_count": 3,
+      "images": [
+        {
+          "alt": "Call Trace",
+          "url": "https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png"
+        },
+        {
+          "alt": "Basic Call",
+          "url": "https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png"
+        },
+        {
+          "alt": "Calls Filter",
+          "url": "https://weave-docs.wandb.ai/assets/images/calls_filter-764602b7a2706e7c889829b86886d6d5.png"
+        }
+      ],
+      "keyword_count": 6,
+      "weave_keywords": [
+        "weave",
+        "tracing",
+        "trace",
+        "wandb",
+        "model",
+        "op"
+      ],
+      "code_blocks": 3,
+      "inline_code": 1,
+      "error": false,
+      "model_name": "qwen3:0.6b",
+      "model": "qwen3:0.6b",
+      "latency": 12.641130924224854
+    },
+    {
+      "response": "<think>\nOkay, the user is asking how to trace their LLM calls using Weave, and they want relevant images and examples. Let me check the sources I have.\n\nLooking at Source 4, there are screenshots of Weave Calls. The user mentioned \"Calls\" which are a fundamental building block in Weave. So maybe include those images. Also, Source 6 mentions setting up W&B Inference with an API key, so that's important. They need to install weave and openai libraries.\n\nWait, the current question is about tracing LLM calls, so I should explain steps like installing the required libraries, setting up Weave, then using the example from Source 4. Also, mention that they can compare models by looking at different calls or metadata. Make sure to reference previous answers when possible, like mentioning the prerequisite for W&B account and API key.\n\nNeed to structure it step-by-step: install libraries, set up Weave, use examples from the sources. Include images as per the provided links. Keep it clear and helpful.\n</think>\n\nTo trace your LLM calls with **Weave**, follow these steps and include relevant examples:\n\n### 1. **Set Up Weave**\n- Access [W&B Weave](https://weave-docs.wandb.ai/guides/tracking/tracing) to start tracing.\n- Include the following image (from Source 4):\n  ![Weave Calls](https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png)\n\n### 2. **Install Required Libraries**\n- Install `pip install weave openai` to use W&B Inference.\n\n### 3. **Build a Basic LLM Application**\n- Use the [W&B Inference guide](https://weave-docs.wandb.ai/quickstart-inference) to set up your account and API key.\n- Include an example from Source 6:\n  ![Learn Weave with W&B Inference](https://weave-docs.wandb.ai/guides/tracking/tracing.png)\n\n### 4. **Trace LLM Calls**\n- Use the tracing features in Weave to compare models, evaluate performance, and track execution details.\n- Include an example from Source 8:\n  ![Tracing Basics](https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png)\n\n### Example Workflow\n1. **Setup**: Install `pip install weave openai`.\n2. **Tracing**: Start tracing a call by clicking \"Start\" in Weave.\n3. **Compare Models**: Use the comparison feature to compare multiple models.\n4. **Evaluate Performance**: Analyze metadata like duration, exceptions, or LLM usage.\n\nBy following these steps and using the provided images, you can effectively trace your LLM applications with Weave.",
+      "word_count": 342,
+      "char_count": 2466,
+      "image_count": 3,
+      "images": [
+        {
+          "alt": "Weave Calls",
+          "url": "https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png"
+        },
+        {
+          "alt": "Learn Weave with W&B Inference",
+          "url": "https://weave-docs.wandb.ai/guides/tracking/tracing.png"
+        },
+        {
+          "alt": "Tracing Basics",
+          "url": "https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png"
+        }
+      ],
+      "keyword_count": 6,
+      "weave_keywords": [
+        "weave",
+        "tracing",
+        "trace",
+        "wandb",
+        "model",
+        "op"
+      ],
+      "code_blocks": 0,
+      "inline_code": 2,
+      "error": false,
+      "model_name": "qwen3-weave:0.6b",
+      "model": "qwen3-weave:0.6b",
+      "latency": 9.951749086380005
+    },
+    {
+      "response": "To trace your LLM calls with Weave, you start by setting up Weave and W&B Inference. You also need to have a W&B account and an API key which can be obtained from [https://wandb.ai/authorize](https://wandb.ai/authorize). Ensure that you're running a Python environment of version 3.9 or later, and have installed the required libraries using the following command:\n\n```python\npip install weave openai\n```\n\nOnce you have everything set up, you can begin tracing your LLM calls. When you run your code, Weave automatically traces your LLM call, logs inputs, outputs, latency, and token usage, and provides a link to view your trace in the Weave UI. \n\nThe concept of \"Calls\" is fundamental in Weave. They represent a single execution of a function, including inputs (arguments), outputs (return value), and metadata such as duration, exceptions, LLM usage, etc. Calls can belong to a Trace, which is a collection of calls in the same execution context, and can have parent and child Calls, forming a tree structure.\n\nHere are some screenshots from the Weave documentation to help visualize this:\n\n![Screenshot of Weave Calls 1](https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png)\n\n![Screenshot of Weave Calls 2](https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png)\n\n![Screenshot of Weave Calls 3](https://weave-docs.wandb.ai/assets/images/calls_filter-764602b7a2706e7c1a4d917b8d3014ca.png)\n\nUnfortunately, the specific code example for tracing LLM calls is not provided in the provided context. You may need to visit the Weave documentation or W&B Inference quickstart guide for a detailed code walkthrough.",
+      "word_count": 225,
+      "char_count": 1682,
+      "image_count": 3,
+      "images": [
+        {
+          "alt": "Screenshot of Weave Calls 1",
+          "url": "https://weave-docs.wandb.ai/assets/images/calls_macro-d9e28cdfc97ad0117e08dbfdc7230206.png"
+        },
+        {
+          "alt": "Screenshot of Weave Calls 2",
+          "url": "https://weave-docs.wandb.ai/assets/images/basic_call-59ec9aa0e8ad59dbc2746a4693b2f0c8.png"
+        },
+        {
+          "alt": "Screenshot of Weave Calls 3",
+          "url": "https://weave-docs.wandb.ai/assets/images/calls_filter-764602b7a2706e7c1a4d917b8d3014ca.png"
+        }
+      ],
+      "keyword_count": 5,
+      "weave_keywords": [
+        "weave",
+        "tracing",
+        "trace",
+        "wandb",
+        "op"
+      ],
+      "code_blocks": 1,
+      "inline_code": 0,
+      "error": false,
+      "model_name": "gpt-4",
+      "model": "gpt-4",
+      "latency": 16.300283908843994
+    },
+    {
+      "response": "",
+      "error": false,
+      "word_count": 0,
+      "char_count": 0,
+      "image_count": 0,
+      "images": [],
+      "keyword_count": 0,
+      "weave_keywords": [],
+      "code_blocks": 0,
+      "inline_code": 0,
+      "model_name": "openpipe:multimodal-agent-v1",
+      "model": "openpipe:multimodal-agent-v1",
+      "latency": 60.3162739276886
+    }
+  ]
+}

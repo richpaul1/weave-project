@@ -21,7 +21,7 @@ class RAGContextRetriever:
     This ensures we use the exact same context retrieval logic as the production agent.
     """
     
-    def __init__(self, agent_base_url: str = "http://localhost:8083"):
+    def __init__(self, agent_base_url: str = "http://localhost:8082"):
         """
         Initialize the RAG context retriever.
         
