@@ -169,7 +169,7 @@ class OpenAIRAGModel(BaseRAGModel):
             client = OpenAI(api_key=os.getenv("OPEN_API_KEY"))
             
             response = client.chat.completions.create(
-                model=self.model_name,
+                model=self.model,
                 messages=[
                     {"role": "user", "content": rag_prompt}
                 ],
@@ -295,7 +295,7 @@ async def evaluate_models_with_rag_context():
         models = {
             "qwen3:0.6b": Qwen3BaselineModel(),
             "qwen3-weave:0.6b": Qwen3WeaveModel(),
-            "gpt-4": OpenAIRAGModel(),
+            "gpt-3.5-turbo": OpenAIRAGModel(),
             "openpipe:multimodal-agent-v1": OpenPipeRAGModel()
         }
         print("✅ All models created successfully")
