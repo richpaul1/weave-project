@@ -8,7 +8,7 @@
 
 - ✅ Training data extracted: 103 examples
 - ✅ Data converted to OpenPipe format: `openpipe_training_data.jsonl`
-- ✅ OpenPipe API key configured: `opk_6ac7c97c7c6fac2e88ffd0e0ed4eb4d38364e85957`
+- ✅ OpenPipe API key configured: `opk_....`
 - ✅ Weave monitoring configured: WANDB project `rl-demo`
 
 ---
@@ -194,7 +194,7 @@ Use the OpenPipe API endpoint:
 import openai
 
 client = openai.OpenAI(
-    api_key="opk_6ac7c97c7c6fac2e88ffd0e0ed4eb4d38364e85957",
+    api_key="opk_....",
     base_url="https://api.openpipe.ai/v1"  # OpenPipe endpoint
 )
 

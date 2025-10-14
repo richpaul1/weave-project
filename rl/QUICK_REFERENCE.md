@@ -18,8 +18,8 @@
 ## Your Credentials
 
 ```bash
-OpenPipe API Key: opk_6ac7c97c7c6fac2e88ffd0e0ed4eb4d38364e85957
-WANDB API Key:    07d1775877b89b133aa54a7c47bb7b570c9d98ae
+OpenPipe API Key: opk_.....
+WANDB API Key:    07........
 WANDB Project:    rl-demo
 WANDB Entity:     richpaul1-stealth
 ```

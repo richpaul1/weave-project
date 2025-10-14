@@ -11,7 +11,7 @@ import { WebCrawler } from './dist/services/webCrawler.js';
 const CONFIG = {
     entity: 'richpaul1-stealth',
     project: 'support-app-dev1',
-    apiKey: '07d1775877b89b133aa54a7c47bb7b570c9d98ae'
+    apiKey: 'xxxx'
 };
 
 console.log('🧪 Testing WebCrawler Weave Instrumentation');
