@@ -14,7 +14,6 @@ from typing import Dict, Any, List
 import asyncio
 import re
 import httpx
-from openai import OpenAI
 from leaderboard import create_models_leaderboard, print_leaderboard_info
 
 # Load environment variables
@@ -25,10 +24,11 @@ WANDB_API_KEY = os.getenv('WANDB_API_KEY')
 OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3:0.6b')
 
-# Initialize Weave
+# Initialize Weave FIRST
 weave.init('rl-demo')
 
-# Initialize clients
+# Import and initialize OpenAI AFTER weave.init() for proper auto-instrumentation
+from openai import OpenAI
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Manual OpenPipe API client to avoid Weave instrumentation issues (same fix as prompt_comparison_eval.py)
@@ -293,14 +293,19 @@ class WeaveTrainedModel(Model):
 class OpenAIModel(Model):
     """Model using OpenAI API"""
     
-    model_name: str = "openai_gpt4"
-    model: str = "gpt-4"
+    model_name: str = "openai_gpt3.5"
+    model: str = "gpt-3.5-turbo"
     temperature: float = 0.3
     
     @weave.op()
     async def predict(self, prompt: str, category: str = None, **kwargs) -> Dict[str, Any]:
         """Query OpenAI model"""
         try:
+            print(f"🤖 OpenAI: Making API call with model {self.model}")
+            print(f"🐛 DEBUG: System prompt length: {len(SYSTEM_PROMPT)}")
+            print(f"🐛 DEBUG: User prompt: {prompt}")
+
+            # OpenAI call - should be automatically traced by Weave
             response = openai_client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -310,11 +315,28 @@ class OpenAIModel(Model):
                 temperature=self.temperature,
                 max_tokens=500
             )
-            
-            response_text = response.choices[0].message.content
-            
+            print(f"🐛 DEBUG: OpenAI response received, type: {type(response)}")
+
+            # Better error handling for response extraction
+            if response.choices and len(response.choices) > 0:
+                message = response.choices[0].message
+                response_text = message.content if message.content else ""
+                print(f"✅ OpenAI: Got response ({len(response_text)} chars)")
+                print(f"🐛 DEBUG: Response preview: {response_text[:200]}...")
+                print(f"🐛 DEBUG: Full response:\n{response_text}\n" + "="*50)
+
+                # Log the full response object for debugging
+                print(f"🐛 DEBUG: Response object type: {type(response)}")
+                print(f"🐛 DEBUG: Has choices: {hasattr(response, 'choices')}")
+                print(f"🐛 DEBUG: Choices length: {len(response.choices) if hasattr(response, 'choices') else 'N/A'}")
+            else:
+                response_text = "Error: No response choices returned"
+                print("❌ OpenAI: No response choices returned")
+                print(f"🐛 DEBUG: Full response: {response}")
+
         except Exception as e:
             response_text = f"Error: {str(e)}"
+            print(f"❌ OpenAI: API call failed: {str(e)}")
         
         # Extract metrics
         images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response_text)
@@ -469,7 +491,7 @@ async def run_model_comparison():
     print("="*80)
     print(f"Models to compare:")
     print(f"  1. Local Ollama: {OLLAMA_MODEL}")
-    print(f"  2. OpenAI: gpt-4")
+    print(f"  2. OpenAI: gpt-3.5-turbo")
     print(f"  3. Custom OpenPipe: openpipe:multimodal-agent-v1")
     print(f"Test queries: {len(TEST_QUERIES)}")
     print("="*80)
@@ -484,7 +506,7 @@ async def run_model_comparison():
     models = [
         ("local-qwen3:0.6b", ollama_model),
         ("local-qwen3-weave:0.6b", weave_model),
-        ("gpt-4", openai_model),
+        ("gpt-3.5-turbo", openai_model),
         ("openpipe:multimodal-agent-v1", openpipe_model)
     ]
 
@@ -615,7 +637,7 @@ if __name__ == "__main__":
     if not OPENPIPE_API_KEY:
         missing_vars.append("OPEN_PIPE_API_KEY")
     if not OPENAI_API_KEY:
-        missing_vars.append("OPEN_API_KEY")
+        missing_vars.append("OPENAI_API_KEY")
     if not WANDB_API_KEY:
         missing_vars.append("WANDB_API_KEY")
 
@@ -625,6 +647,21 @@ if __name__ == "__main__":
         exit(1)
 
     print("✅ All environment variables found")
+
+    # Debug OpenAI client initialization
+    print(f"🐛 DEBUG: OpenAI API Key present: {bool(OPENAI_API_KEY)}")
+    print(f"🐛 DEBUG: OpenAI API Key length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+
+    # Test OpenAI client
+    try:
+        test_response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=10
+        )
+        print("✅ OpenAI client test successful")
+    except Exception as e:
+        print(f"❌ OpenAI client test failed: {e}")
 
     # Run evaluation
     try:
