@@ -162,7 +162,7 @@ class OpenAIRAGModel(BaseRAGModel):
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.3
 
-    @weave.op(name="gpt_4")
+    @weave.op(name="predict")
     async def predict(self, rag_prompt: str) -> Dict[str, Any]:
         """Generate response using OpenAI model with RAG context"""
         try:
