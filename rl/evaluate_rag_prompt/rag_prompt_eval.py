@@ -156,7 +156,11 @@ class Qwen3WeaveModel(BaseRAGModel):
 class OpenAIRAGModel(BaseRAGModel):
     """OpenAI model for RAG evaluation"""
 
-    model_name: str = "gpt-4"
+    """OpenAI GPT-3 model"""
+    
+    model_name: str = "openai_gpt3.5"
+    model: str = "gpt-3.5-turbo"
+    temperature: float = 0.3
 
     @weave.op(name="gpt_4")
     async def predict(self, rag_prompt: str) -> Dict[str, Any]:
@@ -170,7 +174,7 @@ class OpenAIRAGModel(BaseRAGModel):
                     {"role": "user", "content": rag_prompt}
                 ],
                 max_tokens=1000,
-                temperature=0.7
+                temperature=self.temperature,
             )
             
             response_text = response.choices[0].message.content
