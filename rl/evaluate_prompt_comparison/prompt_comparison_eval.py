@@ -19,6 +19,7 @@ import re
 load_dotenv('../../.env.local')
 OPENPIPE_API_KEY = os.getenv('OPEN_PIPE_API_KEY')
 WANDB_API_KEY = os.getenv('WANDB_API_KEY')
+OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
 
 # Initialize Weave without any autopatch to avoid conflicts
 weave.init('rl-demo')
@@ -169,11 +170,11 @@ TEST_QUERIES = [
 ]
 
 
-# Weave Model for Simple Prompt
-class SimplePromptModel(Model):
-    """Model using simple prompt"""
+# Weave Model for Simple Prompt - OpenPipe
+class SimplePromptOpenPipeModel(Model):
+    """OpenPipe model using simple prompt"""
 
-    model_name: str = "simple_prompt"
+    model_name: str = "simple_prompt_openpipe"
     system_prompt: str = SIMPLE_PROMPT
     temperature: float = 0.3
 
@@ -213,11 +214,11 @@ class SimplePromptModel(Model):
         }
 
 
-# Weave Model for Complex Prompt
-class ComplexPromptModel(Model):
-    """Model using complex prompt"""
+# Weave Model for Complex Prompt - OpenPipe
+class ComplexPromptOpenPipeModel(Model):
+    """OpenPipe model using complex prompt"""
 
-    model_name: str = "complex_prompt"
+    model_name: str = "complex_prompt_openpipe"
     system_prompt: str = COMPLEX_PROMPT
     temperature: float = 0.3
 
@@ -254,6 +255,116 @@ class ComplexPromptModel(Model):
             "word_count": len(response.split()),
             "char_count": len(response),
             "error": "Error:" in response
+        }
+
+
+# Weave Model for Simple Prompt - Local Custom Model
+class SimplePromptLocalModel(Model):
+    """Local qwen3-weave model using simple prompt"""
+
+    model_name: str = "simple_prompt_local"
+    system_prompt: str = SIMPLE_PROMPT
+    temperature: float = 0.3
+
+    @weave.op()
+    async def predict(self, sentence: str, category: str = None, expected_image: bool = None) -> Dict[str, Any]:
+        """
+        Query the local custom model with simple prompt.
+        Returns the response and metadata.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": "qwen3-weave:0.6b",
+                        "prompt": f"System: {self.system_prompt}\n\nUser: {sentence}",
+                        "stream": False,
+                        "options": {
+                            "temperature": self.temperature,
+                            "num_predict": 800
+                        }
+                    }
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    response_text = result.get("response", "")
+                else:
+                    response_text = f"Error: HTTP {response.status_code}"
+
+        except Exception as e:
+            response_text = f"Error: {str(e)}"
+
+        # Extract metrics
+        images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response_text)
+
+        return {
+            "response": response_text,
+            "query": sentence,
+            "category": category,
+            "expected_image": expected_image,
+            "has_image": len(images) > 0,
+            "image_count": len(images),
+            "images": [{"alt": alt, "url": url} for alt, url in images],
+            "word_count": len(response_text.split()),
+            "char_count": len(response_text),
+            "error": "Error:" in response_text
+        }
+
+
+# Weave Model for Complex Prompt - Local Custom Model
+class ComplexPromptLocalModel(Model):
+    """Local qwen3-weave model using complex prompt"""
+
+    model_name: str = "complex_prompt_local"
+    system_prompt: str = COMPLEX_PROMPT
+    temperature: float = 0.3
+
+    @weave.op()
+    async def predict(self, sentence: str, category: str = None, expected_image: bool = None) -> Dict[str, Any]:
+        """
+        Query the local custom model with complex prompt.
+        Returns the response and metadata.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": "qwen3-weave:0.6b",
+                        "prompt": f"System: {self.system_prompt}\n\nUser: {sentence}",
+                        "stream": False,
+                        "options": {
+                            "temperature": self.temperature,
+                            "num_predict": 800
+                        }
+                    }
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    response_text = result.get("response", "")
+                else:
+                    response_text = f"Error: HTTP {response.status_code}"
+
+        except Exception as e:
+            response_text = f"Error: {str(e)}"
+
+        # Extract metrics
+        images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response_text)
+
+        return {
+            "response": response_text,
+            "query": sentence,
+            "category": category,
+            "expected_image": expected_image,
+            "has_image": len(images) > 0,
+            "image_count": len(images),
+            "images": [{"alt": alt, "url": url} for alt, url in images],
+            "word_count": len(response_text.split()),
+            "char_count": len(response_text),
+            "error": "Error:" in response_text
         }
 
 
@@ -352,80 +463,134 @@ def overall_quality_scorer(expected_image: bool, output: Dict[str, Any]) -> Dict
 
 async def run_evaluation():
     """
-    Run the full evaluation comparing simple vs complex prompts using Weave Evaluation framework.
+    Run the full evaluation comparing simple vs complex prompts for both OpenPipe and Local models.
     """
     print("🧪 Starting Prompt Comparison Evaluation with Weave Framework")
     print("="*80)
-    print(f"\nModel: openpipe:multimodal-agent-v1")
+    print(f"\nModels: openpipe:multimodal-agent-v1 vs local-qwen3-weave:0.6b")
     print(f"Test queries: {len(TEST_QUERIES)}")
     print(f"Temperature: 0.3")
     print("\n" + "="*80)
 
     # Create models
     print("\n📝 Creating models...")
-    simple_model = SimplePromptModel(name="simple_prompt_model")
-    complex_model = ComplexPromptModel(name="complex_prompt_model")
+    simple_openpipe_model = SimplePromptOpenPipeModel(name="simple_prompt_openpipe_model")
+    complex_openpipe_model = ComplexPromptOpenPipeModel(name="complex_prompt_openpipe_model")
+    simple_local_model = SimplePromptLocalModel(name="simple_prompt_local_model")
+    complex_local_model = ComplexPromptLocalModel(name="complex_prompt_local_model")
 
-    # Create evaluations
-    print("\n📝 Testing with SIMPLE PROMPT")
+    # Create evaluations for OpenPipe model
+    print("\n📝 Testing OpenPipe with SIMPLE PROMPT")
     print("-"*80)
 
-    simple_evaluation = Evaluation(
-        evaluation_name="simple_prompt_evaluation",
+    simple_openpipe_evaluation = Evaluation(
+        evaluation_name="simple_prompt_openpipe_evaluation",
         dataset=TEST_QUERIES,
         scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
     )
 
-    simple_results = await simple_evaluation.evaluate(simple_model)
+    simple_openpipe_results = await simple_openpipe_evaluation.evaluate(simple_openpipe_model)
 
-    print("\n📝 Testing with COMPLEX PROMPT")
+    print("\n📝 Testing OpenPipe with COMPLEX PROMPT")
     print("-"*80)
 
-    complex_evaluation = Evaluation(
-        evaluation_name="complex_prompt_evaluation",
+    complex_openpipe_evaluation = Evaluation(
+        evaluation_name="complex_prompt_openpipe_evaluation",
         dataset=TEST_QUERIES,
         scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
     )
 
-    complex_results = await complex_evaluation.evaluate(complex_model)
+    complex_openpipe_results = await complex_openpipe_evaluation.evaluate(complex_openpipe_model)
+
+    # Create evaluations for Local model
+    print("\n📝 Testing Local qwen3-weave with SIMPLE PROMPT")
+    print("-"*80)
+
+    simple_local_evaluation = Evaluation(
+        evaluation_name="simple_prompt_local_evaluation",
+        dataset=TEST_QUERIES,
+        scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
+    )
+
+    simple_local_results = await simple_local_evaluation.evaluate(simple_local_model)
+
+    print("\n📝 Testing Local qwen3-weave with COMPLEX PROMPT")
+    print("-"*80)
+
+    complex_local_evaluation = Evaluation(
+        evaluation_name="complex_prompt_local_evaluation",
+        dataset=TEST_QUERIES,
+        scorers=[image_inclusion_scorer, response_length_scorer, overall_quality_scorer]
+    )
+
+    complex_local_results = await complex_local_evaluation.evaluate(complex_local_model)
 
     # Print summary
     print("\n\n" + "="*80)
     print("📊 EVALUATION SUMMARY")
     print("="*80)
 
-    # Extract scores
-    simple_quality = simple_results.get("overall_quality_scorer", {})
-    complex_quality = complex_results.get("overall_quality_scorer", {})
+    # Extract scores for all models
+    simple_openpipe_quality = simple_openpipe_results.get("overall_quality_scorer", {})
+    complex_openpipe_quality = complex_openpipe_results.get("overall_quality_scorer", {})
+    simple_local_quality = simple_local_results.get("overall_quality_scorer", {})
+    complex_local_quality = complex_local_results.get("overall_quality_scorer", {})
 
-    simple_image = simple_results.get("image_inclusion_scorer", {})
-    complex_image = complex_results.get("image_inclusion_scorer", {})
+    simple_openpipe_image = simple_openpipe_results.get("image_inclusion_scorer", {})
+    complex_openpipe_image = complex_openpipe_results.get("image_inclusion_scorer", {})
+    simple_local_image = simple_local_results.get("image_inclusion_scorer", {})
+    complex_local_image = complex_local_results.get("image_inclusion_scorer", {})
 
-    print(f"\n{'Metric':<30} {'Simple Prompt':<20} {'Complex Prompt':<20}")
+    print(f"\n{'Model/Prompt':<25} {'Quality Score':<15} {'Image Rate':<15} {'Images':<10}")
     print("-"*80)
 
-    if "score" in simple_quality and "mean" in simple_quality["score"]:
-        simple_avg = simple_quality["score"]["mean"] * 100
-        complex_avg = complex_quality["score"]["mean"] * 100
-        print(f"{'Average Quality Score':<30} {simple_avg:>18.1f}% {complex_avg:>18.1f}%")
+    # OpenPipe results
+    if "score" in simple_openpipe_quality and "mean" in simple_openpipe_quality["score"]:
+        simple_op_avg = simple_openpipe_quality["score"]["mean"] * 100
+        simple_op_img_count = simple_openpipe_image.get("passed", {}).get("true_count", 0)
+        simple_op_img_rate = (simple_op_img_count/len(TEST_QUERIES)*100)
+        print(f"{'OpenPipe + Simple':<25} {simple_op_avg:>13.1f}% {simple_op_img_rate:>13.1f}% {simple_op_img_count:>8}/{len(TEST_QUERIES)}")
 
-    if "passed" in simple_image and "true_count" in simple_image["passed"]:
-        simple_img_count = simple_image["passed"]["true_count"]
-        complex_img_count = complex_image["passed"]["true_count"]
-        print(f"{'Images Included':<30} {simple_img_count:>18}/{len(TEST_QUERIES)} {complex_img_count:>18}/{len(TEST_QUERIES)}")
-        print(f"{'Image Inclusion Rate':<30} {(simple_img_count/len(TEST_QUERIES)*100):>18.1f}% {(complex_img_count/len(TEST_QUERIES)*100):>18.1f}%")
+    if "score" in complex_openpipe_quality and "mean" in complex_openpipe_quality["score"]:
+        complex_op_avg = complex_openpipe_quality["score"]["mean"] * 100
+        complex_op_img_count = complex_openpipe_image.get("passed", {}).get("true_count", 0)
+        complex_op_img_rate = (complex_op_img_count/len(TEST_QUERIES)*100)
+        print(f"{'OpenPipe + Complex':<25} {complex_op_avg:>13.1f}% {complex_op_img_rate:>13.1f}% {complex_op_img_count:>8}/{len(TEST_QUERIES)}")
+
+    # Local model results
+    if "score" in simple_local_quality and "mean" in simple_local_quality["score"]:
+        simple_local_avg = simple_local_quality["score"]["mean"] * 100
+        simple_local_img_count = simple_local_image.get("passed", {}).get("true_count", 0)
+        simple_local_img_rate = (simple_local_img_count/len(TEST_QUERIES)*100)
+        print(f"{'Local + Simple':<25} {simple_local_avg:>13.1f}% {simple_local_img_rate:>13.1f}% {simple_local_img_count:>8}/{len(TEST_QUERIES)}")
+
+    if "score" in complex_local_quality and "mean" in complex_local_quality["score"]:
+        complex_local_avg = complex_local_quality["score"]["mean"] * 100
+        complex_local_img_count = complex_local_image.get("passed", {}).get("true_count", 0)
+        complex_local_img_rate = (complex_local_img_count/len(TEST_QUERIES)*100)
+        print(f"{'Local + Complex':<25} {complex_local_avg:>13.1f}% {complex_local_img_rate:>13.1f}% {complex_local_img_count:>8}/{len(TEST_QUERIES)}")
 
     print("\n" + "="*80)
 
-    if complex_avg > simple_avg + 10:
-        print("✅ RESULT: Complex prompt significantly outperforms simple prompt")
-        print("💡 RECOMMENDATION: Use complex prompt in production")
-    elif complex_avg > simple_avg:
-        print("⚠️  RESULT: Complex prompt slightly better than simple prompt")
-        print("💡 RECOMMENDATION: Consider using complex prompt")
-    else:
-        print("❌ RESULT: No significant improvement with complex prompt")
-        print("💡 RECOMMENDATION: Simple prompt is sufficient")
+    # Determine best combination
+    scores = [
+        ("OpenPipe + Simple", simple_op_avg if 'simple_op_avg' in locals() else 0),
+        ("OpenPipe + Complex", complex_op_avg if 'complex_op_avg' in locals() else 0),
+        ("Local + Simple", simple_local_avg if 'simple_local_avg' in locals() else 0),
+        ("Local + Complex", complex_local_avg if 'complex_local_avg' in locals() else 0)
+    ]
+
+    best_combo = max(scores, key=lambda x: x[1])
+    print(f"🏆 BEST PERFORMER: {best_combo[0]} ({best_combo[1]:.1f}%)")
+
+    # Model comparison
+    if 'simple_local_avg' in locals() and 'simple_op_avg' in locals():
+        if simple_local_avg > simple_op_avg + 5:
+            print("✅ Local model outperforms OpenPipe with simple prompt")
+        elif simple_op_avg > simple_local_avg + 5:
+            print("✅ OpenPipe outperforms local model with simple prompt")
+        else:
+            print("⚖️ Similar performance between models with simple prompt")
 
     print("="*80 + "\n")
 
@@ -433,9 +598,11 @@ async def run_evaluation():
     output_file = f"evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     results_data = {
         "timestamp": datetime.now().isoformat(),
-        "model": "openpipe:multimodal-agent-v1",
-        "simple_results": simple_results,
-        "complex_results": complex_results
+        "models": ["openpipe:multimodal-agent-v1", "local-qwen3-weave:0.6b"],
+        "simple_openpipe_results": simple_openpipe_results,
+        "complex_openpipe_results": complex_openpipe_results,
+        "simple_local_results": simple_local_results,
+        "complex_local_results": complex_local_results
     }
 
     with open(output_file, 'w') as f:
@@ -445,7 +612,8 @@ async def run_evaluation():
     print(f"🔗 View in Weave: https://wandb.ai/richpaul1-stealth/rl-demo")
 
     # Create leaderboard
-    evaluations = [simple_evaluation, complex_evaluation]
+    evaluations = [simple_openpipe_evaluation, complex_openpipe_evaluation,
+                   simple_local_evaluation, complex_local_evaluation]
     try:
         print("\n🏆 Creating Prompt_Comparison Leaderboard...")
 

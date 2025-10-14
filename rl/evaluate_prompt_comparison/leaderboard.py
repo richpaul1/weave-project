@@ -66,11 +66,21 @@ def create_prompts_leaderboard(evaluations: List[Any], project_name: str = "rl-d
     spec = leaderboard.Leaderboard(
         name="Prompt_Comparison",
         description="""
-This leaderboard compares the performance of different prompt types across multiple dimensions:
+This leaderboard compares the performance of different model and prompt combinations:
+
+### Models Compared
+- **OpenPipe**: openpipe:multimodal-agent-v1 (custom trained model)
+- **Local**: local-qwen3-weave:0.6b (locally trained custom model)
 
 ### Prompts Compared
 - **Simple Prompt**: Basic question format
 - **Complex Prompt**: Detailed instructions with context and examples
+
+### Combinations Evaluated
+- OpenPipe + Simple Prompt
+- OpenPipe + Complex Prompt
+- Local + Simple Prompt
+- Local + Complex Prompt
 
 ### Evaluation Metrics
 
@@ -81,7 +91,7 @@ This leaderboard compares the performance of different prompt types across multi
 ### Scoring
 - Overall Quality and Response Length Quality are scored as percentages (0-100%)
 - Image Inclusion Rate shows the fraction of responses that include images when expected
-- Higher scores indicate better prompt performance
+- Higher scores indicate better model/prompt combination performance
 """,
         columns=columns,
     )
