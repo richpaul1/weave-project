@@ -230,11 +230,12 @@ class WeaveTrainedModel(BaseModel):
         }
 
 class OpenAIModel(BaseModel):
-    """OpenAI GPT-4 model"""
+    """OpenAI GPT-3 model"""
     
-    model_name: str = "openai_gpt4"
-    model: str = "gpt-4"
+    model_name: str = "openai_gpt3.5"
+    model: str = "gpt-3.5-turbo"
     temperature: float = 0.3
+
     
     @weave.op()
     async def predict(self, prompt: str) -> Dict[str, Any]:
