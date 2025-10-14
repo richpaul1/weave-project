@@ -292,20 +292,18 @@ class WeaveTrainedModel(Model):
 
 class OpenAIModel(Model):
     """Model using OpenAI API"""
-    
+
     model_name: str = "openai_gpt3.5"
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.3
-    
+
     @weave.op()
-    async def predict(self, prompt: str, category: str = None, **kwargs) -> Dict[str, Any]:
+    def predict(self, prompt: str, category: str = None, **kwargs) -> Dict[str, Any]:
         """Query OpenAI model"""
         try:
             print(f"🤖 OpenAI: Making API call with model {self.model}")
-            print(f"🐛 DEBUG: System prompt length: {len(SYSTEM_PROMPT)}")
-            print(f"🐛 DEBUG: User prompt: {prompt}")
 
-            # OpenAI call - should be automatically traced by Weave
+            # Simple, direct OpenAI call (not async)
             response = openai_client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -315,7 +313,6 @@ class OpenAIModel(Model):
                 temperature=self.temperature,
                 max_tokens=500
             )
-            print(f"🐛 DEBUG: OpenAI response received, type: {type(response)}")
 
             # Better error handling for response extraction
             if response.choices and len(response.choices) > 0:
@@ -341,6 +338,9 @@ class OpenAIModel(Model):
         # Extract metrics
         images = re.findall(r'!\[([^\]]*)\]\(([^\)]+)\)', response_text)
         
+
+
+        print(f"🐛 DEBUG: Response text ************: {response_text}")
         return {
             "response": response_text,
             "model": f"openai:{self.model}",
