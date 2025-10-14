@@ -22,8 +22,8 @@ import weave
 # =============================================================================
 
 # Allow version override via environment variable
-PROMPT_VERSION = os.getenv("PROMPT_VERSION", "1.3.0")
-PROMPT_VERSION_DATE = "2024-10-06"
+PROMPT_VERSION = os.getenv("PROMPT_VERSION", "1.4.0")
+PROMPT_VERSION_DATE = "2024-10-10"
 
 # Version compatibility mapping
 SUPPORTED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]
@@ -45,7 +45,8 @@ Instructions:
 5. Always cite your sources when possible
 6. Be conversational and helpful in your responses
 7. Maintain consistency with previous answers while incorporating new information
-8. When appropriate, include relevant images in your responses using markdown format: ![alt text](image_url)
+8. When appropriate, include relevant images in your responses using markdown format: ![alt text](image_url). IMPORTANT if the image_url ends with .png return these urls.
+
 
 When you see **HISTORY** sections, use them to understand what we've discussed before.
 When you see **NEW_CONTEXT** sections, prioritize this information for factual accuracy.""",
@@ -75,7 +76,7 @@ You have access to our conversation history. Use this context to:
 - Avoid repeating information already provided
 - Build upon previous recommendations
 - Provide more personalized and contextual responses
-- When appropriate, include relevant images in your responses using markdown format: ![alt text](image_url)
+- When appropriate, include relevant images in your responses using markdown format: ![alt text](image_url). IMPORTANT if the image_url ends with .png return these urls.
 
 
 <think>
@@ -308,10 +309,10 @@ Tool Selection Guidelines:
 8. Include specific recommendations and actionable advice from tool results"""
 }
 
-# Current active prompts (points to latest version)
-GENERAL_SYSTEM_PROMPT = PROMPTS_V1_3_0["general_system"]
-LEARNING_SYSTEM_PROMPT = PROMPTS_V1_3_0["learning_system"]
-TOOL_CALLING_SYSTEM_PROMPT = PROMPTS_V1_3_0["tool_calling_system"]
+# Current active prompts (will be set dynamically after PromptConfig class definition)
+GENERAL_SYSTEM_PROMPT = None
+LEARNING_SYSTEM_PROMPT = None
+TOOL_CALLING_SYSTEM_PROMPT = None
 
 # Legacy RAG system prompt (for backward compatibility)
 LEGACY_RAG_SYSTEM_PROMPT = PROMPTS_V1_0_0["general_system"]
@@ -444,7 +445,9 @@ class PromptConfig:
             "1.0.0": PROMPTS_V1_0_0,
             "1.1.0": PROMPTS_V1_1_0,
             "1.2.0": PROMPTS_V1_2_0,
-            "1.3.0": PROMPTS_V1_3_0
+            "1.3.0": PROMPTS_V1_3_0,
+            "1.4.0": PROMPTS_V1_4_0
+
         }
 
         if version not in version_map:
@@ -679,3 +682,14 @@ class PromptConfig:
             "supported_versions": SUPPORTED_VERSIONS,
             "default_version": DEFAULT_VERSION
         }
+
+
+# =============================================================================
+# DYNAMIC PROMPT ASSIGNMENT
+# =============================================================================
+
+# Set active prompts dynamically based on PROMPT_VERSION
+_current_prompts = PromptConfig.get_prompts_for_version(PROMPT_VERSION)
+GENERAL_SYSTEM_PROMPT = _current_prompts["general_system"]
+LEARNING_SYSTEM_PROMPT = _current_prompts["learning_system"]
+TOOL_CALLING_SYSTEM_PROMPT = _current_prompts["tool_calling_system"]
